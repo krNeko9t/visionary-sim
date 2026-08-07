@@ -13,7 +13,7 @@ const canvas = document.getElementById('app');
 async function boot() {
     const app = await createApp(canvas);
 
-    const { camera, controls } = createStage(app);
+    const { camera } = createStage(app);
     createTank(app);
 
     const bodies = await createBodies();
@@ -44,7 +44,7 @@ async function boot() {
         }
     });
     document.body.append(panel.element);
-    attachGrabber(app, camera, sim, controls);
+    attachGrabber(app, camera, sim);
 
     // The dispatch has to be recorded inside the render frame, so it hangs off
     // the app update rather than a timer of its own.

@@ -99,7 +99,7 @@ export function createPanel(sim, { onLatticeToggle }) {
         pause.set(sim.params.paused ? '继续' : '暂停');
     });
 
-    const note = element('p', 'ui-note', '在物体上按住拖动可以直接抓住它。');
+    const note = element('p', 'ui-note', '左键拖动抓住物体，右键拖动旋转视角，中键平移，滚轮缩放。');
 
     const panel = element('div', 'ui-panel');
     panel.append(
