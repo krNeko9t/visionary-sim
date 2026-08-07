@@ -34,16 +34,23 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     var p: array<vec3f, 8>;
     var w: array<f32, 8>;
     var ids: array<u32, 8>;
+    // Where each node was when this substep began. Only the damping term reads
+    // it, and only through `grad C . dx`, so it costs one more load per node and
+    // nothing at all when the material is not viscous.
+    var prev: array<vec3f, 8>;
     for (var c = 0u; c < 8u; c++) {
         let n = cornerNode(b, coord, c);
         ids[c] = n;
         p[c] = nodePos[n].xyz;
+        prev[c] = nodePrev[n].xyz;
         w[c] = nodeInvMass[n];
     }
 
     let invDt2 = 1.0 / (uniform.dt * uniform.dt);
     let alphaDev = b.alphaDev * invDt2;
     let alphaHyd = b.alphaHyd * invDt2;
+    // The material stores a relaxation time; the solve wants it in substeps.
+    let relax = b.relaxation / uniform.dt;
     // Every rest cell is the same cube, so the six rest shape inverses are
     // scene-wide constants and only need scaling by the cell size. There is no
     // per-tetrahedron rest data in memory at all.
@@ -107,7 +114,22 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             w0 * dot(h0, h0) + w1 * dot(h1, h1) + w2 * dot(h2, h2) + w3 * dot(h3, h3)
         );
 
-        let dl = xpbdCouple(cDev, cHyd, alphaDev, alphaHyd, gram);
+        // How fast each constraint is being violated, as `grad C . dx` over the
+        // substep so far. A translating or spinning tetrahedron scores zero on
+        // both, because the gradients sum to zero and neither constraint can
+        // see a rigid motion.
+        let x0 = p[i0] - prev[i0];
+        let x1 = p[i1] - prev[i1];
+        let x2 = p[i2] - prev[i2];
+        let x3 = p[i3] - prev[i3];
+        let rate = vec2f(
+            dot(d0, x0) + dot(d1, x1) + dot(d2, x2) + dot(d3, x3),
+            dot(h0, x0) + dot(h1, x1) + dot(h2, x2) + dot(h3, x3)
+        );
+
+        let dl = xpbdCouple(
+            vec2f(cDev, cHyd), vec2f(alphaDev, alphaHyd), relax, rate, gram
+        );
         p[i0] += (d0 * dl.x + h0 * dl.y) * w0;
         p[i1] += (d1 * dl.x + h1 * dl.y) * w1;
         p[i2] += (d2 * dl.x + h2 * dl.y) * w2;

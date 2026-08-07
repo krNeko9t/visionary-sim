@@ -44,7 +44,15 @@ const MATERIAL_CONTROLS = [
         step: 10,
         format: value => `${value.toFixed(0)} kg/m³`
     },
-    { key: 'damping', label: '阻尼', min: 0, max: 8, step: 0.1, format: value => value.toFixed(1) },
+    {
+        key: 'relaxation',
+        label: '松弛',
+        min: 0,
+        max: 0.04,
+        step: 0.001,
+        format: value => (value > 0 ? `${(value * 1000).toFixed(0)} ms` : '弹性')
+    },
+    { key: 'damping', label: '阻力', min: 0, max: 8, step: 0.1, format: value => value.toFixed(1) },
     { key: 'friction', label: '摩擦', min: 0, max: 1, step: 0.02, format: value => value.toFixed(2) }
 ];
 

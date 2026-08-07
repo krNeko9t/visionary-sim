@@ -18,8 +18,8 @@ struct Body {
     damping: f32,
     friction: f32,
     grabNode: i32,
+    relaxation: f32,
     pad0: f32,
-    pad1: f32,
 }
 
 // One arena for the whole scene rather than per-body buffers: it keeps the
@@ -91,14 +91,38 @@ fn cornerNode(b: Body, coord: vec3u, corner: u32) -> u32 {
 // `gram` is `(sum w |grad C_D|^2, sum w grad C_D . grad C_H, sum w |grad C_H|^2)`
 // -- what the constraints contribute to the block. The compliances are added
 // here so that no caller has to remember them.
-fn xpbdCouple(cDev: f32, cHyd: f32, alphaDev: f32, alphaHyd: f32, gram: vec3f) -> vec2f {
-    let a00 = gram.x + alphaDev;
-    let a01 = gram.y;
-    let a11 = gram.z + alphaHyd;
+//
+// `relax` is XPBD's damping coefficient (Macklin 2016 calls it gamma, which this
+// codebase has already spent on the Neo-Hookean rest offset -- they are
+// unrelated). It enters as `(1 + relax)` on the gradient part and as
+// `relax * grad C . dx` in the residual, where `dx` is the motion since the
+// substep began. Since `grad C . dx` is `dC/dt * dt`, the residual reads
+// `C + (relax * dt) * dC/dt`: a Kelvin-Voigt element whose relaxation time is
+// `relax * dt`. That product is the quantity with physical meaning, so the
+// material stores the time in seconds and the kernel divides by the substep.
+//
+// Two things this damping deliberately cannot do, both because every gradient
+// set sums to zero: it cannot slow a body that is merely translating, and it
+// cannot slow one that is merely spinning -- `grad C . dx` vanishes for any
+// motion that does not change the deformation gradient. It removes energy from
+// deformation only, which is what `Body.damping` (plain velocity drag, applied
+// in contact.wgsl) cannot distinguish.
+//
+// At `relax = 0` this reduces to the undamped block exactly. At rest it returns
+// zero however large `relax` is: `dx` contributes nothing there, and scaling the
+// whole gradient part by `(1 + relax)` leaves the cancellation of the previous
+// paragraph untouched.
+fn xpbdCouple(c: vec2f, alpha: vec2f, relax: f32, rate: vec2f, gram: vec3f) -> vec2f {
+    let stiffened = 1.0 + relax;
+    let a00 = gram.x * stiffened + alpha.x;
+    let a01 = gram.y * stiffened;
+    let a11 = gram.z * stiffened + alpha.y;
 
     let det = a00 * a11 - a01 * a01;
     if (det < 1e-20) {
         return vec2f(0.0, 0.0);
     }
-    return vec2f(a01 * cHyd - a11 * cDev, a01 * cDev - a00 * cHyd) / det;
+
+    let rhs = -(c + rate * relax);
+    return vec2f(a11 * rhs.x - a01 * rhs.y, a00 * rhs.y - a01 * rhs.x) / det;
 }

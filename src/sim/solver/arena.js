@@ -31,7 +31,8 @@ const BODY_FIELDS = {
     gamma: 14, //      f32
     damping: 15, //    f32
     friction: 16, //   f32
-    grabNode: 17 //    i32
+    grabNode: 17, //   i32
+    relaxation: 18 //  f32
 };
 
 const BODY_WORDS = BODY_STRIDE / 4;
@@ -151,6 +152,7 @@ export class SimArena {
             bodyFloats[base + BODY_FIELDS.damping] = body.material.damping;
             bodyFloats[base + BODY_FIELDS.friction] = body.material.friction;
             bodyInts[base + BODY_FIELDS.grabNode] = this.grabNodes[b];
+            bodyFloats[base + BODY_FIELDS.relaxation] = body.material.relaxation;
         }
 
         this.bodyParams.write(0, new Uint8Array(this.bodyWords));

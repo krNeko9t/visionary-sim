@@ -13,7 +13,14 @@
  * @property {number} poissonRatio - nu, dimensionless. See {@link POISSON_RANGE}.
  * @property {number} density - rho, in kg/m^3. Water and most soft tissue are ~1000.
  * @property {number} friction - Coulomb friction coefficient for contacts.
- * @property {number} damping - Velocity damping rate, per second.
+ * @property {number} damping - Velocity damping rate, per second. Plain drag: it
+ *   slows a body that is merely falling just as much as one that is wobbling.
+ * @property {number} relaxation - Kelvin-Voigt relaxation time, in seconds. How
+ *   long a deformation takes to stop ringing. Unlike {@link Material.damping}
+ *   this acts on the rate of deformation rather than on velocity, so it leaves
+ *   free fall and spin alone; see `xpbdCouple` in `sim/solver/wgsl/common.wgsl`.
+ *   Zero is a perfectly elastic material, which rings until something else takes
+ *   the energy.
  */
 
 /**
@@ -60,7 +67,8 @@ export const DEFAULT_MATERIAL = Object.freeze({
     poissonRatio: 0.40,
     density: 1000,
     friction: 0.4,
-    damping: 0.6
+    damping: 0.6,
+    relaxation: 0.012
 });
 
 /**

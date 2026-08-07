@@ -105,39 +105,50 @@ function constraints(p, B, gamma) {
  * @param {number[]} w - Inverse masses.
  * @param {{ alphaDev: number, alphaHyd: number, gamma: number }} c - Solver constants,
  *   compliances already divided by dt^2.
+ * @param {object} [damping] - Kelvin-Voigt term; omitted means perfectly elastic.
+ * @param {number[][]} [damping.prev] - Positions at the start of the substep.
+ * @param {number} [damping.relax] - Relaxation time divided by the substep.
  * @returns {number[][]} Corrected positions.
  */
-function projectCoupled(p, B, w, { alphaDev, alphaHyd, gamma }) {
+function projectCoupled(p, B, w, { alphaDev, alphaHyd, gamma }, { prev = p, relax = 0 } = {}) {
     const { cDev, cHyd, gDev, gHyd } = constraints(p, B, gamma);
-    const [a00, a01, a11] = gram(gDev, gHyd, w, alphaDev, alphaHyd);
+    const [a00, a01, a11] = gram(gDev, gHyd, w, alphaDev, alphaHyd, relax);
+
+    const motion = p.map((q, i) => sub(q, prev[i]));
+    const rate = g => motion.reduce((sum, d, i) => sum + dot(g[i], d), 0);
+    const bDev = -(cDev + rate(gDev) * relax);
+    const bHyd = -(cHyd + rate(gHyd) * relax);
 
     const det = a00 * a11 - a01 * a01;
-    const lDev = (a01 * cHyd - a11 * cDev) / det;
-    const lHyd = (a01 * cDev - a00 * cHyd) / det;
+    const lDev = (a11 * bDev - a01 * bHyd) / det;
+    const lHyd = (a00 * bHyd - a01 * bDev) / det;
 
     return p.map((q, i) => add(q, scale(add(scale(gDev[i], lDev), scale(gHyd[i], lHyd)), w[i])));
 }
 
 /**
- * The block matrix, compliances included.
+ * The block matrix, compliances included and the gradient part stiffened by the
+ * damping the way XPBD's `(1 + gamma)` factor does.
  *
  * @param {number[][]} gDev - Deviatoric gradients.
  * @param {number[][]} gHyd - Hydrostatic gradients.
  * @param {number[]} w - Inverse masses.
  * @param {number} alphaDev - Deviatoric compliance over dt^2.
  * @param {number} alphaHyd - Hydrostatic compliance over dt^2.
+ * @param {number} [relax] - Relaxation time divided by the substep.
  * @returns {number[]} `[a00, a01, a11]`.
  */
-function gram(gDev, gHyd, w, alphaDev, alphaHyd) {
-    let a00 = alphaDev;
+function gram(gDev, gHyd, w, alphaDev, alphaHyd, relax = 0) {
+    let a00 = 0;
     let a01 = 0;
-    let a11 = alphaHyd;
+    let a11 = 0;
     for (let i = 0; i < 4; i++) {
         a00 += w[i] * dot(gDev[i], gDev[i]);
         a01 += w[i] * dot(gDev[i], gHyd[i]);
         a11 += w[i] * dot(gHyd[i], gHyd[i]);
     }
-    return [a00, a01, a11];
+    const stiffened = 1 + relax;
+    return [a00 * stiffened + alphaDev, a01 * stiffened, a11 * stiffened + alphaHyd];
 }
 
 /**
@@ -196,10 +207,15 @@ function restTet(poissonRatio, tet = 0) {
     // Lumped the way the lattice lumps: the tetrahedron's mass over its corners.
     const nodeMass = (material.density * tetRestVolume(lattice)) / 4;
 
+    const { mu, lambda } = lameParameters(material);
+
     return {
         p: KUHN_TETS[tet].map(c => CUBE_CORNERS[c].map(x => x * H)),
         B: kuhnRestShapeInverses(H)[tet],
         w: Array.from({ length: 4 }, () => 1 / nodeMass),
+        mu,
+        lambda,
+        volume: tetRestVolume(lattice),
         c: {
             alphaDev: deviatoric / (DT * DT),
             alphaHyd: hydrostatic / (DT * DT),
@@ -231,19 +247,41 @@ const volume = p => mat3Determinant(
  * @param {object} setup - From {@link restTet}, optionally with `p` replaced.
  * @param {Function} project - Which scheme to use.
  * @param {number} substeps - How many substeps to run.
+ * @param {number} [relax] - Relaxation time divided by the substep.
  * @returns {number[][]} Final positions.
  */
-function run({ p, B, w, c }, project, substeps) {
+function run({ p, B, w, c }, project, substeps, relax = 0) {
     let positions = p;
     let velocity = p.map(() => [0, 0, 0]);
 
     for (let s = 0; s < substeps; s++) {
         const prev = positions;
-        positions = positions.map((q, i) => add(q, scale(velocity[i], DT)));
-        positions = project(positions, B, w, c);
+        positions = positions.map((q, i) => add(q, scale(velocity[i], DT * (w[i] > 0 ? 1 : 0))));
+        positions = project(positions, B, w, c, { prev, relax });
         velocity = positions.map((q, i) => scale(sub(q, prev[i]), 1 / DT));
     }
     return positions;
+}
+
+/**
+ * Elastic energy stored in one tetrahedron *above its rest value*, which is what
+ * the damping is supposed to remove and rigid motion is not supposed to contain.
+ *
+ * The subtraction is not cosmetic. This energy is not zero at rest -- `C_D` is
+ * `sqrt(3)` there and `C_H` is `-mu/lambda` -- and the rest value is large
+ * enough to bury the ring being measured.
+ *
+ * @param {number[][]} p - The four node positions.
+ * @param {object} setup - From {@link restTet}.
+ * @returns {number} Energy in joules above rest.
+ */
+function stored(p, setup) {
+    const { B, c, mu, lambda, volume } = setup;
+    const at = (positions) => {
+        const { cDev, cHyd } = constraints(positions, B, c.gamma);
+        return 0.5 * mu * volume * cDev * cDev + 0.5 * lambda * volume * cHyd * cHyd;
+    };
+    return at(p) - at(setup.p);
 }
 
 /**
@@ -356,6 +394,103 @@ describe('the coupled 2x2 projection', () => {
             expect(a00 * a11 - a01 * a01, `nu = ${nu}`)
                 .toBeGreaterThanOrEqual(c.alphaDev * c.alphaHyd);
         }
+    });
+});
+
+describe('the Kelvin-Voigt damping term', () => {
+    /** A generous relaxation time over the substep -- 40 ms, the slider's top. */
+    const RELAX = 0.04 / DT;
+
+    it('changes nothing at all when the relaxation time is zero', () => {
+        const setup = restTet(0.35);
+        const squashed = setup.p.map(q => [q[0], q[1] * 0.8, q[2]]);
+        const bare = projectCoupled(squashed, setup.B, setup.w, setup.c);
+        const damped = projectCoupled(squashed, setup.B, setup.w, setup.c, { prev: setup.p, relax: 0 });
+
+        expect(moved(bare, damped)).toBe(0);
+    });
+
+    it('still leaves rest exactly at rest, however viscous the material', () => {
+        // The cancellation survives because the damping scales the whole
+        // gradient part by one factor, and a body at rest has no motion for the
+        // rate term to bite on. A damping that broke this would reintroduce the
+        // drift the block solve exists to remove.
+        for (const nu of RATIOS) {
+            const setup = restTet(nu);
+            const after = projectCoupled(setup.p, setup.B, setup.w, setup.c, { relax: RELAX });
+
+            expect(moved(setup.p, after), `nu = ${nu}`).toBeLessThan(1e-9);
+        }
+    });
+
+    it('ignores a tetrahedron that is only translating', () => {
+        // The whole point of doing this at the constraint rather than on the
+        // velocity: `grad C . dx` is `(sum grad C) . dx` for a rigid shift, and
+        // every gradient set sums to zero. A falling body is not slowed.
+        const setup = restTet(0.35);
+        const shifted = setup.p.map(q => add(q, [0.004, -0.011, 0.002]));
+        const after = projectCoupled(shifted, setup.B, setup.w, setup.c, { prev: setup.p, relax: RELAX });
+
+        expect(moved(shifted, after)).toBeLessThan(1e-9);
+    });
+
+    it('ignores a tetrahedron that is only spinning', () => {
+        // Both constraints are invariant under rotation, so their gradients are
+        // orthogonal to a rotational velocity field. Unlike translation this is
+        // exact only in the limit: the leftover is second order in the angle,
+        // where a shear of the same size is first order. So the gap widens as
+        // the angle shrinks, and the bound below is a statement about that
+        // order, not a tolerance.
+        const setup = restTet(0.35);
+        const angle = 0.002;
+        const spun = setup.p.map(([x, y, z]) => [
+            x * Math.cos(angle) - y * Math.sin(angle),
+            x * Math.sin(angle) + y * Math.cos(angle),
+            z
+        ]);
+        const after = projectCoupled(spun, setup.B, setup.w, setup.c, { prev: setup.p, relax: RELAX });
+
+        // A shear of the same magnitude, for scale.
+        const sheared = setup.p.map(([x, y, z]) => [x + y * angle, y, z]);
+        const shearResponse = moved(
+            sheared,
+            projectCoupled(sheared, setup.B, setup.w, setup.c, { prev: setup.p, relax: RELAX })
+        );
+
+        expect(moved(spun, after)).toBeLessThan(shearResponse / 100);
+    });
+
+    it('lowers the deformation a struck tetrahedron reaches', () => {
+        // A free tetrahedron hit with a shearing velocity, comparing the largest
+        // deformation energy reached along the way. Most of that strike turns
+        // into rigid motion within a few substeps -- which the damping must not
+        // touch -- so a single tetrahedron only shows a few percent, and this
+        // asserts the direction rather than the size.
+        //
+        // The size is a property of a whole body's vibration modes, which needs
+        // a lattice sweep rather than one element. Measured that way on a 3x3x3
+        // cantilever: at 0.1 s a relaxation of 12 ms leaves a fifth of the ring
+        // an elastic material still holds, and by 0.4 s a two-hundredth of it.
+        //
+        // The direction is the part worth a guard. A sign slip in the rate term
+        // would turn this damping into an energy source, and the peak would go
+        // up rather than down.
+        const setup = restTet(0.35);
+        const peak = (relax) => {
+            let positions = setup.p;
+            let velocity = setup.p.map(([, y]) => [y * 2, 0, 0]);
+            let worst = 0;
+            for (let s = 0; s < 200; s++) {
+                const prev = positions;
+                positions = positions.map((q, i) => add(q, scale(velocity[i], DT)));
+                positions = projectCoupled(positions, setup.B, setup.w, setup.c, { prev, relax });
+                velocity = positions.map((q, i) => scale(sub(q, prev[i]), 1 / DT));
+                worst = Math.max(worst, stored(positions, setup));
+            }
+            return worst;
+        };
+
+        expect(peak(0.012 / DT)).toBeLessThan(peak(0) * 0.98);
     });
 });
 
