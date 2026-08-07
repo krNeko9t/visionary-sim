@@ -10,7 +10,7 @@ import {
 } from 'playcanvas';
 
 import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../discretize/lattice.js';
-import { SAMPLE_WGSL, bindDeformation } from '../../deformation/bind.js';
+import { SAMPLE_WGSL, deformationParameters } from '../../deformation/bind.js';
 import { CUBE_CORNERS } from '../../deformation/corners.js';
 
 /**
@@ -166,7 +166,9 @@ export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
         });
         const tint = GROUP_TINTS[group];
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
-        bindDeformation(material, field);
+        for (const [name, value] of Object.entries(deformationParameters(field))) {
+            material.setParameter(name, value);
+        }
         material.update();
 
         const mesh = new Mesh(device);

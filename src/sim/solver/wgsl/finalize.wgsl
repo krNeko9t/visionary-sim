@@ -1,9 +1,16 @@
-// Contacts against the tank, then the substep's velocity update.
+// The substep's closing pass: the tank boundary, then velocities read back off
+// the positions the constraints left behind.
 //
 // These are one kernel rather than two because both are per-node and strictly
-// adjacent: contacts must land after the elastic solve and before velocities
-// are read back off the positions. Merging them saves a dispatch per substep,
-// and at ten-plus substeps a frame that is worth having.
+// adjacent: the boundary must land after every constraint has projected and
+// before velocities are derived. Merging them saves a dispatch per substep, and
+// at ten-plus substeps a frame that is worth having.
+//
+// The tank is here rather than among the constraints because it is a property
+// of the world, fixed and known, not of any object -- five planes that never
+// move and never have to be discovered. Contact *between bodies* is the
+// opposite on every count, which is why it will arrive as a constraint set of
+// its own rather than as more planes in this file.
 
 uniform nodeCount: u32;
 uniform dt: f32;
@@ -38,13 +45,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         return;
     }
 
-    let b = bodies[bodyOfNode(n)];
+    let np = nodeParams[bodyOfNode(n)];
     let prev = nodePrev[n].xyz;
     var p = nodePos[n].xyz;
 
     // A grabbed node is driven, not simulated: it is pinned to the pointer ray
     // and keeps whatever velocity that implies.
-    if (b.grabNode >= 0 && u32(b.grabNode) == n) {
+    if (np.grabNode >= 0 && u32(np.grabNode) == n) {
         nodePos[n] = vec4f(uniform.grabTarget, 0.0);
         nodeVel[n] = vec4f((uniform.grabTarget - prev) / uniform.dt, 0.0);
         return;
@@ -55,7 +62,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
 
     // The tank is open at the top, so there is no y = max plane.
-    let fr = b.friction;
+    let fr = np.friction;
     p = resolvePlane(p, prev, vec3f(0.0, 1.0, 0.0), uniform.tankMin.y - p.y, fr);
     p = resolvePlane(p, prev, vec3f(1.0, 0.0, 0.0), uniform.tankMin.x - p.x, fr);
     p = resolvePlane(p, prev, vec3f(-1.0, 0.0, 0.0), p.x - uniform.tankMax.x, fr);
@@ -65,6 +72,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     nodePos[n] = vec4f(p, 0.0);
 
     var v = (p - prev) / uniform.dt;
-    v *= exp(-b.damping * uniform.dt);
+    v *= exp(-np.damping * uniform.dt);
     nodeVel[n] = vec4f(v, 0.0);
 }

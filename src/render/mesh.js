@@ -1,6 +1,6 @@
 import { Color, Entity, Mesh, MeshInstance, SHADERLANGUAGE_WGSL, StandardMaterial } from 'playcanvas';
 
-import { SAMPLE_WGSL, bindDeformation } from '../deformation/bind.js';
+import { SAMPLE_WGSL, deformationParameters } from '../deformation/bind.js';
 import { restNormals } from './normals.js';
 import vertexHookWgsl from './mesh.wgsl?raw';
 
@@ -49,7 +49,9 @@ export function createMeshView(app, surface, field, { tint = [0.92, 0.45, 0.26],
     const chunks = material.getShaderChunks(SHADERLANGUAGE_WGSL);
     chunks.set('litUserDeclarationVS', SAMPLE_WGSL);
     chunks.set('litUserMainEndVS', vertexHookWgsl);
-    bindDeformation(material, field);
+    for (const [name, value] of Object.entries(deformationParameters(field))) {
+        material.setParameter(name, value);
+    }
     material.update();
 
     const mesh = new Mesh(app.graphicsDevice);

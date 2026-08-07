@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATERIAL, POISSON_RANGE, waveSpeed } from '../../src/body/material.js';
-import { collapseScale, elementCompliance, waveRatio } from '../../src/sim/solver/compliance.js';
+import { collapseScale, elementCompliance, waveRatio } from '../../src/sim/constraints/compliance.js';
 
 /** A stand-in lattice: only the cell size reaches the compliance maths. */
 const cell = h => ({ h });

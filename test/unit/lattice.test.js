@@ -40,7 +40,7 @@ describe('lattice', () => {
     });
 
     it('round-trips a cell index through its coordinates', () => {
-        // `cellCoords` also exists in WGSL, in sim/solver/wgsl/common.wgsl, where the
+        // `cellCoords` also exists in WGSL, in sim/constraints/wgsl/cells.wgsl, where the
         // solver unpacks the very same `cells` array. The two cannot share code
         // across the language boundary, so this pins the JS side to the exact
         // packing `buildLattice` writes; if the WGSL copy ever drifts, the

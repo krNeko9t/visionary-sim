@@ -13,15 +13,34 @@
 PlayCanvas engine 承担渲染与场景，物理以 WGSL compute 运行在 WebGPU 上。
 
 替换代价：等同于换项目。
-→ `scene/`、`sim/solver/wgsl/`
+
+落点是 `scene/`、`sim/state/particles.js`、`sim/constraints/elasticCells.js`、`sim/solver/stepper.js`、`render/mesh.js`——引擎的
+buffer、compute、材质插桩都在这四处。`sim/solver/wgsl/` **不在**其中：那些 WGSL 除了方言
+（`uniform x: T;`、storage 绑定交给引擎分配）之外是可移植的，换引擎是机械替换，不是重写。
+最深的一处是 `render/mesh.js`，它插进标准材质的 chunk 点、用常量钉住引擎版本、直接写引擎
+内部 varying——那是内部 ABI，换来的是光照与阴影，是笔明账。
 
 ## 三、解算框架
 
 **XPBD**：小步长子步的辛欧拉积分，稳定 Neo-Hookean 本构，杨氏模量与泊松比作为一等参数。
 
-替换代价：重写 `sim/solver/`，其余各层不动。凡是只在 XPBD 下成立的量——顺服量、gamma、
-CFL 判据——都收在这个目录内。
-→ `sim/solver/`
+替换代价：重写 `sim/solver/` 与 `sim/constraints/`，其余各层不动。凡是只在 XPBD 下成立的
+量——顺服量、gamma、CFL 判据——都收在这两个目录内。
+→ `sim/solver/`、`sim/constraints/`
+
+模拟侧内部分成三段，边界按"谁必须知道什么"划，不按调用顺序划：
+
+```
+sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
+   自由度            自由度要服从什么         让它随时间服从
+```
+
+`sim/state/` 什么都不依赖。它只管节点的位置、历史和逆质量，不知道这些节点是干什么用的。
+这就是允许出现第二种约束的那道缝：物体间接触与弹性除了"移动同一批节点"之外毫无共同点，
+于是节点成了两者唯一都能看见的东西，而两者互相看不见。
+
+`sim/solver/` 只能看见 `sim/state/`，**看不见 `sim/constraints/`**。步进器按顺序派发别人交给
+它的约束，且必须无法叫出它们的名字——一旦能，"加一种约束"就又变回"改循环"了。
 
 有两条越界即塌的边界（见 `CLAUDE.md`）。只有 CFL 属于这个框架，另一条属于本构模型，
 换掉 XPBD 也带不走。两条都不当作实现细节藏起来：界面把当前值摆在会推着你越界的那几根
@@ -41,15 +60,25 @@ sim/  ──────►  deformation/  ◄──────  render/
 求法线、高斯能转协方差，因此一条通道同时服务两种渲染。同一套数学有 CPU 与 GPU 两份实现，
 前者是后者的参考解，由单元测试对齐。
 
-「把形变绑定到材质」只有一份实现，落在 `deformation/` 里。这不是自律的结果：`render/` 只
-能看见 `deformation/`，调试视图只能看见 `sim/discretize/` 和 `deformation/`，两者唯一的交
-集就是那里。想各写一份，得先破坏分层才拿得到。
+「形变要交给材质哪几个参数」只有一份实现，落在 `deformation/` 里。这不是自律的结果：
+`render/` 只能看见 `deformation/`，调试视图只能看见 `sim/discretize/` 和 `deformation/`，
+两者唯一的交集就是那里。想各写一份，得先破坏分层才拿得到。
 
-三条边界由 `test/unit/architecture.test.js` 在每次 `npm test` 时检查：
+那一份实现**返回参数字典，不写进材质**。差别不是风格：写进去就得调用别人对象的方法，那是
+对那套 API 的依赖，有没有 `import` 都一样，而依赖表只读 import。`deformation/bind.js` 曾经
+一边在类型标注里写着 `import('playcanvas').Material`、一边被这套检查判为"无任何依赖"。
+交还一个普通对象，这里就没有可以判断错的东西了。
+
+四条边界由 `test/unit/architecture.test.js` 在每次 `npm test` 时检查：
 
 - `render/` 的依赖只有 `deformation/`
 - `deformation/` 无任何依赖
+- `deformation/` 里不出现任何渲染器的词汇（**知识边**，import 表看不见的那种）
 - 依赖一律向下，无环
+
+第三条的范围写明，不往大里说：`deformation/sample.wgsl` 仍然写 PlayCanvas 的 WGSL 方言
+（`uniform x: T;` 反过来读作 `uniform.x`，storage 绑定交给引擎分配）。那处耦合是真的，这条
+规则够不到它，它要等 GPU 资源层那道缝一起走。
 
 ## 五、当前实现选择
 
@@ -57,7 +86,7 @@ sim/  ──────►  deformation/  ◄──────  render/
 |---|---|---|
 | 体素点阵 + Kuhn 六四面体切分 | `sim/discretize/` | 重写该目录，`body/` 及以上不动 |
 | 三线性内嵌 | `deformation/` | 通道内部换算法，两侧不动 |
-| 8 色并行 Gauss-Seidel | `sim/solver/` | 性能手段，可独立更换 |
+| 8 色并行 Gauss-Seidel | `sim/constraints/elasticCells.js` | 性能手段，可独立更换。这条批次规则**只属于弹性约束**：它跨物体成立仅仅因为各物体的节点区间互不相交，跨物体的接触约束没有奇偶可援引，必须另想办法 |
 | 先网格、后 3DGS | `render/` | M6 之后网格路径去留自定 |
 | 借引擎标准材质的顶点钩子，而非自写着色 | `render/mesh.wgsl` | 换来光照与阴影，代价是随引擎版本复核钩子 |
 | 解析形状自带参数化表面 | `assets/tessellate.js` | 换成任意 SDF 要 marching cubes |
@@ -71,9 +100,11 @@ sim/  ──────►  deformation/  ◄──────  render/
 | `main.js` | 组装：把各层接成一个可运行的程序 |
 | `scene/` | 这一次跑什么、在什么环境里观察它。仅 `main.js` 依赖，改动成本最低 |
 | `body/` | 被模拟对象的自我描述：身份、材质、静止形状 |
-| `sim/simulator.js` | 模拟侧对外的唯一入口 |
+| `sim/simulator.js` | 模拟侧对外的唯一入口，也是上面那三段的装配处 |
 | `sim/discretize/` | 把连续的物体变成有限个自由度 |
-| `sim/solver/` | 让这些自由度随时间演化并服从材料规律 |
+| `sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
+| `sim/constraints/` | 自由度要服从什么。一种约束自带它的数据、它的批次规则和它的投影核 |
+| `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
 | `sim/debug/` | 使求解状态可见 |
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |
 | `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条 |

@@ -13,11 +13,13 @@ import sampleWgsl from './sample.wgsl?raw';
  * the shader text and the parameter names from drifting apart:
  *
  *   1. {@link SAMPLE_WGSL}, spliced into its shader wherever declarations go.
- *   2. {@link bindDeformation}, called once with the field to sample.
+ *   2. {@link deformationParameters}, whose result it feeds to its own shader.
  *
  * @typedef {object} DeformationField
- * @property {import('playcanvas').StorageBuffer} nodePositions - Live deformed node
- *   positions for the whole scene, vec4f per node.
+ * @property {object} nodePositions - Live deformed node positions for the whole
+ *   scene, vec4f per node. An opaque storage-buffer handle: this file passes it
+ *   along and never calls anything on it, which is what lets the channel stay
+ *   ignorant of whose renderer is on the other end.
  * @property {number[]} origin - World position of the min corner of cell (0,0,0).
  * @property {number} h - Cell edge length.
  * @property {number[]} cellDims - Cell counts along each axis.
@@ -29,19 +31,35 @@ import sampleWgsl from './sample.wgsl?raw';
 export const SAMPLE_WGSL = sampleWgsl;
 
 /**
- * Points a material's copy of {@link SAMPLE_WGSL} at one field.
+ * What a copy of {@link SAMPLE_WGSL} has to be given to point at one field:
+ * every uniform that file declares, and where its value comes from.
+ *
+ * Returned as data rather than written into a material, and the shape of this
+ * function is the whole point. Writing them meant calling the renderer's
+ * parameter setter on an object this module did not make, which is a dependency
+ * on that renderer's API whether or not an `import` records it -- and the
+ * layering test reads imports, so the tree went on claiming this channel
+ * depended on nothing while its one function was written against PlayCanvas.
+ * Handing back a plain object leaves nothing here to be wrong about: the six
+ * names and their sources stay in one place, and applying them is the caller's
+ * business, because the caller is the one who owns a renderer.
+ *
+ * `architecture.test.js` now checks that no renderer's vocabulary appears in
+ * this directory at all, which is why the paragraph above names no method.
  *
  * Cheap enough to call every frame, but there is no reason to: the buffer is
- * written in place by the solver, so a field bound once stays live.
+ * written in place by the solver, so a field applied once stays live.
  *
- * @param {import('playcanvas').Material} material - Material whose shader includes the channel.
  * @param {DeformationField} field - Field to sample.
+ * @returns {Record<string, unknown>} Shader parameter names and their values.
  */
-export function bindDeformation(material, field) {
-    material.setParameter('deformNodePos', field.nodePositions);
-    material.setParameter('deformOrigin', field.origin);
-    material.setParameter('deformH', field.h);
-    material.setParameter('deformCellDims', field.cellDims);
-    material.setParameter('deformNodeDims', field.nodeDims);
-    material.setParameter('deformNodeOffset', field.nodeOffset);
+export function deformationParameters(field) {
+    return {
+        deformNodePos: field.nodePositions,
+        deformOrigin: field.origin,
+        deformH: field.h,
+        deformCellDims: field.cellDims,
+        deformNodeDims: field.nodeDims,
+        deformNodeOffset: field.nodeOffset
+    };
 }

@@ -60,7 +60,7 @@ export function nodeIndex(nodeDims, i, j, k) {
  * Unpacks a linear cell index back into grid coordinates.
  *
  * `cells` stores linear indices, so everything that walks that array needs this
- * -- the debug renderer, the tests, and `cellCoords` in `sim/wgsl/common.wgsl`.
+ * -- the debug renderer, the tests, and `cellCoords` in `sim/constraints/wgsl/cells.wgsl`.
  * The WGSL copy is unavoidable, being a different language; `lattice.test.js`
  * pins the two against a round trip so they cannot drift apart silently.
  *

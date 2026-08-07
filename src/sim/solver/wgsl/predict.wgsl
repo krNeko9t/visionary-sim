@@ -1,8 +1,12 @@
 // Substep prediction: symplectic Euler on the nodes.
 //
 // This is the whole of XPBD's time integration. Gauss-Seidel, which the spec
-// called "time integration", is the ordering of the constraint sweep in
-// elastic.wgsl -- a different axis entirely.
+// called "time integration", is the ordering of a constraint's own sweep --
+// see `constraints/wgsl/project.wgsl` -- a different axis entirely.
+//
+// The stepper opens every substep with this pass and closes it with
+// `finalize.wgsl`. Whatever constraints run in between is not this file's
+// business; it moves nodes it knows nothing else about.
 
 uniform nodeCount: u32;
 uniform dt: f32;

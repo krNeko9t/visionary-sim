@@ -8,13 +8,20 @@
 // Within a tetrahedron the two constraints are *not* taken in turn. They are
 // evaluated at the same deformation gradient and solved as one 2x2 block, which
 // is what makes a compressible material hold its shape; see xpbdCouple in
-// common.wgsl for why taking them in turn does not.
+// cells.wgsl for why taking them in turn does not.
 //
 // Cells of one colour agree in index parity on every axis, so they never share
 // a node (see cellColor in discretize/lattice.js). A whole colour therefore runs
 // in parallel with no atomics and no read-modify-write races, and eight
 // dispatches cover the scene. This is what makes Gauss-Seidel convergence
 // available on a GPU at all; plain Jacobi would need far more iterations.
+//
+// That guarantee belongs to this constraint and does not travel. It holds
+// across bodies only because bodies own disjoint node ranges, so two same
+// -coloured cells in different lattices cannot collide either. A constraint
+// that couples a node of one body to a node of another -- which is what contact
+// between bodies is -- has no parity to appeal to and must not be batched this
+// way. It gets its own file and its own answer.
 
 uniform colorStart: u32;
 uniform colorCount: u32;
@@ -28,8 +35,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
 
     let entry = cells[uniform.colorStart + slot];
-    let b = bodies[entry.x];
-    let coord = cellCoords(b.cellDims, entry.y);
+    let cp = cellParams[entry.x];
+    let coord = cellCoords(cp.cellDims, entry.y);
 
     var p: array<vec3f, 8>;
     var w: array<f32, 8>;
@@ -39,7 +46,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     // nothing at all when the material is not viscous.
     var prev: array<vec3f, 8>;
     for (var c = 0u; c < 8u; c++) {
-        let n = cornerNode(b, coord, c);
+        let n = cornerNode(cp, coord, c);
         ids[c] = n;
         p[c] = nodePos[n].xyz;
         prev[c] = nodePrev[n].xyz;
@@ -47,14 +54,14 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
 
     let invDt2 = 1.0 / (uniform.dt * uniform.dt);
-    let alphaDev = b.alphaDev * invDt2;
-    let alphaHyd = b.alphaHyd * invDt2;
+    let alphaDev = cp.alphaDev * invDt2;
+    let alphaHyd = cp.alphaHyd * invDt2;
     // The material stores a relaxation time; the solve wants it in substeps.
-    let relax = b.relaxation / uniform.dt;
+    let relax = cp.relaxation / uniform.dt;
     // Every rest cell is the same cube, so the six rest shape inverses are
     // scene-wide constants and only need scaling by the cell size. There is no
     // per-tetrahedron rest data in memory at all.
-    let restScale = 1.0 / b.h;
+    let restScale = 1.0 / cp.h;
 
     for (var t = 0u; t < 6u; t++) {
         let tet = KUHN_TETS[t];
@@ -83,7 +90,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         // offset that makes F = I a stationary point of the combined energy, so
         // a body at rest neither collapses under the deviatoric term nor
         // inflates.
-        let cHyd = determinant(F) - b.gamma;
+        let cHyd = determinant(F) - cp.gamma;
 
         // dC/dp_{1,2,3} are the columns of (dC/dF) * B^T; the fourth gradient
         // follows from translation invariance.

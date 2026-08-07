@@ -6,7 +6,7 @@
  * inputs rather than a dimensionless "stiffness" slider, which is why the Ten
  * Minute Physics edge-length plus volume constraints were not used -- they have
  * no material meaning at all. What the current solver turns these into lives in
- * `sim/solver/compliance.js`.
+ * `sim/constraints/compliance.js`.
  *
  * @typedef {object} Material
  * @property {number} youngsModulus - E, in pascals. Jelly is around 1e4..1e6.
@@ -18,7 +18,7 @@
  * @property {number} relaxation - Kelvin-Voigt relaxation time, in seconds. How
  *   long a deformation takes to stop ringing. Unlike {@link Material.damping}
  *   this acts on the rate of deformation rather than on velocity, so it leaves
- *   free fall and spin alone; see `xpbdCouple` in `sim/solver/wgsl/common.wgsl`.
+ *   free fall and spin alone; see `xpbdCouple` in `sim/constraints/wgsl/cells.wgsl`.
  *   Zero is a perfectly elastic material, which rings until something else takes
  *   the energy.
  */
@@ -39,7 +39,7 @@
  * itself the maximum and a body inflates without bound instead.
  *
  * nu = 0.25 is gamma = 2, which puts the barrier at 54% linear compression --
- * a sixth of the rest volume. `collapseScale` in `sim/solver/compliance.js`
+ * a sixth of the rest volume. `collapseScale` in `sim/constraints/compliance.js`
  * computes it, the panel reports it beside this slider, and
  * `test/unit/elastic.test.js` checks the formula against what a tetrahedron
  * actually survives.
@@ -53,7 +53,7 @@
  * so nu had to stay near 0.5. Solving the two as a coupled 2x2 block removed
  * that mechanism outright rather than shrinking it: at `F = I` the corrections
  * now cancel identically, for any gamma, dt or mass. See `xpbdCouple` in
- * `sim/solver/wgsl/common.wgsl`.
+ * `sim/constraints/wgsl/cells.wgsl`.
  *
  * So the floor moved for one reason and stopped for another. What it buys is
  * material that is genuinely compressible: at nu = 0.25 a body can lose a third
@@ -114,7 +114,7 @@ export function engineeringConstants({ mu, lambda }) {
  *
  * Turning it into a substep count needs a cell size, which only exists once a
  * solver has chosen a discretisation, so that lives on the simulation side in
- * `sim/solver/compliance.js`. This function is the only place the wave speed
+ * `sim/constraints/compliance.js`. This function is the only place the wave speed
  * itself is defined.
  *
  * @param {Material} material - The material.

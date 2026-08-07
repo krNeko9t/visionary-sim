@@ -1,8 +1,9 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
-import { SimArena } from './solver/arena.js';
-import { collapseScale, elementCompliance, waveRatio } from './solver/compliance.js';
-import { SimKernels } from './solver/kernels.js';
+import { ElasticCells } from './constraints/elasticCells.js';
+import { Particles } from './state/particles.js';
+import { Stepper } from './solver/stepper.js';
+import { collapseScale, elementCompliance, waveRatio } from './constraints/compliance.js';
 
 /**
  * The simulation's only public surface.
@@ -48,8 +49,28 @@ export class Simulator {
         /** @type {SimBody[]} */
         this.simBodies = bodies.map(body => ({ body, lattice: discretizeBody(body) }));
 
-        this.arena = new SimArena(device, this.simBodies);
-        this.kernels = new SimKernels(device, this.arena);
+        // The three pieces of the simulation side, assembled here and nowhere
+        // else. They are listed in dependency order and each knows only the one
+        // before it: the nodes exist, a constraint moves them, a stepper runs
+        // the constraints. The stepper never learns what kind of constraint it
+        // is running, which is what leaves room for a second kind.
+        // Spelled out rather than handing the lattice over whole: these three
+        // arrays are the entire set of things the node storage is allowed to
+        // know, and writing them at the seam is what keeps that visible.
+        this.particles = new Particles(device, this.simBodies.map(({ lattice }) => ({
+            restPositions: lattice.restPositions,
+            invMass: lattice.invMass,
+            nodeCount: lattice.nodeCount
+        })));
+        this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
+            ({ body, lattice }) => ({ lattice, material: body.material })
+        ));
+        this.stepper = new Stepper(device, this.particles, [this.elastic]);
+
+        for (let b = 0; b < this.simBodies.length; b++) {
+            const { damping, friction } = this.simBodies[b].body.material;
+            this.particles.setParams(b, { damping, friction });
+        }
 
         this.grab = { body: -1, node: -1, target: [0, 0, 0] };
         this.stepCount = 0;
@@ -74,12 +95,12 @@ export class Simulator {
     deformationOf(bodyIndex) {
         const { lattice } = this.simBodies[bodyIndex];
         return {
-            nodePositions: this.arena.nodePos,
+            nodePositions: this.particles.nodePos,
             origin: lattice.origin,
             h: lattice.h,
             cellDims: lattice.cellDims,
             nodeDims: lattice.nodeDims,
-            nodeOffset: this.arena.nodeOffsets[bodyIndex]
+            nodeOffset: this.particles.offsetOf(bodyIndex)
         };
     }
 
@@ -151,9 +172,9 @@ export class Simulator {
         return {
             deviceType: this.device.deviceType,
             bodyCount: this.simBodies.length,
-            cells: this.arena.cellCount,
-            tets: this.arena.cellCount * 6,
-            nodes: this.arena.nodeCount,
+            cells: this.elastic.cellCount,
+            tets: this.elastic.cellCount * 6,
+            nodes: this.particles.nodeCount,
             substeps: this.params.substeps,
             advised: this.recommendedSubsteps(frameTime),
             cfl: this.cflNumber(frameTime),
@@ -212,7 +233,7 @@ export class Simulator {
             return;
         }
 
-        this.kernels.setFrameParameters({
+        this.stepper.setFrameParameters({
             substepDt: dt / substeps,
             gravity,
             tankMin: this.tank.min,
@@ -220,7 +241,7 @@ export class Simulator {
             grabTarget: this.grab.target
         });
 
-        this.device.computeDispatch(this.kernels.sequence(substeps), 'softbody-step');
+        this.device.computeDispatch(this.stepper.sequence(substeps), 'softbody-step');
         this.stepCount += substeps;
     }
 
@@ -228,6 +249,10 @@ export class Simulator {
      * Applies a material change. Everything except density is a handful of
      * uniforms; density also has to re-lump the node masses, because those are
      * a property of the discretisation rather than of the material.
+     *
+     * One material now lands in two places, and the split is the honest one: a
+     * node is slowed and rubs against things whatever constraint is holding it,
+     * while compliance and gamma mean nothing outside the elastic constraint.
      *
      * @param {number} bodyIndex - Index into the body list.
      * @param {Partial<import('../body/material.js').Material>} changes - Fields to change.
@@ -240,9 +265,13 @@ export class Simulator {
         if (density > 0 && density !== body.material.density) {
             relumpMasses(lattice, body.material.density, density);
             body.material.density = density;
-            this.arena.uploadMasses();
+            this.particles.uploadMasses();
         }
-        this.arena.uploadBodies();
+        this.particles.setParams(bodyIndex, {
+            damping: body.material.damping,
+            friction: body.material.friction
+        });
+        this.elastic.uploadParams();
     }
 
     /**
@@ -262,16 +291,16 @@ export class Simulator {
      *   The grabbable node, or null if the ray missed.
      */
     async pick(origin, direction, { radius = this.coarsestCell() * 1.2 } = {}) {
-        const nodes = await this.arena.readNodePositions();
-        const found = nearestNodeToRay(nodes, this.arena.invMass, origin, direction, radius);
+        const nodes = await this.particles.readPositions();
+        const found = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, radius);
         if (found < 0) {
             return null;
         }
 
-        const bodyIndex = bodyOfNode(this.arena.nodeOffsets, found);
+        const bodyIndex = bodyOfNode(this.particles.offsets, found);
         return {
             bodyIndex,
-            node: found - this.arena.nodeOffsets[bodyIndex],
+            node: found - this.particles.offsetOf(bodyIndex),
             position: [nodes[found * 4], nodes[found * 4 + 1], nodes[found * 4 + 2]]
         };
     }
@@ -291,12 +320,12 @@ export class Simulator {
         if (bodyIndex < 0 || localNodeIndex < 0) {
             this.grab.body = -1;
             this.grab.node = -1;
-            this.arena.setGrab(-1, -1);
+            this.particles.setGrab(-1, -1);
             return;
         }
         this.grab.body = bodyIndex;
-        this.grab.node = this.arena.nodeOffsets[bodyIndex] + localNodeIndex;
-        this.arena.setGrab(bodyIndex, this.grab.node);
+        this.grab.node = this.particles.offsetOf(bodyIndex) + localNodeIndex;
+        this.particles.setGrab(bodyIndex, this.grab.node);
     }
 
     /**
@@ -309,12 +338,13 @@ export class Simulator {
     /** Returns every body to its rest state, at rest. */
     reset() {
         this.setGrab(-1, -1);
-        this.arena.reset();
+        this.particles.reset();
         this.stepCount = 0;
     }
 
     destroy() {
-        this.kernels.destroy();
-        this.arena.destroy();
+        this.stepper.destroy();
+        this.elastic.destroy();
+        this.particles.destroy();
     }
 }

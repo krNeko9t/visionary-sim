@@ -17,11 +17,16 @@
 新增目录时同时更新该表；调整表意味着调整设计，需在 `ARCHITECTURE.md` 中说明理由。
 
 现行硬规则：`render/` 只依赖 `deformation/`；`deformation/` 无依赖；`body/` 只依赖
-`assets/`；`sim/discretize/` 不依赖 `sim/solver/`；`ui/` 只依赖 `sim/` 与 `body/`；
-依赖一律向下，无环。
+`assets/`；`sim/discretize/` 不依赖求解侧；`sim/state/` 无依赖；`sim/solver/` 只依赖
+`sim/state/`（**看不见 `sim/constraints/`**）；`sim/constraints/` 依赖 `sim/state/`、
+`sim/discretize/`、`body/`；`ui/` 只依赖 `sim/` 与 `body/`；依赖一律向下，无环。
 
-这张表还顺带决定了"把形变绑定到材质"只能有一份实现：`render/` 与 `sim/debug/` 唯一的公共
-可见范围就是 `deformation/`。新增消费者时走那一份，不要在自己目录里再写一遍绑定。
+这张表还顺带决定了"形变要交给材质哪几个参数"只能有一份实现：`render/` 与 `sim/debug/` 唯一
+的公共可见范围就是 `deformation/`。新增消费者时走那一份，不要在自己目录里再写一遍。
+
+那一份实现返回参数字典、不写进材质，因为依赖表只读 `import`，而调用别人对象的方法同样是
+依赖。所以还有一条按**知识边**检查的规则：`deformation/` 里不得出现渲染器的词汇。加新规则
+时想清楚查的是 import 还是知识——树上写着的话必须是真的，假保证比没保证坏。
 
 ## 层次不可混淆
 
@@ -46,10 +51,10 @@
 历史注记：第 2 条以前不是这个。以前两个约束顺序投影，受到的阻尼不等，每对投影留下净收缩，
 只有体积约束硬到锁死才不累积，因此要求 `gamma ≈ 1`（泊松比 ≥ 0.35）。**这条已经消除**：
 两个约束现在作为 2×2 耦合块联立求解，`F = I` 处的修正恒等于零，与 gamma、dt、质量都无关。
-推导在 `sim/solver/wgsl/common.wgsl` 的 `xpbdCouple`，两套方案的对照在
+推导在 `sim/constraints/wgsl/cells.wgsl` 的 `xpbdCouple`，两套方案的对照在
 `test/unit/elastic.test.js`。下限因此从 0.35 降到 0.25，挡住它继续下降的是上面第 2 条。
 
-推导写在 `body/material.js` 与 `sim/solver/compliance.js` 的注释中。
+推导写在 `body/material.js` 与 `sim/constraints/compliance.js` 的注释中。
 
 ## 离散化的一条硬边界
 
@@ -77,6 +82,15 @@ M4 完成的状态：`ui/` 面板驱动材料、子步、暂停/单步/重置和
 也为 false 时它甚至只打印一句警告就原样返回。`ui/grab.js` 因此把监听挂在 `window` 的捕获
 阶段——早于挂在 canvas 上的相机——左键事件在到达相机之前就被取走。
 
-M5 是物体之间的接触。现在只有物体与水缸的碰撞（`sim/solver/wgsl/contact.wgsl`），物体
-互相穿过。加新界面时走 `ui/`，不要在 `main.js` 里堆事件监听；`render/` 增加新表示法
-（M6 的 3DGS）时走 `deformation/bind.js`，不要新写一份绑定。
+M5 是物体之间的接触。现在只有物体与水缸的碰撞（`sim/solver/wgsl/finalize.wgsl`），物体
+互相穿过。落点是 `sim/constraints/` 里与 `elasticCells.js` 并列的第二个约束集，步进器接一个
+数组元素即可，不改循环。三件事事先写明，免得照着弹性抄：
+
+1. **不能用 8 色。** 那条奇偶规则跨物体成立，只因各物体的节点区间互不相交；接触约束一旦
+   把两个物体的节点耦合起来，前提当场作废。走 Jacobi + 原子累加再平均（Flex/Vellum 的做法）。
+2. **数量每子步都变。** 弹性的 cells 缓冲在构造时定长，接触的不行，要 append 缓冲加 GPU 计数器。
+3. **粗筛不需要 BVH。** 每个物体自带占据网格，节点碰物体是一次 O(1) 查表；5 个物体的粗筛
+   是 CPU 上 10 次 AABB 比较。别照抄 PhysX 那套——它是为上万个任意凸体准备的。
+
+加新界面时走 `ui/`，不要在 `main.js` 里堆事件监听；`render/` 增加新表示法（M6 的 3DGS）时
+走 `deformation/bind.js`，不要新写一份绑定。

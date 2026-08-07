@@ -1,48 +1,39 @@
-// Shared declarations for every simulation kernel. `sim/kernels.js` prepends
-// the generated Kuhn constants and then this file to each kernel source, so
-// there is exactly one definition of the data layout.
+// What the elastic constraint needs on top of the particle declarations: which
+// cells there are, what each one is made of, and the 2x2 block that projects
+// one tetrahedron.
+//
+// `elasticCells.js` prepends the generated Kuhn constants, then `state.wgsl`,
+// then this file, to its projection kernel. Nothing outside this constraint
+// includes it -- the stepper's own passes move nodes without ever learning that
+// a cell exists.
 
-// Per-body parameters. Laid out to WGSL's std430-like rules: every vec3 aligns
-// to 16 bytes and is followed by a scalar that fills the gap. Total 80 bytes.
-// `sim/arena.js` writes this exact layout.
-struct Body {
-    origin: vec3f,
-    h: f32,
+// Per-body constants for this constraint. 64 bytes, written by
+// `elasticCells.js` to this exact layout.
+//
+// The lattice's world origin is deliberately absent. It is what the render side
+// needs in order to find the cell a rest point falls in; nothing in here has to
+// locate anything, because a cell arrives already identified. It used to be
+// uploaded anyway, every frame, unread.
+struct CellParams {
     cellDims: vec3u,
     nodeOffset: u32,
     nodeDims: vec3u,
-    nodeCount: u32,
+    pad0: u32,
+    h: f32,
     alphaDev: f32,
     alphaHyd: f32,
     gamma: f32,
-    damping: f32,
-    friction: f32,
-    grabNode: i32,
     relaxation: f32,
-    pad0: f32,
+    pad1: f32,
+    pad2: f32,
+    pad3: f32,
 }
 
-// One arena for the whole scene rather than per-body buffers: it keeps the
-// dispatch count independent of the body count, and lets a colour group span
-// every body at once.
-var<storage, read_write> nodePos: array<vec4f>;
-var<storage, read_write> nodePrev: array<vec4f>;
-var<storage, read_write> nodeVel: array<vec4f>;
-var<storage, read> nodeInvMass: array<f32>;
+var<storage, read> cellParams: array<CellParams>;
+
+// One entry per occupied cell: (body index, linear cell index), grouped by
+// colour across every body at once.
 var<storage, read> cells: array<vec2u>;
-var<storage, read> bodies: array<Body>;
-
-// Bodies own contiguous node ranges, and there are only a handful of them, so a
-// linear scan is cheaper than storing a node-to-body index for every node.
-fn bodyOfNode(node: u32) -> u32 {
-    let count = arrayLength(&bodies);
-    for (var b = 0u; b + 1u < count; b++) {
-        if (node < bodies[b].nodeOffset + bodies[b].nodeCount) {
-            return b;
-        }
-    }
-    return count - 1u;
-}
 
 fn cellCoords(dims: vec3u, linear: u32) -> vec3u {
     return vec3u(
@@ -54,10 +45,10 @@ fn cellCoords(dims: vec3u, linear: u32) -> vec3u {
 
 // Corner `c` of a cell sits at offset (c&1, (c>>1)&1, (c>>2)&1), matching
 // CUBE_CORNERS in deformation/corners.js.
-fn cornerNode(b: Body, coord: vec3u, corner: u32) -> u32 {
+fn cornerNode(cp: CellParams, coord: vec3u, corner: u32) -> u32 {
     let offset = vec3u(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u);
     let n = coord + offset;
-    return b.nodeOffset + n.x + b.nodeDims.x * (n.y + b.nodeDims.y * n.z);
+    return cp.nodeOffset + n.x + cp.nodeDims.x * (n.y + cp.nodeDims.y * n.z);
 }
 
 // XPBD multipliers for the two constraints of one tetrahedron, solved together
@@ -105,8 +96,8 @@ fn cornerNode(b: Body, coord: vec3u, corner: u32) -> u32 {
 // set sums to zero: it cannot slow a body that is merely translating, and it
 // cannot slow one that is merely spinning -- `grad C . dx` vanishes for any
 // motion that does not change the deformation gradient. It removes energy from
-// deformation only, which is what `Body.damping` (plain velocity drag, applied
-// in contact.wgsl) cannot distinguish.
+// deformation only, which is what the plain velocity drag in the stepper's
+// finalize pass cannot distinguish.
 //
 // At `relax = 0` this reduces to the undamped block exactly. At rest it returns
 // zero however large `relax` is: `dx` contributes nothing there, and scaling the

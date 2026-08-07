@@ -36,8 +36,22 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  * - `body` may reach only `assets`. A body describes an object; it must not
  *   learn how anyone chose to simulate it, or that choice becomes expensive to
  *   change.
- * - `sim/discretize` may not reach `sim/solver`. How an object is cut up must
- *   not depend on who solves it, so that either can be replaced alone.
+ * - `sim/discretize` may not reach `sim/state`, `sim/constraints` or
+ *   `sim/solver`. How an object is cut up must not depend on who solves it, so
+ *   that either can be replaced alone.
+ * - `sim/state` may reach nothing at all. It holds the degrees of freedom and
+ *   must not know what any of them are for. This is the seam that lets a second
+ *   kind of constraint exist: contact between bodies shares nothing with
+ *   elasticity except the nodes it moves, so the nodes are what both are
+ *   allowed to see, and neither can see the other.
+ * - `sim/solver` may reach `sim/state` and nothing else -- in particular not
+ *   `sim/constraints`. The stepper runs whatever constraint sets it is handed
+ *   and must stay unable to name them; the moment it can, "add a constraint
+ *   type" turns back into "edit the loop".
+ * - `sim/constraints` may reach `sim/state`, `sim/discretize` and `body`. A
+ *   constraint is entitled to know what it is constraining and what the thing
+ *   is made of. It may not reach `sim/solver`: constraints are run, they do not
+ *   run anything.
  * - `ui` may reach `sim` and `body` and nothing else. It edits materials and
  *   drives the simulation, and it does both through the surfaces those two
  *   already publish. Letting it reach a lattice or a buffer would put a second
@@ -49,7 +63,9 @@ const ALLOWED = {
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
     'sim/discretize': ['deformation', 'assets'],
-    'sim/solver': ['sim/discretize', 'body', 'deformation'],
+    'sim/state': [],
+    'sim/constraints': ['sim/state', 'sim/discretize', 'body'],
+    'sim/solver': ['sim/state'],
     'sim/debug': ['sim/discretize', 'deformation'],
     render: ['deformation'],
     body: ['assets'],
@@ -59,8 +75,25 @@ const ALLOWED = {
 
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
 const REQUIRED = [
-    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/solver', 'scene', 'ui'
+    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/state',
+    'sim/constraints', 'sim/solver', 'scene', 'ui'
 ];
+
+/**
+ * Names that belong to whoever is doing the rendering.
+ *
+ * The table above is a table of *imports*, and a module can know something
+ * without importing it: calling a method on an object it did not make, or
+ * naming a foreign type in an annotation, are both dependencies that no import
+ * check will ever see. Wherever the tree makes a claim, this list is how that
+ * claim is kept true rather than merely displayed.
+ *
+ * Matched case-sensitively, and that is load-bearing rather than sloppy:
+ * `playcanvas` in lower case is how the package is named in an import or a type
+ * annotation, while prose that discusses the engine writes PlayCanvas. The
+ * first is a dependency and the second is a sentence.
+ */
+const RENDERER_API = ['playcanvas', 'setParameter', 'getShaderChunks', 'StorageBuffer'];
 
 /**
  * @param {string} dir - Directory to walk.
@@ -141,6 +174,33 @@ describe('the layering the file tree claims', () => {
             .map(({ from, to }) => `${from} -> ${to}`);
 
         expect(leaks).toEqual([]);
+    });
+
+    it('keeps the deformation channel free of any renderer API', () => {
+        // The import rules cannot see this one. `bind.js` used to take a
+        // PlayCanvas material and call `setParameter` on it six times, and said
+        // so in an `import('playcanvas').Material` annotation -- and every
+        // import check passed the whole time, because the edge scan only
+        // matches relative paths. The tree said the channel depended on
+        // nothing, the suite certified it, and it was not true. A guarantee
+        // that is wrong is worse than one that was never offered, so the
+        // knowledge edges are checked by name as well.
+        //
+        // The scope is stated rather than overclaimed: `sample.wgsl` still
+        // writes PlayCanvas's WGSL dialect -- `uniform x: T;` read back as
+        // `uniform.x`, storage bindings left for the engine to assign. That
+        // coupling is real, this rule does not reach it, and it goes when the
+        // GPU resource seam does.
+        const leaks = sourceFiles()
+            .filter(file => areaOf(file) === 'deformation')
+            .flatMap((file) => {
+                const text = readFileSync(join(SRC, file), 'utf8');
+                return RENDERER_API
+                    .filter(name => text.includes(name))
+                    .map(name => `src/${file} mentions "${name}"`);
+            });
+
+        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
     });
 
     it('has no cycles', () => {

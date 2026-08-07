@@ -4,13 +4,13 @@ import { DEFAULT_MATERIAL, POISSON_RANGE, lameParameters } from '../../src/body/
 import { CUBE_CORNERS } from '../../src/deformation/corners.js';
 import { KUHN_TETS, kuhnRestShapeInverses } from '../../src/sim/discretize/kuhn.js';
 import { mat3Determinant, mat3FromColumns, mat3Multiply } from '../../src/sim/discretize/mat3.js';
-import { collapseScale, elementCompliance, tetRestVolume } from '../../src/sim/solver/compliance.js';
+import { collapseScale, elementCompliance, tetRestVolume } from '../../src/sim/constraints/compliance.js';
 
 /**
  * What one tetrahedron's projection does, and where the material's limits
  * actually come from.
  *
- * The scheme lives in `sim/solver/wgsl/elastic.wgsl` and cannot be run here, so
+ * The scheme lives in `sim/constraints/wgsl/project.wgsl` and cannot be run here, so
  * this file carries a transcription of it -- the same status as the WGSL copy of
  * `cellCoords`, and kept honest the same way, by reading the two side by side.
  * Both schemes are transcribed: the coupled 2x2 block that ships, and the
