@@ -58,7 +58,9 @@ export class SimArena {
         this.cellCount = cellTotal;
 
         const positions = new Float32Array(nodeTotal * 4);
+        /** Kept on the CPU as well: picking needs to know which nodes are inert. */
         const invMass = new Float32Array(nodeTotal);
+        this.invMass = invMass;
         for (let b = 0; b < simBodies.length; b++) {
             const { restPositions, invMass: bodyInvMass, nodeCount } = simBodies[b].lattice;
             const offset = this.nodeOffsets[b];
@@ -159,11 +161,26 @@ export class SimArena {
      * the material constants, so this is the one material edit that is not free.
      */
     uploadMasses() {
-        const invMass = new Float32Array(this.nodeCount);
         for (let b = 0; b < this.simBodies.length; b++) {
-            invMass.set(this.simBodies[b].lattice.invMass, this.nodeOffsets[b]);
+            this.invMass.set(this.simBodies[b].lattice.invMass, this.nodeOffsets[b]);
         }
-        this.nodeInvMass.write(0, invMass);
+        this.nodeInvMass.write(0, this.invMass);
+    }
+
+    /**
+     * Copies the live node positions back to the CPU.
+     *
+     * The only readback in the system, and it happens once per pointer press.
+     * Anything that wanted this per frame would be asking the CPU to wait for
+     * the GPU, which is the one thing this arena is arranged to avoid.
+     *
+     * @returns {Promise<Float32Array>} Positions, 4 floats per node. Reused
+     *   between calls, so read it before awaiting anything else.
+     */
+    async readNodePositions() {
+        this.readback ??= new Float32Array(this.nodeCount * 4);
+        await this.nodePos.read(0, this.readback.byteLength, this.readback, true);
+        return this.readback;
     }
 
     /**

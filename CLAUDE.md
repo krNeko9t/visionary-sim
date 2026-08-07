@@ -17,7 +17,8 @@
 新增目录时同时更新该表；调整表意味着调整设计，需在 `ARCHITECTURE.md` 中说明理由。
 
 现行硬规则：`render/` 只依赖 `deformation/`；`deformation/` 无依赖；`body/` 只依赖
-`assets/`；`sim/discretize/` 不依赖 `sim/solver/`；依赖一律向下，无环。
+`assets/`；`sim/discretize/` 不依赖 `sim/solver/`；`ui/` 只依赖 `sim/` 与 `body/`；
+依赖一律向下，无环。
 
 这张表还顺带决定了"把形变绑定到材质"只能有一份实现：`render/` 与 `sim/debug/` 唯一的公共
 可见范围就是 `deformation/`。新增消费者时走那一份，不要在自己目录里再写一遍绑定。
@@ -53,11 +54,15 @@
 
 ## 里程碑
 
-M0 脚手架 → M1 几何 → M2 GPU 求解器 → M3 形变渲染 → **M4 交互/UI（当前）** →
-M5 接触 → M6 3DGS。
+M0 脚手架 → M1 几何 → M2 GPU 求解器 → M3 形变渲染 → M4 交互/UI →
+**M5 接触（当前）** → M6 3DGS。
 
 M3 完成的状态：五个物体都以形变表面显示，法线由形变梯度重建，光照与阴影走引擎标准材质；
 点阵线框退为默认关闭的调试视图，与渲染共用同一条通道。
 
-M4 把 `Simulator` 已有的 `setMaterial` / `setGrab` 接到界面上。`render/` 增加新表示法
+M4 完成的状态：`ui/` 面板驱动材料、子步、暂停/单步/重置和点阵开关，并把 CFL 与 gamma
+的当前值摆在会推着你越界的滑杆旁边；指针按下可以直接抓住物体拖动。
+
+M5 是物体之间的接触。现在只有物体与水缸的碰撞（`sim/solver/wgsl/contact.wgsl`），物体
+互相穿过。加新界面时走 `ui/`，不要在 `main.js` 里堆事件监听；`render/` 增加新表示法
 （M6 的 3DGS）时走 `deformation/bind.js`，不要新写一份绑定。

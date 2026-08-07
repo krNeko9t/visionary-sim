@@ -38,9 +38,14 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  *   change.
  * - `sim/discretize` may not reach `sim/solver`. How an object is cut up must
  *   not depend on who solves it, so that either can be replaced alone.
+ * - `ui` may reach `sim` and `body` and nothing else. It edits materials and
+ *   drives the simulation, and it does both through the surfaces those two
+ *   already publish. Letting it reach a lattice or a buffer would put a second
+ *   opinion about the simulation's state in the interface.
  */
 const ALLOWED = {
-    'main.js': ['scene', 'sim', 'render'],
+    'main.js': ['scene', 'sim', 'render', 'ui'],
+    ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
     'sim/discretize': ['deformation', 'assets'],
@@ -53,7 +58,9 @@ const ALLOWED = {
 };
 
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
-const REQUIRED = ['assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/solver', 'scene'];
+const REQUIRED = [
+    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/solver', 'scene', 'ui'
+];
 
 /**
  * @param {string} dir - Directory to walk.
@@ -65,7 +72,7 @@ function sourceFiles(dir = SRC) {
         if (statSync(full).isDirectory()) {
             return sourceFiles(full);
         }
-        return /\.(js|wgsl)$/.test(entry) ? [relative(SRC, full).replaceAll('\\', '/')] : [];
+        return /\.(js|wgsl|css)$/.test(entry) ? [relative(SRC, full).replaceAll('\\', '/')] : [];
     });
 }
 

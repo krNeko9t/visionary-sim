@@ -1,3 +1,4 @@
+import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { SimArena } from './solver/arena.js';
 import { elementCompliance, waveRatio } from './solver/compliance.js';
@@ -52,6 +53,8 @@ export class Simulator {
 
         this.grab = { body: -1, node: -1, target: [0, 0, 0] };
         this.stepCount = 0;
+        /** Set by {@link requestStep}, consumed by the next {@link step}. */
+        this.pendingStep = false;
     }
 
     /**
@@ -173,6 +176,11 @@ export class Simulator {
      * @param {number} dt - Elapsed seconds since the last frame.
      */
     step(dt) {
+        if (this.pendingStep) {
+            this.pendingStep = false;
+            this.advance(Math.min(dt, this.params.maxFrameTime));
+            return;
+        }
         if (this.params.paused) {
             return;
         }
@@ -180,13 +188,15 @@ export class Simulator {
     }
 
     /**
-     * Advances by exactly one frame regardless of the paused flag, for
-     * single-stepping from the UI.
+     * Asks for exactly one frame, paused or not.
      *
-     * @param {number} [dt] - Frame duration in seconds.
+     * Deferred rather than run here, because a dispatch is only legal inside
+     * the render frame and the thing that wants a single step is a button
+     * click. Keeping that rule inside this class is the point: no caller should
+     * have to know when a dispatch may be recorded.
      */
-    stepOnce(dt = 1 / 60) {
-        this.advance(dt);
+    requestStep() {
+        this.pendingStep = true;
     }
 
     /**
@@ -229,6 +239,42 @@ export class Simulator {
             this.arena.uploadMasses();
         }
         this.arena.uploadBodies();
+    }
+
+    /**
+     * What a line through the scene hits, as something {@link setGrab} accepts.
+     *
+     * Asynchronous because the answer lives on the GPU. That is a property of
+     * where the simulation runs, not an accident: the caller has to be willing
+     * to learn what it grabbed a frame after asking.
+     *
+     * @param {number[]} origin - Ray origin in world space.
+     * @param {number[]} direction - Unit ray direction.
+     * @param {object} [options] - Tolerance.
+     * @param {number} [options.radius] - How far off the ray a node may be.
+     *   Defaults to a little over the coarsest cell, so that anything the
+     *   pointer is visibly over has a node within reach.
+     * @returns {Promise<{ bodyIndex: number, node: number, position: number[] }|null>}
+     *   The grabbable node, or null if the ray missed.
+     */
+    async pick(origin, direction, { radius = this.coarsestCell() * 1.2 } = {}) {
+        const nodes = await this.arena.readNodePositions();
+        const found = nearestNodeToRay(nodes, this.arena.invMass, origin, direction, radius);
+        if (found < 0) {
+            return null;
+        }
+
+        const bodyIndex = bodyOfNode(this.arena.nodeOffsets, found);
+        return {
+            bodyIndex,
+            node: found - this.arena.nodeOffsets[bodyIndex],
+            position: [nodes[found * 4], nodes[found * 4 + 1], nodes[found * 4 + 2]]
+        };
+    }
+
+    /** @returns {number} Cell edge length of the coarsest body in the scene. */
+    coarsestCell() {
+        return this.simBodies.reduce((coarsest, { lattice }) => Math.max(coarsest, lattice.h), 0);
     }
 
     /**

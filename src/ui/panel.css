@@ -1,0 +1,140 @@
+/* Look and layout of the control panel. Kept out of index.html so that
+   everything the interface is made of sits in one directory. */
+
+.ui-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 272px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 14px 16px 16px;
+    border-radius: 10px;
+    background: rgba(24, 28, 34, 0.86);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #d7dbe2;
+    font: 12px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    user-select: none;
+}
+
+.ui-section + .ui-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ui-title {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: #7d8592;
+}
+
+.ui-row,
+.ui-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+}
+
+.ui-label {
+    flex: 0 0 52px;
+    color: #98a1ad;
+}
+
+.ui-value {
+    flex: 0 0 76px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    color: #e6e9ee;
+}
+
+.ui-value[data-tone="warn"] {
+    color: #e8b84b;
+}
+
+.ui-value[data-tone="bad"] {
+    color: #ec6a5c;
+}
+
+.ui-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 18px;
+    margin: 0;
+    accent-color: #6f9ce8;
+    background: none;
+}
+
+.ui-warn .ui-label,
+.ui-warn .ui-value {
+    color: #e8b84b;
+}
+
+.ui-warn .ui-slider {
+    accent-color: #e8b84b;
+}
+
+.ui-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.ui-chip,
+.ui-button {
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #b9c0ca;
+    font: inherit;
+    cursor: pointer;
+}
+
+.ui-chip:hover,
+.ui-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eef1f5;
+}
+
+.ui-chip.ui-on {
+    background: #3c5e96;
+    border-color: #4d76b8;
+    color: #f2f5f9;
+}
+
+.ui-buttons {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.ui-buttons .ui-button {
+    flex: 1 1 0;
+    text-align: center;
+}
+
+.ui-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.ui-toggle input {
+    margin: 0;
+    accent-color: #6f9ce8;
+}
+
+.ui-note {
+    margin: 10px 0 0;
+    color: #6f7885;
+    line-height: 1.6;
+}

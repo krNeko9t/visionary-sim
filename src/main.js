@@ -1,5 +1,7 @@
+import { attachGrabber } from './ui/grab.js';
 import { createBodies } from './scene/contents.js';
 import { createMeshView } from './render/mesh.js';
+import { createPanel } from './ui/panel.js';
 import { createStage } from './scene/stage.js';
 import { TANK_BOUNDS, createTank } from './scene/tank.js';
 import { WebGpuUnavailableError, createApp } from './scene/app.js';
@@ -11,7 +13,7 @@ const canvas = document.getElementById('app');
 async function boot() {
     const app = await createApp(canvas);
 
-    createStage(app);
+    const { camera, controls } = createStage(app);
     createTank(app);
 
     const bodies = await createBodies();
@@ -34,17 +36,29 @@ async function boot() {
         return view;
     });
 
+    const panel = createPanel(sim, {
+        onLatticeToggle: (visible) => {
+            for (const view of latticeViews) {
+                view.enabled = visible;
+            }
+        }
+    });
+    document.body.append(panel.element);
+    attachGrabber(app, camera, sim, controls);
+
     // The dispatch has to be recorded inside the render frame, so it hangs off
     // the app update rather than a timer of its own.
-    app.on('update', dt => sim.step(dt));
+    app.on('update', (dt) => {
+        sim.step(dt);
+        panel.update(dt);
+    });
 
     app.start();
 
     report(sim.stats());
 
-    // Handy while there is no UI yet.
+    // Handy from the console; the panel covers everything routine.
     Object.assign(window, { app, sim, bodies, latticeViews });
-    console.info('[softbody] latticeViews.forEach(v => v.enabled = true) shows the solver lattice');
     return app;
 }
 
