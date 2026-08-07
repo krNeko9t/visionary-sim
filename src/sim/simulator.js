@@ -1,12 +1,20 @@
-import { SimArena } from './arena.js';
-import { SimKernels } from './kernels.js';
+import { discretizeBody, relumpMasses } from './discretize/discretize.js';
+import { SimArena } from './solver/arena.js';
+import { elementCompliance, waveRatio } from './solver/compliance.js';
+import { SimKernels } from './solver/kernels.js';
 
 /**
  * The simulation's only public surface.
  *
- * Everything outside `sim/` talks to this object: the scene adds bodies, the UI
- * changes materials, the grabber pins a node. Nothing outside touches a buffer,
- * a kernel or a dispatch.
+ * Everything outside `sim/` talks to this object: the scene hands it bodies,
+ * the UI changes materials, the grabber pins a node. Nothing outside touches a
+ * buffer, a kernel or a dispatch -- and nothing outside decides how a body is
+ * cut up, which is this object's first act.
+ *
+ * @typedef {object} SimBody
+ * @property {import('../body/softBody.js').SoftBody} body - What the author described.
+ * @property {import('./discretize/lattice.js').Lattice} lattice - How this simulator chose
+ *   to discretise it. The seam between the two is exactly this pairing.
  */
 
 const DEFAULT_PARAMS = {
@@ -33,18 +41,20 @@ export class Simulator {
             throw new Error('Simulator requires a device with compute support');
         }
         this.device = device;
-        this.bodies = bodies;
         this.tank = tank;
         this.params = { ...DEFAULT_PARAMS };
 
-        this.arena = new SimArena(device, bodies);
+        /** @type {SimBody[]} */
+        this.simBodies = bodies.map(body => ({ body, lattice: discretizeBody(body) }));
+
+        this.arena = new SimArena(device, this.simBodies);
         this.kernels = new SimKernels(device, this.arena);
 
         this.grab = { body: -1, node: -1, target: [0, 0, 0] };
         this.stepCount = 0;
     }
 
-    /** @returns {import('playcanvas').StorageBuffer} Live node positions, for the renderer. */
+    /** @returns {import('playcanvas').StorageBuffer} Live node positions, for the debug view. */
     get nodePositions() {
         return this.arena.nodePos;
     }
@@ -72,7 +82,8 @@ export class Simulator {
      * @returns {number} The CFL number; keep it below 1.
      */
     cflNumber(frameTime = 1 / 60) {
-        return this.worstBody().waveRatio * (frameTime / this.params.substeps);
+        const { body, lattice } = this.worst();
+        return waveRatio(body.material, lattice) * (frameTime / this.params.substeps);
     }
 
     /**
@@ -82,10 +93,12 @@ export class Simulator {
      * Every stability query goes through this one reduction, so there is a
      * single definition of "which body is the problem".
      *
-     * @returns {import('../body/softBody.js').SoftBody} The limiting body.
+     * @returns {SimBody} The limiting body.
      */
-    worstBody() {
-        return this.bodies.reduce((worst, body) => (body.waveRatio > worst.waveRatio ? body : worst));
+    worst() {
+        return this.simBodies.reduce((worst, entry) =>
+            (waveRatio(entry.body.material, entry.lattice) >
+             waveRatio(worst.body.material, worst.lattice) ? entry : worst));
     }
 
     /**
@@ -95,7 +108,8 @@ export class Simulator {
      * @returns {number} Recommended substeps.
      */
     recommendedSubsteps(frameTime = 1 / 60) {
-        return Math.max(1, Math.ceil((frameTime * this.worstBody().waveRatio) / CFL_TARGET));
+        const { body, lattice } = this.worst();
+        return Math.max(1, Math.ceil((frameTime * waveRatio(body.material, lattice)) / CFL_TARGET));
     }
 
     /**
@@ -108,6 +122,33 @@ export class Simulator {
         const advised = this.recommendedSubsteps(frameTime);
         this.params.substeps = Math.min(Math.max(advised, 4), this.params.maxSubsteps);
         return { advised, applied: this.params.substeps, cfl: this.cflNumber(frameTime) };
+    }
+
+    /**
+     * Everything worth reporting about the current setup, so that callers can
+     * print or display it without reaching into the arena or the lattices.
+     *
+     * @param {number} [frameTime] - Frame duration in seconds.
+     * @returns {object} A flat report.
+     */
+    stats(frameTime = 1 / 60) {
+        return {
+            deviceType: this.device.deviceType,
+            bodyCount: this.simBodies.length,
+            cells: this.arena.cellCount,
+            tets: this.arena.cellCount * 6,
+            nodes: this.arena.nodeCount,
+            substeps: this.params.substeps,
+            advised: this.recommendedSubsteps(frameTime),
+            cfl: this.cflNumber(frameTime),
+            limitedBy: this.worst().body.name,
+            perBody: this.simBodies.map(({ body, lattice }) => ({
+                name: body.name,
+                h: lattice.h,
+                cells: lattice.cells.length,
+                gamma: elementCompliance(body.material, lattice).gamma
+            }))
+        };
     }
 
     /**
@@ -158,19 +199,20 @@ export class Simulator {
 
     /**
      * Applies a material change. Everything except density is a handful of
-     * uniforms; density also has to re-lump the node masses.
+     * uniforms; density also has to re-lump the node masses, because those are
+     * a property of the discretisation rather than of the material.
      *
      * @param {number} bodyIndex - Index into the body list.
      * @param {Partial<import('../body/material.js').Material>} changes - Fields to change.
      */
     setMaterial(bodyIndex, changes) {
-        const body = this.bodies[bodyIndex];
+        const { body, lattice } = this.simBodies[bodyIndex];
         const { density, ...rest } = changes;
 
         Object.assign(body.material, rest);
-        // Density owns an invariant across the lattice, so the body applies it
-        // and tells us whether the node masses actually moved.
-        if (density !== undefined && body.setDensity(density)) {
+        if (density > 0 && density !== body.material.density) {
+            relumpMasses(lattice, body.material.density, density);
+            body.material.density = density;
             this.arena.uploadMasses();
         }
         this.arena.uploadBodies();

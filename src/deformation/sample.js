@@ -1,17 +1,27 @@
-import { CUBE_CORNERS } from './kuhn.js';
+import { CUBE_CORNERS } from './corners.js';
 
 /**
- * Trilinear embedding of arbitrary rest points in the lattice.
+ * The channel between the simulation side and the render side.
  *
- * This is the whole deformation field, and the reason the lattice was chosen
- * over a surface-conforming tetrahedral mesh: locating a point costs a divide
- * and a floor, the eight weights are a product of three lerps, and the
- * deformation gradient falls out of the same shape functions for free. A tet
- * mesh needs a spatial hash and per-point storage to answer the same question,
- * and cannot answer it at all for a Gaussian splat cloud, which has no surface.
+ * The simulation moves a small number of nodes. Any rest point -- a mesh
+ * vertex today, a Gaussian centre at M6 -- asks this module where it ended up
+ * and how the space around it was stretched. Nothing else crosses.
  *
- * The WGSL in `sim/wgsl/field.wgsl` is the same maths on the GPU. These
- * functions are the CPU reference the unit tests pin that behaviour against.
+ * Two answers, from one sampling:
+ *   position  x(p) = sum_c N_c(u) x_c
+ *   gradient  F(p) = sum_c x_c (x) grad N_c(u)
+ *
+ * The gradient is what lets the render side do more than move points: a mesh
+ * turns it into a normal, a Gaussian turns it into a rotated covariance. It
+ * falls out of the same shape functions for free, which is the reason this
+ * channel can serve both.
+ *
+ * This module depends on nothing. That is deliberate and enforced by
+ * `test/unit/architecture.test.js`: a channel that reached into either side
+ * would stop being a channel.
+ *
+ * `sample.wgsl` (M3) will be the same maths on the GPU; these functions are the
+ * CPU reference the unit tests pin that behaviour against.
  *
  * @typedef {object} LatticeSpace
  * @property {number[]} origin - World position of the min corner of cell (0,0,0).

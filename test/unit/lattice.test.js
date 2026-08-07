@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex } from '../../src/geometry/lattice.js';
-import { sphere } from '../../src/geometry/shapes.js';
-import { voxelizeSdf } from '../../src/geometry/voxelize.js';
+import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex } from '../../src/sim/discretize/lattice.js';
+import { sphere } from '../../src/assets/shapes.js';
+import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
 
 const DENSITY = 1000;
 
 /**
  * @param {number} resolution - Cells along the longest axis.
- * @returns {import('../../src/geometry/lattice.js').Lattice} A sphere lattice.
+ * @returns {import('../../src/sim/discretize/lattice.js').Lattice} A sphere lattice.
  */
 function sphereLattice(resolution = 12) {
     return buildLattice(voxelizeSdf(sphere({ radius: 0.1 }), { resolution }), { density: DENSITY });
@@ -40,7 +40,7 @@ describe('lattice', () => {
     });
 
     it('round-trips a cell index through its coordinates', () => {
-        // `cellCoords` also exists in WGSL, in sim/wgsl/common.wgsl, where the
+        // `cellCoords` also exists in WGSL, in sim/solver/wgsl/common.wgsl, where the
         // solver unpacks the very same `cells` array. The two cannot share code
         // across the language boundary, so this pins the JS side to the exact
         // packing `buildLattice` writes; if the WGSL copy ever drifts, the

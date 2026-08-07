@@ -53,7 +53,7 @@ fn cellCoords(dims: vec3u, linear: u32) -> vec3u {
 }
 
 // Corner `c` of a cell sits at offset (c&1, (c>>1)&1, (c>>2)&1), matching
-// CUBE_CORNERS in geometry/kuhn.js.
+// CUBE_CORNERS in deformation/corners.js.
 fn cornerNode(b: Body, coord: vec3u, corner: u32) -> u32 {
     let offset = vec3u(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u);
     let n = coord + offset;

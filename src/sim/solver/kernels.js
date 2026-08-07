@@ -1,6 +1,6 @@
 import { Compute, SHADERLANGUAGE_WGSL, Shader } from 'playcanvas';
 
-import { KUHN_TETS, kuhnRestShapeInverses } from '../geometry/kuhn.js';
+import { KUHN_TETS, kuhnRestShapeInverses } from '../discretize/kuhn.js';
 import commonWgsl from './wgsl/common.wgsl?raw';
 import contactWgsl from './wgsl/contact.wgsl?raw';
 import elasticWgsl from './wgsl/elastic.wgsl?raw';
@@ -21,7 +21,7 @@ function f32Literal(value) {
 /**
  * Emits the Kuhn decomposition as WGSL constants.
  *
- * Generated rather than hand-written so `geometry/kuhn.js` stays the single
+ * Generated rather than hand-written so `discretize/kuhn.js` stays the single
  * source of truth: the unit tests check the orientation and the inverses there,
  * and the GPU gets exactly what they checked.
  *
@@ -44,7 +44,7 @@ function kuhnConstants() {
         .join(',\n');
 
     return [
-        '// Generated from geometry/kuhn.js -- do not edit here.',
+        '// Generated from discretize/kuhn.js -- do not edit here.',
         `var<private> KUHN_TETS: array<vec4u, 6> = array<vec4u, 6>(\n${tets}\n);`,
         '// Rest shape inverses for a unit cube; scaled by 1/h per body.',
         `var<private> KUHN_REST_INV: array<mat3x3f, 6> = array<mat3x3f, 6>(\n${inverses}\n);`,

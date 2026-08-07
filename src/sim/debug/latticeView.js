@@ -9,24 +9,23 @@ import {
     ShaderMaterial
 } from 'playcanvas';
 
-import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../geometry/lattice.js';
-import { CUBE_CORNERS } from '../geometry/kuhn.js';
+import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../discretize/lattice.js';
+import { CUBE_CORNERS } from '../../deformation/corners.js';
 
 /**
- * Debug view of a lattice: one shrunken wireframe cube per occupied cell,
- * tinted by its parallel-solve colour, and driven live off the simulation's
- * node buffer.
+ * A picture of the solver's own insides: one shrunken wireframe cube per
+ * occupied cell, tinted by its parallel-solve colour, driven live off the node
+ * buffer.
+ *
+ * This lives under `sim/` rather than with the render paths because it is not
+ * a way of drawing an object -- it draws cells, colour groups and nodes, none
+ * of which the render side is allowed to know about. Anything that has to
+ * mention a lattice to do its job belongs on this side of the fence.
  *
  * Showing occupancy and colouring in one picture is deliberate. Occupancy tells
  * you whether voxelisation leaked or missed a limb; the colouring is what the
  * GPU solver's correctness rests on, and eight interleaved tints make a broken
  * parity rule obvious.
- *
- * Reading node positions straight out of the storage buffer in the vertex
- * shader is the same mechanism the deformed mesh and the splat renderer will
- * use, on the simplest possible geometry -- so if binding a storage buffer to a
- * material is going to be a problem, it surfaces here rather than three
- * milestones later.
  */
 
 /**
@@ -83,7 +82,7 @@ const FRAGMENT_WGSL = /* wgsl */ `
 `;
 
 /**
- * @param {import('../geometry/lattice.js').Lattice} lattice - Lattice to visualise.
+ * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
  * @param {number} nodeOffset - Where this body's nodes start in the arena.
  * @param {{ start: number, count: number }} range - Cells of one colour.
  * @param {number} inset - How far to pull each corner towards the cell centre.
@@ -131,14 +130,14 @@ function buildGroupGeometry(lattice, nodeOffset, range, inset) {
 
 /**
  * @param {import('playcanvas').AppBase} app - The application.
- * @param {import('../geometry/lattice.js').Lattice} lattice - Lattice to visualise.
+ * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
  * @param {import('playcanvas').StorageBuffer} nodePositions - Live node positions.
  * @param {number} nodeOffset - Where this body's nodes start in the arena.
  * @param {object} [options] - Display options.
  * @param {number} [options.shrink] - Cell size as a fraction of the real cell.
  * @returns {Entity} An entity holding one mesh instance per colour group.
  */
-export function createLatticeDebug(app, lattice, nodePositions, nodeOffset, { shrink = 0.78 } = {}) {
+export function createLatticeView(app, lattice, nodePositions, nodeOffset, { shrink = 0.78 } = {}) {
     const device = app.graphicsDevice;
     const entity = new Entity('lattice-debug');
     const instances = [];
@@ -153,7 +152,7 @@ export function createLatticeDebug(app, lattice, nodePositions, nodeOffset, { sh
         const { positions, nodeData, indices } = buildGroupGeometry(lattice, nodeOffset, range, inset);
 
         const material = new ShaderMaterial({
-            uniqueName: 'lattice-debug',
+            uniqueName: 'lattice-view',
             vertexWGSL: VERTEX_WGSL,
             fragmentWGSL: FRAGMENT_WGSL,
             attributes: {

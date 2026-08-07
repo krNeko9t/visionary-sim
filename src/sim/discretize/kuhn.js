@@ -1,3 +1,4 @@
+import { CUBE_CORNERS } from '../../deformation/corners.js';
 import { mat3FromColumns, mat3Inverse } from './mat3.js';
 
 /**
@@ -17,18 +18,6 @@ import { mat3FromColumns, mat3Inverse } from './mat3.js';
  *    *same six* rest shape matrices. There is no per-tetrahedron rest data to
  *    store or fetch at all -- normally the largest buffer in a FEM solver.
  */
-
-/** Corner offsets of the unit cube, indexed so corner `c` is `(c&1, (c>>1)&1, (c>>2)&1)`. */
-export const CUBE_CORNERS = Object.freeze([
-    [0, 0, 0], // 0
-    [1, 0, 0], // 1
-    [0, 1, 0], // 2
-    [1, 1, 0], // 3
-    [0, 0, 1], // 4
-    [1, 0, 1], // 5
-    [0, 1, 1], // 6
-    [1, 1, 1] //  7
-]);
 
 /**
  * The six tetrahedra as corner indices, each ordered so that

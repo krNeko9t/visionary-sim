@@ -3,14 +3,14 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { locate } from '../../src/geometry/embed.js';
-import { buildLattice } from '../../src/geometry/lattice.js';
-import { meshBounds, normalizeMesh, parseObj } from '../../src/geometry/objLoader.js';
-import { cellIndex, countOccupied, voxelizeMesh } from '../../src/geometry/voxelize.js';
+import { locate } from '../../src/deformation/sample.js';
+import { buildLattice } from '../../src/sim/discretize/lattice.js';
+import { meshBounds, normalizeMesh, parseObj } from '../../src/assets/objLoader.js';
+import { cellIndex, countOccupied, voxelizeMesh } from '../../src/sim/discretize/voxelize.js';
 
 /**
  * @param {string} name - File name under public/models.
- * @returns {import('../../src/geometry/objLoader.js').TriangleMesh} The mesh.
+ * @returns {import('../../src/assets/objLoader.js').TriangleMesh} The mesh.
  */
 function loadAsset(name) {
     const path = fileURLToPath(new URL(`../../public/models/${name}`, import.meta.url));

@@ -1,6 +1,7 @@
 import { BUFFERUSAGE_COPY_DST, BUFFERUSAGE_COPY_SRC, StorageBuffer } from 'playcanvas';
 
-import { COLOR_COUNT } from '../geometry/lattice.js';
+import { COLOR_COUNT } from '../discretize/lattice.js';
+import { elementCompliance } from './compliance.js';
 
 /**
  * GPU-side storage for the whole scene, in one set of buffers.
@@ -38,19 +39,19 @@ const BODY_WORDS = BODY_STRIDE / 4;
 export class SimArena {
     /**
      * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
-     * @param {import('../body/softBody.js').SoftBody[]} bodies - Bodies to pack.
+     * @param {import('../simulator.js').SimBody[]} simBodies - Bodies and their lattices.
      */
-    constructor(device, bodies) {
+    constructor(device, simBodies) {
         this.device = device;
-        this.bodies = bodies;
+        this.simBodies = simBodies;
 
         let nodeTotal = 0;
         let cellTotal = 0;
         /** Where each body's nodes start in the shared arrays. */
-        this.nodeOffsets = bodies.map((body) => {
+        this.nodeOffsets = simBodies.map(({ lattice }) => {
             const offset = nodeTotal;
-            nodeTotal += body.nodeCount;
-            cellTotal += body.cellCount;
+            nodeTotal += lattice.nodeCount;
+            cellTotal += lattice.cells.length;
             return offset;
         });
         this.nodeCount = nodeTotal;
@@ -58,8 +59,8 @@ export class SimArena {
 
         const positions = new Float32Array(nodeTotal * 4);
         const invMass = new Float32Array(nodeTotal);
-        for (let b = 0; b < bodies.length; b++) {
-            const { restPositions, invMass: bodyInvMass, nodeCount } = bodies[b].lattice;
+        for (let b = 0; b < simBodies.length; b++) {
+            const { restPositions, invMass: bodyInvMass, nodeCount } = simBodies[b].lattice;
             const offset = this.nodeOffsets[b];
             for (let n = 0; n < nodeCount; n++) {
                 positions[(offset + n) * 4] = restPositions[n * 3];
@@ -77,8 +78,8 @@ export class SimArena {
         let cursor = 0;
         for (let color = 0; color < COLOR_COUNT; color++) {
             const start = cursor;
-            for (let b = 0; b < bodies.length; b++) {
-                const { cells, colorRanges } = bodies[b].lattice;
+            for (let b = 0; b < simBodies.length; b++) {
+                const { cells, colorRanges } = simBodies[b].lattice;
                 const range = colorRanges[color];
                 for (let n = 0; n < range.count; n++) {
                     cellEntries[cursor * 2] = b;
@@ -95,7 +96,7 @@ export class SimArena {
         this.nodeVel = new StorageBuffer(device, positions.byteLength, usage);
         this.nodeInvMass = new StorageBuffer(device, invMass.byteLength, usage);
         this.cells = new StorageBuffer(device, cellEntries.byteLength, usage);
-        this.bodyParams = new StorageBuffer(device, bodies.length * BODY_STRIDE, usage);
+        this.bodyParams = new StorageBuffer(device, simBodies.length * BODY_STRIDE, usage);
 
         this.nodePos.write(0, positions);
         this.nodePrev.write(0, positions);
@@ -105,11 +106,11 @@ export class SimArena {
 
         // One staging copy reused for every material update, so changing a
         // slider does not allocate.
-        this.bodyWords = new ArrayBuffer(bodies.length * BODY_STRIDE);
+        this.bodyWords = new ArrayBuffer(simBodies.length * BODY_STRIDE);
         this.bodyFloats = new Float32Array(this.bodyWords);
         this.bodyUints = new Uint32Array(this.bodyWords);
         this.bodyInts = new Int32Array(this.bodyWords);
-        this.grabNodes = bodies.map(() => -1);
+        this.grabNodes = simBodies.map(() => -1);
 
         this.uploadBodies();
     }
@@ -119,12 +120,12 @@ export class SimArena {
      * materials. Cheap by design: material sliders never touch the lattice.
      */
     uploadBodies() {
-        const { bodyFloats, bodyUints, bodyInts, bodies } = this;
+        const { bodyFloats, bodyUints, bodyInts, simBodies } = this;
 
-        for (let b = 0; b < bodies.length; b++) {
-            const body = bodies[b];
-            const { origin, h, cellDims, nodeDims, nodeCount } = body.lattice;
-            const { deviatoric, hydrostatic, gamma } = body.solverConstants;
+        for (let b = 0; b < simBodies.length; b++) {
+            const { body, lattice } = simBodies[b];
+            const { origin, h, cellDims, nodeDims, nodeCount } = lattice;
+            const { deviatoric, hydrostatic, gamma } = elementCompliance(body.material, lattice);
             const base = b * BODY_WORDS;
 
             bodyFloats[base + BODY_FIELDS.origin] = origin[0];
@@ -159,8 +160,8 @@ export class SimArena {
      */
     uploadMasses() {
         const invMass = new Float32Array(this.nodeCount);
-        for (let b = 0; b < this.bodies.length; b++) {
-            invMass.set(this.bodies[b].lattice.invMass, this.nodeOffsets[b]);
+        for (let b = 0; b < this.simBodies.length; b++) {
+            invMass.set(this.simBodies[b].lattice.invMass, this.nodeOffsets[b]);
         }
         this.nodeInvMass.write(0, invMass);
     }

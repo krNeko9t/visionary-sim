@@ -1,8 +1,8 @@
-import { WebGpuUnavailableError, createApp } from './scene/app.js';
 import { createBodies } from './scene/contents.js';
 import { createStage } from './scene/stage.js';
 import { TANK_BOUNDS, createTank } from './scene/tank.js';
-import { createLatticeDebug } from './render/latticeDebug.js';
+import { WebGpuUnavailableError, createApp } from './scene/app.js';
+import { createLatticeView } from './sim/debug/latticeView.js';
 import { Simulator } from './sim/simulator.js';
 
 const canvas = document.getElementById('app');
@@ -15,10 +15,10 @@ async function boot() {
 
     const bodies = await createBodies();
     const sim = new Simulator(app.graphicsDevice, bodies, TANK_BOUNDS);
-    const pacing = sim.autoSubsteps();
+    sim.autoSubsteps();
 
-    bodies.forEach((body, index) => {
-        app.root.addChild(createLatticeDebug(app, body.lattice, sim.nodePositions, sim.nodeOffset(index)));
+    sim.simBodies.forEach(({ lattice }, index) => {
+        app.root.addChild(createLatticeView(app, lattice, sim.nodePositions, sim.nodeOffset(index)));
     });
 
     // The dispatch has to be recorded inside the render frame, so it hangs off
@@ -27,31 +27,36 @@ async function boot() {
 
     app.start();
 
-    const totals = bodies.reduce(
-        (acc, body) => ({ cells: acc.cells + body.cellCount, nodes: acc.nodes + body.nodeCount }),
-        { cells: 0, nodes: 0 }
-    );
-    console.info(
-        `[softbody] device=${app.graphicsDevice.deviceType} bodies=${bodies.length} ` +
-        `cells=${totals.cells} tets=${totals.cells * 6} nodes=${totals.nodes} ` +
-        `substeps=${pacing.applied} (advised ${pacing.advised}) cfl=${pacing.cfl.toFixed(2)} ` +
-        `limited by "${sim.worstBody().name}"`
-    );
-    for (const body of bodies) {
-        const { gamma } = body.solverConstants;
-        console.info(`[softbody]   ${body.name}: h=${body.lattice.h.toFixed(4)}m cells=${body.cellCount} gamma=${gamma.toFixed(3)}`);
-    }
-    if (pacing.cfl >= 1) {
-        console.warn(
-            `[softbody] CFL ${pacing.cfl.toFixed(2)} >= 1: the deviatoric constraint will be ` +
-            'projected hard and bodies will collapse. Soften the material, enlarge the cells, ' +
-            'or raise params.maxSubsteps.'
-        );
-    }
+    report(sim.stats());
 
     // Handy while there is no UI yet.
     Object.assign(window, { app, sim, bodies });
     return app;
+}
+
+/**
+ * @param {ReturnType<import('./sim/simulator.js').Simulator['stats']>} stats - Setup report.
+ */
+function report(stats) {
+    console.info(
+        `[softbody] device=${stats.deviceType} bodies=${stats.bodyCount} ` +
+        `cells=${stats.cells} tets=${stats.tets} nodes=${stats.nodes} ` +
+        `substeps=${stats.substeps} (advised ${stats.advised}) cfl=${stats.cfl.toFixed(2)} ` +
+        `limited by "${stats.limitedBy}"`
+    );
+    for (const body of stats.perBody) {
+        console.info(
+            `[softbody]   ${body.name}: h=${body.h.toFixed(4)}m cells=${body.cells} ` +
+            `gamma=${body.gamma.toFixed(3)}`
+        );
+    }
+    if (stats.cfl >= 1) {
+        console.warn(
+            `[softbody] CFL ${stats.cfl.toFixed(2)} >= 1: the deviatoric constraint will be ` +
+            'projected hard and bodies will collapse. Soften the material, enlarge the cells, ' +
+            'or raise params.maxSubsteps.'
+        );
+    }
 }
 
 boot().catch((err) => {

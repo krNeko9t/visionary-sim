@@ -1,18 +1,12 @@
 /**
- * Material space: the parameters an author thinks in, and the numbers the
- * solver needs.
+ * Material space: the parameters an author thinks in.
  *
- * The constitutive model is the stable Neo-Hookean of Macklin & Muller (2021)
- * in XPBD form. Each tetrahedron carries two constraints:
- *
- *   deviatoric   C_D = ||F||_F              compliance 1 / (mu * V)
- *   hydrostatic  C_H = det(F) - gamma       compliance 1 / (lambda * V)
- *
- * with `gamma = 1 + mu / lambda`. Because the compliances *are* the Lame
- * parameters, Young's modulus and Poisson's ratio are first-class inputs rather
- * than a dimensionless "stiffness" slider. That is the reason this model was
- * chosen over the edge-length plus volume constraints of the Ten Minute Physics
- * reference, which have no material meaning at all.
+ * These are continuum-mechanics quantities and belong to the object, not to
+ * whoever simulates it. Young's modulus and Poisson's ratio are first-class
+ * inputs rather than a dimensionless "stiffness" slider, which is why the Ten
+ * Minute Physics edge-length plus volume constraints were not used -- they have
+ * no material meaning at all. What the current solver turns these into lives in
+ * `sim/solver/compliance.js`.
  *
  * @typedef {object} Material
  * @property {number} youngsModulus - E, in pascals. Jelly is around 1e4..1e6.
@@ -102,29 +96,13 @@ export function engineeringConstants({ mu, lambda }) {
 }
 
 /**
- * Per-element solver constants.
- *
- * @param {Material} material - The material.
- * @param {number} restVolume - Rest volume of one element, in cubic metres.
- * @returns {{ deviatoric: number, hydrostatic: number, gamma: number }} XPBD constants.
- */
-export function elementConstants(material, restVolume) {
-    const { mu, lambda } = lameParameters(material);
-    return {
-        deviatoric: 1 / (mu * restVolume),
-        hydrostatic: 1 / (lambda * restVolume),
-        gamma: 1 + mu / lambda
-    };
-}
-
-/**
  * Longitudinal wave speed. This is the primitive behind the CFL limit: a
  * substep has to be short enough that a wave cannot cross a cell.
  *
- * Turning it into a substep count needs a cell size, which is a property of a
- * body rather than of a material, so that lives on {@link SoftBody#waveRatio}
- * and {@link Simulator#recommendedSubsteps}. This function is the only place
- * the wave speed itself is defined.
+ * Turning it into a substep count needs a cell size, which only exists once a
+ * solver has chosen a discretisation, so that lives on the simulation side in
+ * `sim/solver/compliance.js`. This function is the only place the wave speed
+ * itself is defined.
  *
  * @param {Material} material - The material.
  * @returns {number} Wave speed in m/s.

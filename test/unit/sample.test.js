@@ -6,10 +6,10 @@ import {
     locate,
     trilinearGradients,
     trilinearWeights
-} from '../../src/geometry/embed.js';
-import { buildLattice, cellNodeIndices } from '../../src/geometry/lattice.js';
-import { box } from '../../src/geometry/shapes.js';
-import { voxelizeSdf } from '../../src/geometry/voxelize.js';
+} from '../../src/deformation/sample.js';
+import { buildLattice, cellNodeIndices } from '../../src/sim/discretize/lattice.js';
+import { box } from '../../src/assets/shapes.js';
+import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
 
 const SPACE = { origin: [-0.1, 0, -0.05], h: 0.02, cellDims: [10, 8, 6] };
 

@@ -6,7 +6,7 @@
 // one's correction -- and writes the nodes back once.
 //
 // Cells of one colour agree in index parity on every axis, so they never share
-// a node (see cellColor in geometry/lattice.js). A whole colour therefore runs
+// a node (see cellColor in discretize/lattice.js). A whole colour therefore runs
 // in parallel with no atomics and no read-modify-write races, and eight
 // dispatches cover the scene. This is what makes Gauss-Seidel convergence
 // available on a GPU at all; plain Jacobi would need far more iterations.

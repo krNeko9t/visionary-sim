@@ -1,5 +1,5 @@
 import { meshBody, shapeBody } from '../body/factory.js';
-import { box, sphere, torus } from '../geometry/shapes.js';
+import { box, sphere, torus } from '../assets/shapes.js';
 
 /**
  * What is in the tank.

@@ -4,7 +4,7 @@
  * Column-major matches WGSL's `mat3x3<f32>`, so the same index arithmetic reads
  * correctly on both sides: element (row, col) lives at `m[col * 3 + row]`.
  *
- * This exists instead of `pc.Mat3` because everything under `geometry/` must
+ * This exists instead of `pc.Mat3` because everything under `sim/discretize/` must
  * stay importable by plain node for the unit tests.
  */
 

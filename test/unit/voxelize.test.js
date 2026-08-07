@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { box, sphere, torus } from '../../src/geometry/shapes.js';
-import { cellIndex, countOccupied, gridForBounds, morphologicalClose, voxelizeMesh, voxelizeSdf } from '../../src/geometry/voxelize.js';
-import { meshBounds, parseObj } from '../../src/geometry/objLoader.js';
+import { box, sphere, torus } from '../../src/assets/shapes.js';
+import { cellIndex, countOccupied, gridForBounds, morphologicalClose, voxelizeMesh, voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { meshBounds, parseObj } from '../../src/assets/objLoader.js';
 
 /**
  * A closed axis-aligned box as a triangle mesh, for testing the mesh path
  * against a shape whose volume is known exactly.
  *
  * @param {number} half - Half extent.
- * @returns {import('../../src/geometry/objLoader.js').TriangleMesh} The mesh.
+ * @returns {import('../../src/assets/objLoader.js').TriangleMesh} The mesh.
  */
 function boxMesh(half) {
     const positions = new Float32Array([
