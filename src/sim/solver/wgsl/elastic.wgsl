@@ -1,9 +1,14 @@
 // Stable Neo-Hookean elasticity, XPBD form (Macklin & Muller 2021).
 //
 // One thread owns one lattice cell: it pulls the cell's eight nodes into
-// registers, projects the two constraints of each of its six Kuhn tetrahedra
-// *sequentially* -- true Gauss-Seidel, each projection seeing the previous
-// one's correction -- and writes the nodes back once.
+// registers, projects each of its six Kuhn tetrahedra in turn -- true
+// Gauss-Seidel, each tetrahedron seeing the previous one's correction -- and
+// writes the nodes back once.
+//
+// Within a tetrahedron the two constraints are *not* taken in turn. They are
+// evaluated at the same deformation gradient and solved as one 2x2 block, which
+// is what makes a compressible material hold its shape; see xpbdCouple in
+// common.wgsl for why taking them in turn does not.
 //
 // Cells of one colour agree in index parity on every axis, so they never share
 // a node (see cellColor in discretize/lattice.js). A whole colour therefore runs
@@ -62,50 +67,51 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let B = KUHN_REST_INV[t] * restScale;
         let Bt = transpose(B);
 
+        let base = p[i0];
+        let F = mat3x3f(p[i1] - base, p[i2] - base, p[i3] - base) * B;
+
         // Deviatoric: C = ||F||_F, energy mu/2 * tr(F^T F).
-        {
-            let base = p[i0];
-            let F = mat3x3f(p[i1] - base, p[i2] - base, p[i3] - base) * B;
-            let cd = sqrt(dot(F[0], F[0]) + dot(F[1], F[1]) + dot(F[2], F[2]));
-            if (cd > 1e-9) {
-                // dC/dp_{1,2,3} are the columns of (dC/dF) * B^T; the fourth
-                // gradient follows from translation invariance.
-                let g = (F * (1.0 / cd)) * Bt;
-                let g1 = g[0];
-                let g2 = g[1];
-                let g3 = g[2];
-                let g0 = -(g1 + g2 + g3);
+        let cDev = sqrt(dot(F[0], F[0]) + dot(F[1], F[1]) + dot(F[2], F[2]));
+        // Hydrostatic: C = det(F) - gamma. gamma = 1 + mu/lambda is exactly the
+        // offset that makes F = I a stationary point of the combined energy, so
+        // a body at rest neither collapses under the deviatoric term nor
+        // inflates.
+        let cHyd = determinant(F) - b.gamma;
 
-                let s = xpbdScale(cd, alphaDev, g0, g1, g2, g3, w0, w1, w2, w3);
-                p[i0] += g0 * (s * w0);
-                p[i1] += g1 * (s * w1);
-                p[i2] += g2 * (s * w2);
-                p[i3] += g3 * (s * w3);
-            }
-        }
+        // dC/dp_{1,2,3} are the columns of (dC/dF) * B^T; the fourth gradient
+        // follows from translation invariance.
+        //
+        // A near-collapsed tetrahedron has no deviatoric direction to speak of.
+        // Zeroing that gradient rather than branching leaves the block reading
+        // `dLambdaD = -cDev / alphaDev` (nothing) and `dLambdaH = -cHyd / a11`
+        // -- the hydrostatic projection on its own -- so the degenerate case
+        // needs no second code path. It is a guard against NaN, not a rescue:
+        // at F = 0 exactly the cofactor matrix vanishes too, and the
+        // tetrahedron is a fixed point either way.
+        let mDev = (F * select(0.0, 1.0 / cDev, cDev > 1e-9)) * Bt;
+        let mHyd = mat3x3f(cross(F[1], F[2]), cross(F[2], F[0]), cross(F[0], F[1])) * Bt;
 
-        // Hydrostatic: C = det(F) - gamma, recomputed from the corrected
-        // positions. gamma = 1 + mu/lambda is exactly the offset that makes
-        // F = I a stationary point of the combined energy, so a body at rest
-        // neither collapses under the deviatoric term nor inflates.
-        {
-            let base = p[i0];
-            let F = mat3x3f(p[i1] - base, p[i2] - base, p[i3] - base) * B;
-            let ch = determinant(F) - b.gamma;
+        let d1 = mDev[0];
+        let d2 = mDev[1];
+        let d3 = mDev[2];
+        let d0 = -(d1 + d2 + d3);
 
-            let cofactor = mat3x3f(cross(F[1], F[2]), cross(F[2], F[0]), cross(F[0], F[1]));
-            let g = cofactor * Bt;
-            let g1 = g[0];
-            let g2 = g[1];
-            let g3 = g[2];
-            let g0 = -(g1 + g2 + g3);
+        let h1 = mHyd[0];
+        let h2 = mHyd[1];
+        let h3 = mHyd[2];
+        let h0 = -(h1 + h2 + h3);
 
-            let s = xpbdScale(ch, alphaHyd, g0, g1, g2, g3, w0, w1, w2, w3);
-            p[i0] += g0 * (s * w0);
-            p[i1] += g1 * (s * w1);
-            p[i2] += g2 * (s * w2);
-            p[i3] += g3 * (s * w3);
-        }
+        let gram = vec3f(
+            w0 * dot(d0, d0) + w1 * dot(d1, d1) + w2 * dot(d2, d2) + w3 * dot(d3, d3),
+            w0 * dot(d0, h0) + w1 * dot(d1, h1) + w2 * dot(d2, h2) + w3 * dot(d3, h3),
+            w0 * dot(h0, h0) + w1 * dot(h1, h1) + w2 * dot(h2, h2) + w3 * dot(h3, h3)
+        );
+
+        let dl = xpbdCouple(cDev, cHyd, alphaDev, alphaHyd, gram);
+        p[i0] += (d0 * dl.x + h0 * dl.y) * w0;
+        p[i1] += (d1 * dl.x + h1 * dl.y) * w1;
+        p[i2] += (d2 * dl.x + h2 * dl.y) * w2;
+        p[i3] += (d3 * dl.x + h3 * dl.y) * w3;
     }
 
     for (var c = 0u; c < 8u; c++) {

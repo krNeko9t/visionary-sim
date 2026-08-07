@@ -8,9 +8,9 @@ import { button, chips, element, section, slider, stat, toggle } from './widgets
  *
  * The panel shows the two limits rather than hiding them behind clamps. Both
  * are real and neither is obvious from the outside: a material can be stiffer
- * than the substep budget can carry, and it can be more compressible than one
- * projection per substep can hold. Crossing either collapses the body, so the
- * numbers that say how close you are sit next to the sliders that move you.
+ * than the substep budget can carry, and a compressible one has a squash it
+ * does not come back from. Crossing either collapses the body, so the numbers
+ * that say how close you are sit next to the sliders that move you.
  *
  * What the panel deliberately does not do is decide anything. Every value it
  * writes goes through `Simulator`, and every value it reads comes from
@@ -51,8 +51,11 @@ const MATERIAL_CONTROLS = [
 /** Above this the deviatoric constraint stops being compliance-damped. */
 const CFL_LIMIT = 1;
 
-/** Above this the per-substep shrink from unequal damping is worth warning about. */
-const GAMMA_LIMIT = 1.3;
+/**
+ * Squash a body past this fraction of its rest size and it will not come back.
+ * Worth saying out loud once the barrier is within reach of an ordinary impact.
+ */
+const COLLAPSE_LIMIT = 0.4;
 
 /** Seconds between readout refreshes: often enough to feel live, rarely enough not to thrash. */
 const REFRESH = 1 / 6;
@@ -89,7 +92,7 @@ export function createPanel(sim, { onLatticeToggle }) {
     const readouts = {
         cfl: stat('CFL'),
         substeps: stat('子步'),
-        gamma: stat('gamma'),
+        collapse: stat('塌陷'),
         size: stat('规模'),
         rate: stat('帧率')
     };
@@ -138,7 +141,10 @@ export function createPanel(sim, { onLatticeToggle }) {
         readouts.substeps.set(stats.advised > stats.substeps
             ? `${stats.substeps} / 需 ${stats.advised}`
             : `${stats.substeps}`, stats.advised > stats.substeps ? 'warn' : '');
-        readouts.gamma.set(body.gamma.toFixed(2), body.gamma > GAMMA_LIMIT ? 'warn' : '');
+        readouts.collapse.set(
+            `压到 ${(body.collapseScale * 100).toFixed(0)}%`,
+            body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
+        );
         readouts.size.set(`${body.cells} / ${stats.cells} 格`);
         readouts.rate.set(`${fps.toFixed(0)} fps`);
 
@@ -185,8 +191,9 @@ function warningFor(key, stats, body) {
         return `CFL ${stats.cfl.toFixed(2)} ≥ 1：偏斜约束会被硬投影，物体将塌成一点。` +
             `软化材料、加大格子，或提高 params.maxSubsteps。`;
     }
-    if (key === 'poissonRatio' && body.gamma > GAMMA_LIMIT) {
-        return `gamma ${body.gamma.toFixed(2)} 离 1 较远：每对投影留下净收缩，物体会慢慢缩小。`;
+    if (key === 'poissonRatio' && body.collapseScale > COLLAPSE_LIMIT) {
+        return `gamma ${body.gamma.toFixed(2)}：压到 ${(body.collapseScale * 100).toFixed(0)}% 以下能量就一路往零走，` +
+            `物体塌成一点且不会回来。这是本构模型的势垒，加子步没有用。`;
     }
     return null;
 }

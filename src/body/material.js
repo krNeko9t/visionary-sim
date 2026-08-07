@@ -22,32 +22,37 @@
  * The upper end is the obvious one: at nu = 0.5 the material is perfectly
  * incompressible and lambda diverges.
  *
- * The lower end is not obvious and was found by measurement, not by taste.
- * With one projection per substep the XPBD correction is scaled by
- * `1 / (sum(w |grad C|^2) + alpha~)`, and the two constraints of a tetrahedron
- * do not get the same scaling: `|grad C_H| = sqrt(3) |grad C_D|` at rest, so
- * the hydrostatic term is damped harder than the deviatoric one. Writing
- * `r = sum(w |grad C_D|^2) / alpha~_D`, the two corrections that should cancel
- * exactly at `F = I` instead leave a net shrink of
+ * The lower end is now a property of the constitutive model rather than of the
+ * solver. Under uniform scaling `F = sI` the stable Neo-Hookean energy is
+ * stationary not only at rest but also where `s^3 + s^2 + s = gamma - 1`, and
+ * that second point is a maximum -- a barrier. Squash a body past it and the
+ * energy falls away to `s = 0`: it collapses to a point, and no amount of
+ * substepping helps, because nothing is being solved incorrectly. The barrier
+ * reaches `s = 1` at `gamma = 4`, which is nu = 0.125; below that rest is
+ * itself the maximum and a body inflates without bound instead.
  *
- *     1 - (gamma - 1)(r + 1) / (3r + gamma - 1)
+ * nu = 0.25 is gamma = 2, which puts the barrier at 54% linear compression --
+ * a sixth of the rest volume. `collapseScale` in `sim/solver/compliance.js`
+ * computes it, the panel reports it beside this slider, and
+ * `test/unit/elastic.test.js` checks the formula against what a tetrahedron
+ * actually survives.
  *
- * per projection pair. The error vanishes as `r -> 0` (that is, as the substep
- * shrinks), but at a practical substep it is percent-level and compounds. The
- * only thing that stops it compounding into total collapse is a hydrostatic
- * constraint stiff enough to lock the volume outright, which needs
- * `lambda >> mu`, which means gamma near 1, which means large nu.
+ * This floor used to be nu = 0.35, for a reason that no longer applies. The
+ * two constraints of a tetrahedron were projected one after the other, which
+ * damped them unequally -- `|grad C_H| = sqrt(3) |grad C_D|` at rest, so the
+ * denominators differed -- and the pair left a net shrink per projection that
+ * compounded until the body was a point. Only a hydrostatic constraint stiff
+ * enough to lock the volume outright held it off, so gamma had to stay near 1,
+ * so nu had to stay near 0.5. Solving the two as a coupled 2x2 block removed
+ * that mechanism outright rather than shrinking it: at `F = I` the corrections
+ * now cancel identically, for any gamma, dt or mass. See `xpbdCouple` in
+ * `sim/solver/wgsl/common.wgsl`.
  *
- * Measured on the tank scene: nu = 0.45 (gamma 1.11) and nu = 0.40 (gamma 1.25)
- * hold their shape indefinitely; nu = 0.35 (gamma 1.43) is stable; nu = 0.25
- * (gamma 2.0) collapses to a point within seconds, as does nu = 0.05.
- *
- * This rules out compressible foams, not any of the soft materials this project
- * is aimed at -- jelly, rubber and flesh all sit at nu = 0.35..0.49. Supporting
- * lower nu needs the two constraints solved as a coupled 2x2 block rather than
- * sequentially, which is a real change to the solver, not a tuning exercise.
+ * So the floor moved for one reason and stopped for another. What it buys is
+ * material that is genuinely compressible: at nu = 0.25 a body can lose a third
+ * of its volume under load and spring back, which at nu = 0.4 it cannot.
  */
-export const POISSON_RANGE = Object.freeze({ min: 0.35, max: 0.49 });
+export const POISSON_RANGE = Object.freeze({ min: 0.25, max: 0.49 });
 
 /** @type {Material} */
 export const DEFAULT_MATERIAL = Object.freeze({

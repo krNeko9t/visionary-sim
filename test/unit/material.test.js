@@ -11,7 +11,7 @@ import {
 describe('material conversion', () => {
     it('round-trips E and nu through the Lame parameters', () => {
         for (const youngsModulus of [1e4, 1.2e5, 5e6]) {
-            for (const poissonRatio of [0.35, 0.4, 0.45, 0.49]) {
+            for (const poissonRatio of [0.25, 0.3, 0.35, 0.4, 0.45, 0.49]) {
                 const back = engineeringConstants(lameParameters({ youngsModulus, poissonRatio }));
                 expect(back.youngsModulus).toBeCloseTo(youngsModulus, 1);
                 expect(back.poissonRatio).toBeCloseTo(poissonRatio, 8);
@@ -21,7 +21,8 @@ describe('material conversion', () => {
 
     it('clamps Poisson ratio away from the degenerate ends', () => {
         // nu = 0.5 diverges lambda; nu = 0 makes gamma infinite and poisons
-        // det(F) - gamma with a NaN.
+        // det(F) - gamma with a NaN. The floor sits well above zero anyway --
+        // see POISSON_RANGE -- but the clamp is what makes that a guarantee.
         for (const nu of [-1, 0, 0.5, 0.99]) {
             const { mu, lambda } = lameParameters({ youngsModulus: 1e5, poissonRatio: nu });
             expect(Number.isFinite(mu)).toBe(true);

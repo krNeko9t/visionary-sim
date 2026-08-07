@@ -60,21 +60,45 @@ fn cornerNode(b: Body, coord: vec3u, corner: u32) -> u32 {
     return b.nodeOffset + n.x + b.nodeDims.x * (n.y + b.nodeDims.y * n.z);
 }
 
-// XPBD position correction scale for one constraint.
+// XPBD multipliers for the two constraints of one tetrahedron, solved together
+// as a 2x2 block.
 //
 // Lambda is deliberately not accumulated: with one projection per substep it
 // starts at zero, so the `alpha * lambda` term of the full XPBD update is
-// identically zero and the projection reduces to an exact elastic force step.
-// That is the "small steps" regime, and it saves a per-constraint buffer.
-// Running more than one iteration per substep would require storing lambda.
-fn xpbdScale(
-    c: f32, alphaTilde: f32,
-    g0: vec3f, g1: vec3f, g2: vec3f, g3: vec3f,
-    w0: f32, w1: f32, w2: f32, w3: f32
-) -> f32 {
-    let denom = w0 * dot(g0, g0) + w1 * dot(g1, g1) + w2 * dot(g2, g2) + w3 * dot(g3, g3) + alphaTilde;
-    if (denom < 1e-20) {
-        return 0.0;
+// identically zero and the block reduces to `A dLambda = -C`. That is the
+// "small steps" regime, and it saves a per-constraint buffer. Running more than
+// one iteration per substep would require storing lambda.
+//
+// Solving the two together rather than one after the other is what lets the
+// material be compressible. Projected in turn they are damped by different
+// amounts -- at rest `grad C_H = sqrt(3) grad C_D`, so the two denominators
+// differ -- and the corrections that ought to cancel at `F = I` instead leave a
+// net shrink per pair, which compounds until the body is a point. Only a
+// hydrostatic constraint stiff enough to lock the volume outright stopped it,
+// which is why gamma had to stay near 1.
+//
+// Solved together they cancel at `F = I` exactly, for every gamma, dt, volume
+// and mass. There the two gradients are parallel, so the block moves the nodes
+// along that one direction by `dLambdaD + sqrt(3) dLambdaH`, which works out to
+// `sqrt(3) (alphaDev * mu / lambda - alphaHyd) / det`, and `alphaDev * mu /
+// lambda` *is* `alphaHyd`: both are `1 / (lambda * V)`. Rest is a fixed point of
+// the solver rather than something a stiff constraint holds it near.
+//
+// `A` cannot be singular. Its off-diagonal is a Cauchy-Schwarz inner product of
+// the two gradient sets, so `det >= alphaDev * alphaHyd > 0` however parallel
+// they become; the epsilon below is against underflow, not against the maths.
+//
+// `gram` is `(sum w |grad C_D|^2, sum w grad C_D . grad C_H, sum w |grad C_H|^2)`
+// -- what the constraints contribute to the block. The compliances are added
+// here so that no caller has to remember them.
+fn xpbdCouple(cDev: f32, cHyd: f32, alphaDev: f32, alphaHyd: f32, gram: vec3f) -> vec2f {
+    let a00 = gram.x + alphaDev;
+    let a01 = gram.y;
+    let a11 = gram.z + alphaHyd;
+
+    let det = a00 * a11 - a01 * a01;
+    if (det < 1e-20) {
+        return vec2f(0.0, 0.0);
     }
-    return -c / denom;
+    return vec2f(a01 * cHyd - a11 * cDev, a01 * cDev - a00 * cHyd) / det;
 }

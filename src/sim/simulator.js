@@ -1,7 +1,7 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { SimArena } from './solver/arena.js';
-import { elementCompliance, waveRatio } from './solver/compliance.js';
+import { collapseScale, elementCompliance, waveRatio } from './solver/compliance.js';
 import { SimKernels } from './solver/kernels.js';
 
 /**
@@ -158,12 +158,16 @@ export class Simulator {
             advised: this.recommendedSubsteps(frameTime),
             cfl: this.cflNumber(frameTime),
             limitedBy: this.worst().body.name,
-            perBody: this.simBodies.map(({ body, lattice }) => ({
-                name: body.name,
-                h: lattice.h,
-                cells: lattice.cells.length,
-                gamma: elementCompliance(body.material, lattice).gamma
-            }))
+            perBody: this.simBodies.map(({ body, lattice }) => {
+                const { gamma } = elementCompliance(body.material, lattice);
+                return {
+                    name: body.name,
+                    h: lattice.h,
+                    cells: lattice.cells.length,
+                    gamma,
+                    collapseScale: collapseScale(gamma)
+                };
+            })
         };
     }
 

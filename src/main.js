@@ -75,7 +75,7 @@ function report(stats) {
     for (const body of stats.perBody) {
         console.info(
             `[softbody]   ${body.name}: h=${body.h.toFixed(4)}m cells=${body.cells} ` +
-            `gamma=${body.gamma.toFixed(3)}`
+            `gamma=${body.gamma.toFixed(3)} collapses below ${(body.collapseScale * 100).toFixed(0)}%`
         );
     }
     if (stats.cfl >= 1) {

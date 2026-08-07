@@ -45,6 +45,45 @@ export function elementCompliance(material, lattice) {
 }
 
 /**
+ * How far a body can be squashed before it stops coming back.
+ *
+ * The stable Neo-Hookean energy has a stationary point besides `F = I`. Under
+ * uniform scaling `F = sI` its derivative factors as
+ *
+ *     (s - 1) * (lambda * s * (s^2 + s + 1) - mu)
+ *
+ * so alongside rest there is a root at `s^3 + s^2 + s = gamma - 1`. It is an
+ * energy *maximum*: a barrier. Compress a body past it and the energy keeps
+ * falling all the way to `s = 0`, which is the collapse-to-a-point that has
+ * nothing to do with any solver.
+ *
+ * The barrier sits at `s = 1` exactly when `gamma = 4`. Above that it moves
+ * above rest, rest becomes the maximum, and the body inflates without bound
+ * instead -- which is why {@link POISSON_RANGE} has a lower end at all now that
+ * the projection is no longer what limits it.
+ *
+ * Bisection rather than Cardano: the left side is strictly increasing for
+ * positive s, forty halvings of [0, 4] land well inside f32, and the reader can
+ * check it against the formula above without expanding a cubic.
+ *
+ * @param {number} gamma - The hydrostatic constraint's rest offset, `1 + mu / lambda`.
+ * @returns {number} Uniform scale of the barrier. Below 1 while gamma is below 4.
+ */
+export function collapseScale(gamma) {
+    let low = 0;
+    let high = 4;
+    for (let i = 0; i < 40; i++) {
+        const s = (low + high) / 2;
+        if (s ** 3 + s ** 2 + s < gamma - 1) {
+            low = s;
+        } else {
+            high = s;
+        }
+    }
+    return (low + high) / 2;
+}
+
+/**
  * Cell crossings per second: how fast an elastic wave moves through a body
  * relative to its own cell size.
  *
