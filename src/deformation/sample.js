@@ -20,8 +20,9 @@ import { CUBE_CORNERS } from './corners.js';
  * `test/unit/architecture.test.js`: a channel that reached into either side
  * would stop being a channel.
  *
- * `sample.wgsl` (M3) will be the same maths on the GPU; these functions are the
- * CPU reference the unit tests pin that behaviour against.
+ * `sample.wgsl` is the same maths on the GPU, and `bind.js` is how a material
+ * gets at it; these functions are the CPU reference the unit tests pin that
+ * behaviour against.
  *
  * @typedef {object} LatticeSpace
  * @property {number[]} origin - World position of the min corner of cell (0,0,0).

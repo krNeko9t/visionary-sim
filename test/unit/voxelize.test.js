@@ -48,9 +48,12 @@ describe('voxelizeSdf', () => {
         const grid = voxelizeSdf(sphere({ radius }), { resolution: 32 });
         const measured = countOccupied(grid) * grid.h ** 3;
         const exact = (4 / 3) * Math.PI * radius ** 3;
-        // The half-cell threshold deliberately over-fills, so allow a bias.
+        // Over-filling is deliberate -- a cell holding surface but no material
+        // is what tears the render geometry embedded in it -- so allow a bias.
+        // The corner test that guarantees containment costs the last point of
+        // it, by claiming cells the surface only clips near a corner.
         expect(measured / exact).toBeGreaterThan(1.0);
-        expect(measured / exact).toBeLessThan(1.15);
+        expect(measured / exact).toBeLessThan(1.16);
     });
 
     it('leaves the hole of a torus empty', () => {

@@ -10,6 +10,7 @@ import {
 } from 'playcanvas';
 
 import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../discretize/lattice.js';
+import { SAMPLE_WGSL, bindDeformation } from '../../deformation/bind.js';
 import { CUBE_CORNERS } from '../../deformation/corners.js';
 
 /**
@@ -26,6 +27,12 @@ import { CUBE_CORNERS } from '../../deformation/corners.js';
  * you whether voxelisation leaked or missed a limb; the colouring is what the
  * GPU solver's correctness rests on, and eight interleaved tints make a broken
  * parity rule obvious.
+ *
+ * It reads the node positions through the same deformation channel as the
+ * render paths, using the one accessor whose geometry already sits on the
+ * lattice. That is not tidiness: this view is the picture people trust when the
+ * render looks wrong, and it is only worth trusting if it is looking at the
+ * same data through the same binding.
  */
 
 /**
@@ -52,19 +59,18 @@ const CUBE_EDGES = [
 ];
 
 const VERTEX_WGSL = /* wgsl */ `
+    ${SAMPLE_WGSL}
+
     attribute vertex_position: vec3f;
-    // xyz: rest-space offset towards the cell centre. w: node index in the
-    // simulation arena.
+    // xyz: rest-space offset towards the cell centre. w: this body's node index.
     attribute vertex_nodeData: vec4f;
 
     uniform matrix_viewProjection: mat4x4f;
 
-    var<storage, read> nodePos: array<vec4f>;
-
     @vertex
     fn vertexMain(input: VertexInput) -> VertexOutput {
         var output: VertexOutput;
-        let node = nodePos[u32(input.vertex_nodeData.w)].xyz;
+        let node = deformedNode(u32(input.vertex_nodeData.w));
         output.position = uniform.matrix_viewProjection * vec4f(node + input.vertex_nodeData.xyz, 1.0);
         return output;
     }
@@ -83,12 +89,11 @@ const FRAGMENT_WGSL = /* wgsl */ `
 
 /**
  * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
- * @param {number} nodeOffset - Where this body's nodes start in the arena.
  * @param {{ start: number, count: number }} range - Cells of one colour.
  * @param {number} inset - How far to pull each corner towards the cell centre.
  * @returns {{ positions: Float32Array, nodeData: Float32Array, indices: Uint32Array }} Mesh streams.
  */
-function buildGroupGeometry(lattice, nodeOffset, range, inset) {
+function buildGroupGeometry(lattice, range, inset) {
     const { cells, cellDims, nodeDims, restPositions } = lattice;
     const { start, count } = range;
 
@@ -115,7 +120,7 @@ function buildGroupGeometry(lattice, nodeOffset, range, inset) {
                 positions[vertex * 3 + axis] = restPositions[node * 3 + axis] + shift;
                 nodeData[vertex * 4 + axis] = shift;
             }
-            nodeData[vertex * 4 + 3] = nodeOffset + node;
+            nodeData[vertex * 4 + 3] = node;
             vertex++;
         }
 
@@ -131,13 +136,12 @@ function buildGroupGeometry(lattice, nodeOffset, range, inset) {
 /**
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
- * @param {import('playcanvas').StorageBuffer} nodePositions - Live node positions.
- * @param {number} nodeOffset - Where this body's nodes start in the arena.
+ * @param {import('../../deformation/bind.js').DeformationField} field - Deformation to follow.
  * @param {object} [options] - Display options.
  * @param {number} [options.shrink] - Cell size as a fraction of the real cell.
  * @returns {Entity} An entity holding one mesh instance per colour group.
  */
-export function createLatticeView(app, lattice, nodePositions, nodeOffset, { shrink = 0.78 } = {}) {
+export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
     const device = app.graphicsDevice;
     const entity = new Entity('lattice-debug');
     const instances = [];
@@ -149,7 +153,7 @@ export function createLatticeView(app, lattice, nodePositions, nodeOffset, { shr
             continue;
         }
 
-        const { positions, nodeData, indices } = buildGroupGeometry(lattice, nodeOffset, range, inset);
+        const { positions, nodeData, indices } = buildGroupGeometry(lattice, range, inset);
 
         const material = new ShaderMaterial({
             uniqueName: 'lattice-view',
@@ -162,7 +166,7 @@ export function createLatticeView(app, lattice, nodePositions, nodeOffset, { shr
         });
         const tint = GROUP_TINTS[group];
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
-        material.setParameter('nodePos', nodePositions);
+        bindDeformation(material, field);
         material.update();
 
         const mesh = new Mesh(device);

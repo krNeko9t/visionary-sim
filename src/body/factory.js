@@ -48,9 +48,14 @@ export async function meshBody(url, { name, size, position, resolution, material
  * @returns {SoftBody} The body.
  */
 export function shapeBody(shape, { name, position, resolution, material, tint }) {
+    const placed = translateShape(restOnGround(shape), position);
+
     return new SoftBody({
         name,
-        source: { kind: 'shape', shape: translateShape(restOnGround(shape), position) },
+        source: { kind: 'shape', shape: placed },
+        // The shape's own triangles, taken after placement so the render
+        // geometry and the distance function describe the same rest pose.
+        renderMesh: placed.surface,
         material,
         resolution,
         tint

@@ -54,17 +54,30 @@ export class Simulator {
         this.stepCount = 0;
     }
 
-    /** @returns {import('playcanvas').StorageBuffer} Live node positions, for the debug view. */
-    get nodePositions() {
-        return this.arena.nodePos;
-    }
-
     /**
+     * How one body's deformation is handed to anything that wants to be carried
+     * by it.
+     *
+     * This is the whole of the simulation's output. It says where the solver's
+     * degrees of freedom currently are and how to read them, and nothing about
+     * cells, colours, tetrahedra or constraints -- so a render path can consume
+     * it without ever learning that a lattice exists. Everything that draws
+     * something goes through here, including the debug view of the lattice
+     * itself.
+     *
      * @param {number} bodyIndex - Index into the body list.
-     * @returns {number} Where that body's nodes start in the shared arrays.
+     * @returns {import('../deformation/bind.js').DeformationField} Its deformation.
      */
-    nodeOffset(bodyIndex) {
-        return this.arena.nodeOffsets[bodyIndex];
+    deformationOf(bodyIndex) {
+        const { lattice } = this.simBodies[bodyIndex];
+        return {
+            nodePositions: this.arena.nodePos,
+            origin: lattice.origin,
+            h: lattice.h,
+            cellDims: lattice.cellDims,
+            nodeDims: lattice.nodeDims,
+            nodeOffset: this.arena.nodeOffsets[bodyIndex]
+        };
     }
 
     /**

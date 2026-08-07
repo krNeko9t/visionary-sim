@@ -78,10 +78,22 @@ export function countOccupied(grid) {
 /**
  * Samples an SDF at cell centres.
  *
- * The threshold is half a cell rather than zero, so cells the surface merely
- * clips still count as material. Over-filling by half a cell makes a body
- * marginally larger; under-filling leaves render points with no lattice cell to
- * be embedded in, which is not recoverable.
+ * The thing that must not happen is a cell that holds part of the surface but
+ * no material. Its outer nodes then have no mass, so they never move, and a
+ * render point embedded there is not merely placed slightly wrong -- the
+ * deformation gradient it reads is torn between nodes that moved and nodes that
+ * could not, and the surface shades as a black speck. Over-filling by half a
+ * cell makes a body marginally larger, which is the cheaper mistake.
+ *
+ * Two things are needed to guarantee it, and the centre sample alone is neither:
+ *
+ *   - The grid is offset so cell centres land on the bounds rather than between
+ *     them. An axis-aligned face -- every face of a box -- otherwise falls
+ *     exactly on the seam between two cells, and the one it gets assigned to is
+ *     the empty one.
+ *   - A cell counts as material if any of its corners is inside, not only if
+ *     its centre is nearly so. A surface that clips a cell near a corner can
+ *     leave the centre more than half a cell away.
  *
  * @param {import('./shapes.js').Shape} shape - Shape to voxelise.
  * @param {object} [options] - Layout options, see {@link gridForBounds}.
@@ -91,22 +103,47 @@ export function countOccupied(grid) {
  */
 export function voxelizeSdf(shape, options = {}) {
     const grid = gridForBounds(shape.bounds, options);
-    const { dims, origin, h, occupancy } = grid;
+    const { dims, h, occupancy } = grid;
+    const origin = grid.origin.map(v => v - h * 0.5);
+    grid.origin = origin;
     const threshold = h * 0.5;
 
     for (let k = 0; k < dims[2]; k++) {
-        const z = origin[2] + (k + 0.5) * h;
         for (let j = 0; j < dims[1]; j++) {
-            const y = origin[1] + (j + 0.5) * h;
             for (let i = 0; i < dims[0]; i++) {
-                const x = origin[0] + (i + 0.5) * h;
-                if (shape.sdf(x, y, z) < threshold) {
+                const x = origin[0] + i * h;
+                const y = origin[1] + j * h;
+                const z = origin[2] + k * h;
+                if (shape.sdf(x + h * 0.5, y + h * 0.5, z + h * 0.5) < threshold ||
+                    anyCornerInside(shape, x, y, z, h)) {
                     occupancy[cellIndex(grid, i, j, k)] = 1;
                 }
             }
         }
     }
     return grid;
+}
+
+/**
+ * @param {import('./shapes.js').Shape} shape - Shape to test against.
+ * @param {number} x - Min corner of the cell along x.
+ * @param {number} y - Min corner of the cell along y.
+ * @param {number} z - Min corner of the cell along z.
+ * @param {number} h - Cell edge length.
+ * @returns {boolean} Whether any of the eight corners is inside the surface.
+ */
+function anyCornerInside(shape, x, y, z, h) {
+    for (let corner = 0; corner < 8; corner++) {
+        const inside = shape.sdf(
+            x + (corner & 1 ? h : 0),
+            y + (corner & 2 ? h : 0),
+            z + (corner & 4 ? h : 0)
+        ) < 0;
+        if (inside) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**

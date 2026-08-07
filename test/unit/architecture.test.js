@@ -53,7 +53,7 @@ const ALLOWED = {
 };
 
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
-const REQUIRED = ['assets', 'body', 'deformation', 'sim', 'sim/discretize', 'sim/solver', 'scene'];
+const REQUIRED = ['assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/solver', 'scene'];
 
 /**
  * @param {string} dir - Directory to walk.

@@ -34,7 +34,12 @@ sim/  ──────►  deformation/  ◄──────  render/
 ```
 
 `deformation/` 回答两件事：某个静止点现在在哪，它周围的空间被拉成什么样。后者使网格能
-求法线、高斯能转协方差，因此一条通道同时服务两种渲染。
+求法线、高斯能转协方差，因此一条通道同时服务两种渲染。同一套数学有 CPU 与 GPU 两份实现，
+前者是后者的参考解，由单元测试对齐。
+
+「把形变绑定到材质」只有一份实现，落在 `deformation/` 里。这不是自律的结果：`render/` 只
+能看见 `deformation/`，调试视图只能看见 `sim/discretize/` 和 `deformation/`，两者唯一的交
+集就是那里。想各写一份，得先破坏分层才拿得到。
 
 三条边界由 `test/unit/architecture.test.js` 在每次 `npm test` 时检查：
 
@@ -49,7 +54,9 @@ sim/  ──────►  deformation/  ◄──────  render/
 | 体素点阵 + Kuhn 六四面体切分 | `sim/discretize/` | 重写该目录，`body/` 及以上不动 |
 | 三线性内嵌 | `deformation/` | 通道内部换算法，两侧不动 |
 | 8 色并行 Gauss-Seidel | `sim/solver/` | 性能手段，可独立更换 |
-| 先网格、后 3DGS | `render/`（M3 建立） | M6 之后网格路径去留自定 |
+| 先网格、后 3DGS | `render/` | M6 之后网格路径去留自定 |
+| 借引擎标准材质的顶点钩子，而非自写着色 | `render/mesh.wgsl` | 换来光照与阴影，代价是随引擎版本复核钩子 |
+| 解析形状自带参数化表面 | `assets/tessellate.js` | 换成任意 SDF 要 marching cubes |
 
 目录名取自它承担的关注点，因此更换实现时目录结构保持不变。
 
@@ -65,4 +72,5 @@ sim/  ──────►  deformation/  ◄──────  render/
 | `sim/solver/` | 让这些自由度随时间演化并服从材料规律 |
 | `sim/debug/` | 使求解状态可见 |
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |
-| `assets/` | 外部几何进入系统的入口 |
+| `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条 |
+| `assets/` | 几何进入系统的入口 |

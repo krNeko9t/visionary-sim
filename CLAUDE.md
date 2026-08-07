@@ -19,6 +19,9 @@
 现行硬规则：`render/` 只依赖 `deformation/`；`deformation/` 无依赖；`body/` 只依赖
 `assets/`；`sim/discretize/` 不依赖 `sim/solver/`；依赖一律向下，无环。
 
+这张表还顺带决定了"把形变绑定到材质"只能有一份实现：`render/` 与 `sim/debug/` 唯一的公共
+可见范围就是 `deformation/`。新增消费者时走那一份，不要在自己目录里再写一遍绑定。
+
 ## 层次不可混淆
 
 不变的是**3DGS 的物理模拟与交互**。PlayCanvas + WebGPU 是技术选型，XPBD 是当前解算
@@ -38,10 +41,23 @@
 
 推导写在 `body/material.js` 与 `sim/solver/compliance.js` 的注释中。
 
+## 离散化的一条硬边界
+
+**网格必须把渲染表面整个包住**：每个渲染顶点所在的格子都得是实心的。差一格的表现不是位置
+略偏，而是表面上出现黑斑——那个格子有角点没有质量、永远不动，顶点读到的形变梯度被撕成两
+半，法线随之作废。插值权重为零也躲不掉，因为梯度权重不为零。
+
+代价是必须往外多填半格，`sim/discretize/voxelize.js` 的注释写了要满足哪两件事才够。
+`test/unit/shapes.test.js` 在多个分辨率上检查：这个失效来自表面与网格的对齐，单一分辨率
+藏得住。
+
 ## 里程碑
 
-M0 脚手架 → M1 几何 → M2 GPU 求解器 → **M3 形变渲染（当前）** → M4 交互/UI →
+M0 脚手架 → M1 几何 → M2 GPU 求解器 → M3 形变渲染 → **M4 交互/UI（当前）** →
 M5 接触 → M6 3DGS。
 
-M3 的第一步是补齐 `deformation/` 的 GPU 一半，并建立唯一一份"把形变绑定到材质"的实现；
-`render/` 与 `sim/debug/latticeView.js` 都走这一份，不各自实现。
+M3 完成的状态：五个物体都以形变表面显示，法线由形变梯度重建，光照与阴影走引擎标准材质；
+点阵线框退为默认关闭的调试视图，与渲染共用同一条通道。
+
+M4 把 `Simulator` 已有的 `setMaterial` / `setGrab` 接到界面上。`render/` 增加新表示法
+（M6 的 3DGS）时走 `deformation/bind.js`，不要新写一份绑定。

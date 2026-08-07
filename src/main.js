@@ -1,4 +1,5 @@
 import { createBodies } from './scene/contents.js';
+import { createMeshView } from './render/mesh.js';
 import { createStage } from './scene/stage.js';
 import { TANK_BOUNDS, createTank } from './scene/tank.js';
 import { WebGpuUnavailableError, createApp } from './scene/app.js';
@@ -17,8 +18,20 @@ async function boot() {
     const sim = new Simulator(app.graphicsDevice, bodies, TANK_BOUNDS);
     sim.autoSubsteps();
 
-    sim.simBodies.forEach(({ lattice }, index) => {
-        app.root.addChild(createLatticeView(app, lattice, sim.nodePositions, sim.nodeOffset(index)));
+    // Two ways of looking at the same deformation: the surface, and the solver's
+    // own insides. The second starts hidden -- it is what you turn on when the
+    // first looks wrong.
+    const latticeViews = sim.simBodies.map(({ body, lattice }, index) => {
+        const field = sim.deformationOf(index);
+
+        if (body.renderMesh) {
+            app.root.addChild(createMeshView(app, body.renderMesh, field, { tint: body.tint }));
+        }
+
+        const view = createLatticeView(app, lattice, field);
+        view.enabled = false;
+        app.root.addChild(view);
+        return view;
     });
 
     // The dispatch has to be recorded inside the render frame, so it hangs off
@@ -30,7 +43,8 @@ async function boot() {
     report(sim.stats());
 
     // Handy while there is no UI yet.
-    Object.assign(window, { app, sim, bodies });
+    Object.assign(window, { app, sim, bodies, latticeViews });
+    console.info('[softbody] latticeViews.forEach(v => v.enabled = true) shows the solver lattice');
     return app;
 }
 
