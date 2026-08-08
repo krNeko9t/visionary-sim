@@ -5,6 +5,11 @@ node_modules/
 dist/
 coverage/
 
+# 3DGS captures: 61 MB of someone else's scan, supplied per checkout rather
+# than carried in history. The unit tests run on synthetic clouds for this
+# reason; what these two are for is looking at.
+public/splats/*.ply
+
 # Local environment files
 .env
 .env.*

@@ -97,6 +97,8 @@ sim/  ──────►  deformation/  ◄──────  render/
 | 8 色并行 Gauss-Seidel | `sim/constraints/elasticCells.js` | 性能手段，可独立更换。这条批次规则**只属于弹性约束**：它跨物体成立仅仅因为各物体的节点区间互不相交，跨物体的接触约束没有奇偶可援引，只好另想办法 |
 | 接触=边界节点的球，均匀网格粗筛 + Jacobi | `sim/constraints/bodyContact.js`、`sim/constraints/broadphase.js` | 换成 SDF 或连续碰撞只动这两个文件。接触因此发生在**代理几何的分辨率**上：两个静止物体之间留下约一格的缝，那是点阵的粒度，不是求解器的误差 |
 | 先网格、后 3DGS | `render/` | M6 之后网格路径去留自定 |
+| 高斯的球谐只留 DC 项 | `assets/splats/cloud.js` | 45 个 `f_rest` 读都不读。视角依赖的波瓣本该随材料一起转，而形变里不转，留着等于买一堆一动就指错方向的高光。代价是比普通 viewer 平一点，要加时通道两侧都得动 |
+| 每份扫描的坐标约定与尺度由人写死，附实测报告 | `assets/splats/place.js`、`assets/splats/measure.js` | 文件里没有这两样东西，只能声明。仓库里这两份资产一个 y-up 一个 z-up，因此不存在"选一个当标准"这个选项 |
 | 借引擎标准材质的顶点钩子，而非自写着色 | `render/mesh.wgsl` | 换来光照与阴影，代价是随引擎版本复核钩子 |
 | 解析形状自带参数化表面 | `assets/tessellate.js` | 换成任意 SDF 要 marching cubes |
 
@@ -118,4 +120,4 @@ sim/  ──────►  deformation/  ◄──────  render/
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |
 | `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条 |
 | `ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
-| `assets/` | 几何进入系统的入口 |
+| `assets/` | 几何进入系统的入口。`splats/` 是 3DGS 那道门：容器、解激活、清洗、量、摆 |
