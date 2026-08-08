@@ -2,8 +2,43 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATERIAL } from '../../src/body/material.js';
 import { SoftBody } from '../../src/body/softBody.js';
-import { sphere } from '../../src/assets/shapes.js';
+import { box, sphere } from '../../src/assets/shapes.js';
 import { discretizeBody, relumpMasses } from '../../src/sim/discretize/discretize.js';
+
+/**
+ * Gaussians scattered over the faces of a cube, standing in for a capture.
+ *
+ * @param {number} half - Half extent of the cube.
+ * @returns {import('../../src/assets/splats/cloud.js').SplatCloud} The cloud.
+ */
+function cloudOnCube(half) {
+    const points = [];
+    const steps = 12;
+    for (let axis = 0; axis < 3; axis++) {
+        for (let side = -1; side <= 1; side += 2) {
+            for (let u = 0; u <= steps; u++) {
+                for (let v = 0; v <= steps; v++) {
+                    const at = [(u / steps * 2 - 1) * half, (v / steps * 2 - 1) * half, side * half];
+                    points.push(at[(3 - axis) % 3], at[(4 - axis) % 3], at[(5 - axis) % 3]);
+                }
+            }
+        }
+    }
+
+    const count = points.length / 3;
+    const cloud = {
+        count,
+        positions: Float32Array.from(points),
+        rotations: new Float32Array(count * 4),
+        scales: new Float32Array(count * 3).fill(half / 40),
+        opacity: new Float32Array(count).fill(1),
+        colors: new Float32Array(count * 3).fill(0.5)
+    };
+    for (let i = 0; i < count; i++) {
+        cloud.rotations[i * 4 + 3] = 1;
+    }
+    return cloud;
+}
 
 /**
  * @param {Partial<import('../../src/body/material.js').Material>} [material] - Overrides.
@@ -30,6 +65,30 @@ describe('discretizeBody', () => {
 
     it('gives a finer request smaller cells', () => {
         expect(latticeOf({}, 16).h).toBeLessThan(latticeOf({}, 6).h);
+    });
+
+    it('takes every kind of rest geometry there is', () => {
+        // The point of the table this dispatches through: a third way of
+        // describing an object arrived and nothing above this file moved. What
+        // is asserted is only that each kind reaches a lattice with material in
+        // it -- what each one does with the geometry belongs to its own test.
+        const cube = box({ halfExtents: [0.04, 0.04, 0.04] });
+        const sources = [
+            { kind: 'shape', shape: cube },
+            { kind: 'mesh', mesh: cube.surface },
+            { kind: 'cloud', cloud: cloudOnCube(0.04) }
+        ];
+
+        for (const source of sources) {
+            const lattice = discretizeBody(new SoftBody({ name: source.kind, source, resolution: 8 }));
+            expect(lattice.cells.length, source.kind).toBeGreaterThan(0);
+            expect(lattice.volume, source.kind).toBeGreaterThan(0);
+        }
+    });
+
+    it('refuses rest geometry it has never heard of', () => {
+        const body = new SoftBody({ name: 'mystery', source: { kind: 'hologram' } });
+        expect(() => discretizeBody(body)).toThrow(/hologram/);
     });
 });
 

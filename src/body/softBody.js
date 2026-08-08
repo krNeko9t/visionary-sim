@@ -11,15 +11,22 @@ import { DEFAULT_MATERIAL } from './material.js';
  *
  * The two geometries are separate fields because they are separate things. The
  * source is what the solver is given to cut up; the render payload is what gets
- * drawn and carried along by the result. Today they are both triangles and both
- * are tagged anyway, because a representation that is not a mesh is exactly what
- * M6 is for, and a field called `renderMesh` would have had to be renamed or
- * lied about the moment one arrived.
+ * drawn and carried along by the result. They coincide for a mesh and they do
+ * not for a capture, where the same Gaussians serve as both and the simulator
+ * still has to invent a volume from them.
  *
  * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }
- *         | { kind: 'shape', shape: import('../assets/shapes.js').Shape }} RestGeometry
+ *         | { kind: 'shape', shape: import('../assets/shapes.js').Shape }
+ *         | { kind: 'cloud', cloud: import('../assets/splats/cloud.js').SplatCloud, report?: string }}
+ *   RestGeometry
  *
- * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }} RenderGeometry
+ * A capture carries the measurements taken when it was placed. Not decoration:
+ * a PLY states neither its up axis nor its units, so both were declared by hand
+ * upstream, and a declaration nobody checks is a guess.
+ *
+ * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }
+ *         | { kind: 'splats', cloud: import('../assets/splats/cloud.js').SplatCloud }}
+ *   RenderGeometry
  */
 export class SoftBody {
     /**

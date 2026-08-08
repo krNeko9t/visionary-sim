@@ -348,14 +348,35 @@ function accumulateAxis(mesh, grid, axis, votes, surface) {
 }
 
 /**
+ * Grows the occupied region by one cell in each of the six directions.
+ *
+ * @param {OccupancyGrid} grid - Grid providing the dimensions.
+ * @param {Uint8Array} [source] - Occupancy to grow; the grid's own by default.
+ * @returns {Uint8Array} The result; the input is untouched.
+ */
+export function dilated(grid, source = grid.occupancy) {
+    return neighbourhoodPass(grid, source, true);
+}
+
+/**
+ * Shrinks the occupied region by one cell in each of the six directions.
+ *
+ * @param {OccupancyGrid} grid - Grid providing the dimensions.
+ * @param {Uint8Array} [source] - Occupancy to shrink; the grid's own by default.
+ * @returns {Uint8Array} The result; the input is untouched.
+ */
+export function eroded(grid, source = grid.occupancy) {
+    return neighbourhoodPass(grid, source, false);
+}
+
+/**
  * Dilate then erode with a 6-neighbourhood, sealing pits and cracks up to one
  * cell wide without changing the bulk of the body.
  *
  * @param {OccupancyGrid} grid - Grid to modify in place.
  */
 export function morphologicalClose(grid) {
-    const dilated = neighbourhoodPass(grid, grid.occupancy, true);
-    grid.occupancy.set(neighbourhoodPass(grid, dilated, false));
+    grid.occupancy.set(eroded(grid, dilated(grid)));
 }
 
 /**

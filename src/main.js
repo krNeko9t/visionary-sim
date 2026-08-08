@@ -17,15 +17,23 @@ async function boot() {
     const { camera } = createStage(app, scene.bounds);
     scene.decorate(app);
 
-    // Drawn but not stepped. Each capture reports what it measured, because
-    // which way up it is and how big it is were declared by hand and a
-    // declaration nobody checks is a guess.
-    for (const capture of await (scene.scenery?.() ?? [])) {
-        console.info(`[splats] ${capture.report}`);
+    // Drawn but not stepped: the parts of a capture that are only ever backdrop.
+    const scenery = await (scene.scenery?.() ?? []);
+    for (const capture of scenery) {
         app.root.addChild(createSplatView(app, capture.name, capture.cloud));
     }
 
     const bodies = await scene.createBodies();
+
+    // Every capture says what it measured, simulated or not, because which way
+    // up it is and how big it is were declared by hand and a declaration nobody
+    // checks is a guess.
+    for (const { report } of [...scenery, ...bodies.map(body => body.source)]) {
+        if (report) {
+            console.info(`[splats] ${report}`);
+        }
+    }
+
     const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
     sim.autoSubsteps();
 
@@ -71,10 +79,9 @@ async function boot() {
 /**
  * Puts a body on screen with whichever representation it brought.
  *
- * One representation so far, and the switch is here anyway: this is the place a
- * second one gets added, and it is assembly rather than a decision -- every
- * representation takes the same deformation field and none of them knows the
- * others exist.
+ * The one place the two render paths are told apart, and it is assembly rather
+ * than a decision: both take the same deformation field, and neither knows the
+ * other exists.
  *
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {import('./body/softBody.js').SoftBody} body - The body to draw.
@@ -83,6 +90,11 @@ async function boot() {
 function drawBody(app, body, field) {
     if (body.render?.kind === 'mesh') {
         app.root.addChild(createMeshView(app, body.render.mesh, field, { tint: body.tint }));
+    } else if (body.render?.kind === 'splats') {
+        // Static for now: the work buffer modifier that carries each Gaussian
+        // along `field` is the next slice. Until it lands, the lattice view is
+        // what shows this body moving.
+        app.root.addChild(createSplatView(app, body.name, body.render.cloud));
     }
 }
 

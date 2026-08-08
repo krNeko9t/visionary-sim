@@ -55,6 +55,38 @@ export function mat3Inverse(m) {
 }
 
 /**
+ * The rotation matrix of a unit quaternion.
+ *
+ * Column-major means column `k` is `m[k * 3 .. k * 3 + 2]`, and column `k` is
+ * where the k-th basis vector goes. That is worth naming, because it is what
+ * makes `dot(column_k, v)` the k-th component of `transpose(R) * v` -- turning a
+ * world vector into the rotated frame's own coordinates without building a
+ * second matrix to transpose.
+ *
+ * @param {ArrayLike<number>} q - Unit quaternion as xyzw.
+ * @param {number} [at] - Index of the quaternion's first component.
+ * @param {Float32Array} [out] - Optional destination of length 9.
+ * @returns {Float32Array} Column-major 3x3 rotation matrix.
+ */
+export function mat3FromQuat(q, at = 0, out = new Float32Array(9)) {
+    const x = q[at], y = q[at + 1], z = q[at + 2], w = q[at + 3];
+
+    out[0] = 1 - 2 * (y * y + z * z);
+    out[1] = 2 * (x * y + z * w);
+    out[2] = 2 * (x * z - y * w);
+
+    out[3] = 2 * (x * y - z * w);
+    out[4] = 1 - 2 * (x * x + z * z);
+    out[5] = 2 * (y * z + x * w);
+
+    out[6] = 2 * (x * z + y * w);
+    out[7] = 2 * (y * z - x * w);
+    out[8] = 1 - 2 * (x * x + y * y);
+
+    return out;
+}
+
+/**
  * @param {ArrayLike<number>} a - Left column-major 3x3 matrix.
  * @param {ArrayLike<number>} b - Right column-major 3x3 matrix.
  * @returns {Float32Array} The product `a * b`.
