@@ -14,8 +14,9 @@ PlayCanvas engine 承担渲染与场景，物理以 WGSL compute 运行在 WebGP
 
 替换代价：等同于换项目。
 
-落点是 `scene/`、`sim/state/particles.js`、`sim/constraints/elasticCells.js`、`sim/solver/stepper.js`、`render/mesh.js`——引擎的
-buffer、compute、材质插桩都在这四处。`sim/solver/wgsl/` **不在**其中：那些 WGSL 除了方言
+落点是 `scene/`、`sim/state/particles.js`、`sim/constraints/elasticCells.js`、
+`sim/constraints/bodyContact.js`、`sim/solver/stepper.js`、`render/mesh.js`——引擎的
+buffer、compute、材质插桩都在这几处。两个 `wgsl/` 目录**不在**其中：那些 WGSL 除了方言
 （`uniform x: T;`、storage 绑定交给引擎分配）之外是可移植的，换引擎是机械替换，不是重写。
 最深的一处是 `render/mesh.js`，它插进标准材质的 chunk 点、用常量钉住引擎版本、直接写引擎
 内部 varying——那是内部 ABI，换来的是光照与阴影，是笔明账。
@@ -40,7 +41,14 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 于是节点成了两者唯一都能看见的东西，而两者互相看不见。
 
 `sim/solver/` 只能看见 `sim/state/`，**看不见 `sim/constraints/`**。步进器按顺序派发别人交给
-它的约束，且必须无法叫出它们的名字——一旦能，"加一种约束"就又变回"改循环"了。
+它的约束，且必须无法叫出它们的名字——一旦能，"加一种约束"就又变回"改循环"了。M5 加入
+物体间接触时，这条缝按预期兑现：`sim/constraints/` 多了一个文件，装配处的数组多了一个
+元素，`sim/solver/` 与依赖表一个字没改。
+
+两种约束现在并列，且共同点只有"移动同一批节点"：弹性的约束在开跑前就全部已知，可按奇偶
+分色批处理；接触的约束要到子步跑起来才被发现，数量每步都变，且跨物体耦合——奇偶前提当场
+作废。所以它走 Jacobi：各自收集、平均、再施加。**批次规则属于每一种约束自己**，不是求解
+框架的属性，这是这道缝真正划对了地方的证据。
 
 有两条越界即塌的边界（见 `CLAUDE.md`）。只有 CFL 属于这个框架，另一条属于本构模型，
 换掉 XPBD 也带不走。两条都不当作实现细节藏起来：界面把当前值摆在会推着你越界的那几根
@@ -86,7 +94,8 @@ sim/  ──────►  deformation/  ◄──────  render/
 |---|---|---|
 | 体素点阵 + Kuhn 六四面体切分 | `sim/discretize/` | 重写该目录，`body/` 及以上不动 |
 | 三线性内嵌 | `deformation/` | 通道内部换算法，两侧不动 |
-| 8 色并行 Gauss-Seidel | `sim/constraints/elasticCells.js` | 性能手段，可独立更换。这条批次规则**只属于弹性约束**：它跨物体成立仅仅因为各物体的节点区间互不相交，跨物体的接触约束没有奇偶可援引，必须另想办法 |
+| 8 色并行 Gauss-Seidel | `sim/constraints/elasticCells.js` | 性能手段，可独立更换。这条批次规则**只属于弹性约束**：它跨物体成立仅仅因为各物体的节点区间互不相交，跨物体的接触约束没有奇偶可援引，只好另想办法 |
+| 接触=边界节点的球，均匀网格粗筛 + Jacobi | `sim/constraints/bodyContact.js`、`sim/constraints/broadphase.js` | 换成 SDF 或连续碰撞只动这两个文件。接触因此发生在**代理几何的分辨率**上：两个静止物体之间留下约一格的缝，那是点阵的粒度，不是求解器的误差 |
 | 先网格、后 3DGS | `render/` | M6 之后网格路径去留自定 |
 | 借引擎标准材质的顶点钩子，而非自写着色 | `render/mesh.wgsl` | 换来光照与阴影，代价是随引擎版本复核钩子 |
 | 解析形状自带参数化表面 | `assets/tessellate.js` | 换成任意 SDF 要 marching cubes |
@@ -103,7 +112,7 @@ sim/  ──────►  deformation/  ◄──────  render/
 | `sim/simulator.js` | 模拟侧对外的唯一入口，也是上面那三段的装配处 |
 | `sim/discretize/` | 把连续的物体变成有限个自由度 |
 | `sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
-| `sim/constraints/` | 自由度要服从什么。一种约束自带它的数据、它的批次规则和它的投影核 |
+| `sim/constraints/` | 自由度要服从什么。一种约束自带它的数据、它的批次规则和它的投影核。现有两种：弹性、物体间接触 |
 | `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
 | `sim/debug/` | 使求解状态可见 |
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |

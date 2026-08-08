@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex } from '../../src/sim/discretize/lattice.js';
+import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex, surfaceNodes } from '../../src/sim/discretize/lattice.js';
 import { sphere } from '../../src/assets/shapes.js';
 import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
 
@@ -102,5 +102,45 @@ describe('lattice', () => {
         // zero inverse mass or they would fall forever.
         expect(lattice.invMass[nodeIndex(lattice.nodeDims, 0, 0, 0)]).toBe(0);
         expect([...lattice.invMass].some(m => m > 0)).toBe(true);
+    });
+
+    it('calls a node a surface node exactly when it can be reached from outside', () => {
+        // Contact only ever touches these, so the two ways to get this wrong
+        // both matter: a missing boundary node is a hole another body falls
+        // through, and a buried one is work done for nothing.
+        const lattice = sphereLattice();
+        const surface = surfaceNodes(lattice);
+        const claimed = new Set(surface);
+
+        expect(surface.length).toBeGreaterThan(0);
+        // The boundary of a solid is a surface, so it grows like the square of
+        // the resolution while the body grows like the cube.
+        const active = [...lattice.invMass].filter(m => m > 0).length;
+        expect(surface.length).toBeLessThan(active);
+
+        for (const node of surface) {
+            expect(lattice.invMass[node]).toBeGreaterThan(0);
+        }
+        expect([...surface]).toEqual([...surface].sort((a, b) => a - b));
+
+        // The centre of a sphere is as buried as a node gets, and the corner of
+        // the padding ring is as far outside as one gets. Neither is a surface.
+        const { nodeDims } = lattice;
+        const middle = nodeDims.map(n => n >> 1);
+        expect(claimed.has(nodeIndex(nodeDims, middle[0], middle[1], middle[2]))).toBe(false);
+        expect(claimed.has(nodeIndex(nodeDims, 0, 0, 0))).toBe(false);
+    });
+
+    it('makes every corner of a lone cell a surface node', () => {
+        // The degenerate case the general rule has to keep getting right: with
+        // one cell occupied there is no interior at all, so all eight corners
+        // are boundary and nothing else is.
+        const cellDims = [3, 3, 3];
+        const nodeDims = [4, 4, 4];
+        const lattice = { cellDims, nodeDims, cells: [cellIndex(cellDims, 1, 1, 1)] };
+
+        const surface = [...surfaceNodes(lattice)];
+        expect(surface).toHaveLength(8);
+        expect(surface).toEqual([...cellNodeIndices(nodeDims, 1, 1, 1)].sort((a, b) => a - b));
     });
 });

@@ -1,5 +1,6 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
+import { BodyContact } from './constraints/bodyContact.js';
 import { ElasticCells } from './constraints/elasticCells.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
@@ -51,9 +52,9 @@ export class Simulator {
 
         // The three pieces of the simulation side, assembled here and nowhere
         // else. They are listed in dependency order and each knows only the one
-        // before it: the nodes exist, a constraint moves them, a stepper runs
-        // the constraints. The stepper never learns what kind of constraint it
-        // is running, which is what leaves room for a second kind.
+        // before it: the nodes exist, constraints move them, a stepper runs the
+        // constraints. The stepper never learns what kind of constraint it is
+        // running, which is what left room for the second kind.
         // Spelled out rather than handing the lattice over whole: these three
         // arrays are the entire set of things the node storage is allowed to
         // know, and writing them at the seam is what keeps that visible.
@@ -65,7 +66,14 @@ export class Simulator {
         this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
             ({ body, lattice }) => ({ lattice, material: body.material })
         ));
-        this.stepper = new Stepper(device, this.particles, [this.elastic]);
+        this.contact = new BodyContact(
+            device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })), tank
+        );
+        // Order is solve order. Contact goes last so it has the final word on
+        // where a node may be: elasticity can push a node back into whatever it
+        // was resting on, and only one of the two is allowed to be wrong about
+        // that.
+        this.stepper = new Stepper(device, this.particles, [this.elastic, this.contact]);
 
         for (let b = 0; b < this.simBodies.length; b++) {
             const { damping, friction } = this.simBodies[b].body.material;
@@ -175,6 +183,8 @@ export class Simulator {
             cells: this.elastic.cellCount,
             tets: this.elastic.cellCount * 6,
             nodes: this.particles.nodeCount,
+            contactNodes: this.contact.surfaceCount,
+            contact: this.contact.enabled,
             substeps: this.params.substeps,
             advised: this.recommendedSubsteps(frameTime),
             cfl: this.cflNumber(frameTime),
@@ -275,6 +285,19 @@ export class Simulator {
     }
 
     /**
+     * Switches contact between bodies on or off.
+     *
+     * Worth having a switch for rather than only a constant: with it off the
+     * bodies interpenetrate exactly as they did before M5, which is the only
+     * way to see what the constraint is actually doing without rebuilding.
+     *
+     * @param {boolean} enabled - Whether bodies should collide with each other.
+     */
+    setContact(enabled) {
+        this.contact.enabled = enabled;
+    }
+
+    /**
      * What a line through the scene hits, as something {@link setGrab} accepts.
      *
      * Asynchronous because the answer lives on the GPU. That is a property of
@@ -344,6 +367,7 @@ export class Simulator {
 
     destroy() {
         this.stepper.destroy();
+        this.contact.destroy();
         this.elastic.destroy();
         this.particles.destroy();
     }

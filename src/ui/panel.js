@@ -122,6 +122,7 @@ export function createPanel(sim, { onLatticeToggle }) {
                 button('单步', () => sim.requestStep()),
                 button('重置', () => sim.reset())
             ]),
+            toggle({ label: '物体互碰', value: true, onChange: on => sim.setContact(on) }).element,
             toggle({ label: '显示点阵', value: false, onChange: onLatticeToggle }).element,
             note
         ])
@@ -153,7 +154,7 @@ export function createPanel(sim, { onLatticeToggle }) {
             `压到 ${(body.collapseScale * 100).toFixed(0)}%`,
             body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
         );
-        readouts.size.set(`${body.cells} / ${stats.cells} 格`);
+        readouts.size.set(`${body.cells} / ${stats.cells} 格 · ${stats.contactNodes} 触点`);
         readouts.rate.set(`${fps.toFixed(0)} fps`);
 
         for (const control of controls) {

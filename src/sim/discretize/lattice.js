@@ -106,6 +106,58 @@ export function cellNodeIndices(nodeDims, i, j, k, out = new Uint32Array(8)) {
 }
 
 /**
+ * The nodes on the boundary of the occupied region.
+ *
+ * A node is on the boundary when some of the eight cells around it hold
+ * material and some do not; outside the grid counts as not. Nodes with all
+ * eight occupied are buried and can only be reached through the material, and
+ * nodes with none are inert.
+ *
+ * This is a fact about the discretisation, not about anything that uses it,
+ * which is why it lives here. What it is for is contact: the boundary is where
+ * a body ends, so it is the only part of one that another can touch.
+ *
+ * How much work that saves is a surface against a volume, so it improves as the
+ * lattice gets finer and is unremarkable now: at the twelve cells these bodies
+ * are cut at, 2541 nodes of the 4127 that have any mass. Against the full node
+ * array it is 2541 of 14104, because the lattice is dense and mostly empty.
+ *
+ * @param {Lattice} lattice - The lattice.
+ * @returns {Uint32Array} Boundary node indices, ascending.
+ */
+export function surfaceNodes({ cellDims, nodeDims, cells }) {
+    const occupied = new Uint8Array(cellDims[0] * cellDims[1] * cellDims[2]);
+    for (const cell of cells) {
+        occupied[cell] = 1;
+    }
+
+    /** @type {number[]} */
+    const found = [];
+    for (let k = 0; k < nodeDims[2]; k++) {
+        for (let j = 0; j < nodeDims[1]; j++) {
+            for (let i = 0; i < nodeDims[0]; i++) {
+                // The eight cells incident on node (i, j, k) are those whose
+                // min corner is one step back from it on each axis.
+                let filled = 0;
+                for (let c = 0; c < 8; c++) {
+                    const [dx, dy, dz] = CUBE_CORNERS[c];
+                    const ci = i + dx - 1;
+                    const cj = j + dy - 1;
+                    const ck = k + dz - 1;
+                    const outside = ci < 0 || cj < 0 || ck < 0 ||
+                        ci >= cellDims[0] || cj >= cellDims[1] || ck >= cellDims[2];
+                    filled += outside ? 0 : occupied[cellIndex(cellDims, ci, cj, ck)];
+                }
+                if (filled > 0 && filled < 8) {
+                    found.push(nodeIndex(nodeDims, i, j, k));
+                }
+            }
+        }
+    }
+    return Uint32Array.from(found);
+}
+
+/**
  * @param {import('./voxelize.js').OccupancyGrid} grid - Source occupancy.
  * @param {object} options - Build options.
  * @param {number} options.density - Material density in kg/m^3.
