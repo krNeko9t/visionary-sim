@@ -1,86 +1,109 @@
-import { BLEND_NORMAL, Color, CULLFACE_NONE, Entity, StandardMaterial, Vec3 } from 'playcanvas';
+import { box, sphere, torus } from '../assets/shapes.js';
+import { createGlassBox } from './glass.js';
+import { meshBody, shapeBody } from '../body/factory.js';
 
 /**
- * Interior of the fish tank, in metres. This is plain data on purpose: the
- * simulation consumes it as six analytic planes and must not depend on
- * PlayCanvas. The top is open -- there is no `y = max` wall.
+ * The fish tank, and what stands in it.
  *
- * The floor (`min[1]`) doubles as the visual ground plane, so the tank has no
- * glass bottom: transparent glass lying flat under transparent glass walls
- * sorts badly and buys nothing.
+ * Resolutions are per body and mean "cells along the longest axis", so a 0.16 m
+ * body at 16 gives 1 cm cells. Everything shares one cell size scale, which
+ * keeps the CFL substep requirement uniform across the scene.
  */
-export const TANK_BOUNDS = {
+
+/**
+ * Interior of the tank, in metres. Plain data on purpose: the simulation
+ * consumes it as six analytic planes and must not depend on PlayCanvas. The top
+ * is open -- there is no `y = max` wall.
+ */
+const BOUNDS = {
     min: [-0.30, 0.0, -0.20],
     max: [0.30, 0.50, 0.20]
 };
 
-const GLASS_THICKNESS = 0.006;
+/**
+ * Stiffness is bounded by the CFL condition, not by taste.
+ *
+ * The XPBD compliance only damps a projection while `alpha/dt^2` stays above
+ * `sum(w |grad C|^2)`; past that both constraints are projected hard, and
+ * projecting the deviatoric constraint `||F|| -> 0` hard means `F -> 0` -- the
+ * body collapses to a point. That ratio is exactly the CFL number
+ * `c * dt_substep / h` with `c = sqrt((lambda + 2 mu) / rho)`, so a material is
+ * only as stiff as the cell size and substep count can carry.
+ *
+ * At `h ~ 1.2 cm` and 22 substeps of a 60 Hz frame, the ceiling is around
+ * 14 m/s of wave speed, which is where these two sit. `Simulator.cflNumber`
+ * reports the live margin, and the UI surfaces it.
+ */
+const JELLY = { youngsModulus: 1.5e4, poissonRatio: 0.42, density: 1050, friction: 0.35 };
+/** Stiffer and denser: lands with a thud and holds its shape. */
+const RUBBER = { youngsModulus: 4e4, poissonRatio: 0.45, density: 1100, friction: 0.6 };
+
+/** @type {import('./scenes.js').Scene} */
+export const tankScene = {
+    name: 'tank',
+    bounds: BOUNDS,
+    decorate: app => createGlassBox(app, BOUNDS),
+    createBodies: () => Promise.all([
+        meshBody('/models/spot.obj', {
+            name: 'spot',
+            size: 0.17,
+            position: [-0.15, 0.18, -0.05],
+            resolution: 12,
+            material: JELLY,
+            tint: [0.95, 0.42, 0.30]
+        }),
+        meshBody('/models/suzanne.obj', {
+            name: 'suzanne',
+            size: 0.15,
+            position: [0.14, 0.21, 0.06],
+            resolution: 12,
+            material: RUBBER,
+            tint: [0.55, 0.72, 0.95]
+        }),
+        shapeBody(torus({ majorRadius: 0.052, minorRadius: 0.022 }), {
+            name: 'torus',
+            position: [0.0, 0.33, 0.0],
+            resolution: 12,
+            material: JELLY,
+            tint: [0.98, 0.76, 0.32]
+        }),
+        shapeBody(sphere({ radius: 0.05 }), {
+            name: 'sphere',
+            position: [-0.16, 0.36, 0.09],
+            resolution: 9,
+            material: JELLY,
+            tint: [0.55, 0.90, 0.62]
+        }),
+        shapeBody(box({ halfExtents: [0.045, 0.045, 0.045] }), {
+            name: 'cube',
+            position: [0.17, 0.35, -0.09],
+            resolution: 8,
+            material: RUBBER,
+            tint: [0.80, 0.56, 0.95]
+        })
+    ])
+};
 
 /**
- * Builds the glass walls and the ground the tank stands on.
+ * The same tank holding the Stanford bunny, for measuring how the pipeline
+ * copes with a large, non-watertight mesh: 70k triangles with open holes in its
+ * base is a voxelisation stress test rather than scenery, which is why it is
+ * its own scene instead of a sixth body in the one above.
  *
- * @param {import('playcanvas').AppBase} app - The application.
- * @returns {Entity} Root entity holding the ground and the four glass panels.
+ * @type {import('./scenes.js').Scene}
  */
-export function createTank(app) {
-    const { min, max } = TANK_BOUNDS;
-    const root = new Entity('tank');
-
-    const glass = new StandardMaterial();
-    glass.diffuse = new Color(0.55, 0.72, 0.78);
-    glass.specular = new Color(1, 1, 1);
-    glass.gloss = 0.95;
-    glass.useMetalness = true;
-    glass.metalness = 0.0;
-    glass.opacity = 0.13;
-    glass.blendType = BLEND_NORMAL;
-    glass.depthWrite = false;
-    glass.cull = CULLFACE_NONE;
-    glass.update();
-
-    const ground = new StandardMaterial();
-    ground.diffuse = new Color(0.17, 0.18, 0.20);
-    ground.gloss = 0.35;
-    ground.useMetalness = true;
-    ground.metalness = 0.0;
-    ground.update();
-
-    const floor = new Entity('ground');
-    floor.addComponent('render', { type: 'plane', material: ground, castShadows: false });
-    floor.setLocalScale(6, 1, 6);
-    floor.setLocalPosition(0, min[1], 0);
-    root.addChild(floor);
-
-    const height = max[1] - min[1];
-    const width = max[0] - min[0];
-    const depth = max[2] - min[2];
-    const midY = min[1] + height * 0.5;
-
-    // Panels sit just outside the interior so the simulation bounds and the
-    // visible inner glass surface coincide.
-    const half = GLASS_THICKNESS * 0.5;
-    const panels = [
-        { name: 'wall-x-min', pos: [min[0] - half, midY, 0], scale: [GLASS_THICKNESS, height, depth] },
-        { name: 'wall-x-max', pos: [max[0] + half, midY, 0], scale: [GLASS_THICKNESS, height, depth] },
-        { name: 'wall-z-min', pos: [0, midY, min[2] - half], scale: [width, height, GLASS_THICKNESS] },
-        { name: 'wall-z-max', pos: [0, midY, max[2] + half], scale: [width, height, GLASS_THICKNESS] }
-    ];
-
-    for (const panel of panels) {
-        const entity = new Entity(panel.name);
-        entity.addComponent('render', { type: 'box', material: glass, castShadows: false });
-        entity.setLocalPosition(...panel.pos);
-        entity.setLocalScale(...panel.scale);
-        root.addChild(entity);
-    }
-
-    app.root.addChild(root);
-
-    // A wire outline gives the glass definition that 13% opacity cannot.
-    const wireMin = new Vec3(min[0], min[1], min[2]);
-    const wireMax = new Vec3(max[0], max[1], max[2]);
-    const wireColor = new Color(0.45, 0.68, 0.78, 1);
-    app.on('update', () => app.drawWireAlignedBox(wireMin, wireMax, wireColor));
-
-    return root;
-}
+export const bunnyScene = {
+    name: 'bunny',
+    bounds: BOUNDS,
+    decorate: tankScene.decorate,
+    createBodies: () => Promise.all([
+        meshBody('/models/stanford-bunny.obj', {
+            name: 'bunny',
+            size: 0.20,
+            position: [0, 0.25, 0],
+            resolution: 24,
+            material: JELLY,
+            tint: [0.88, 0.86, 0.82]
+        })
+    ])
+};

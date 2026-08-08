@@ -1,9 +1,8 @@
 import { attachGrabber } from './ui/grab.js';
-import { createBodies } from './scene/contents.js';
 import { createMeshView } from './render/mesh.js';
 import { createPanel } from './ui/panel.js';
 import { createStage } from './scene/stage.js';
-import { TANK_BOUNDS, createTank } from './scene/tank.js';
+import { sceneNamed } from './scene/scenes.js';
 import { WebGpuUnavailableError, createApp } from './scene/app.js';
 import { createLatticeView } from './sim/debug/latticeView.js';
 import { Simulator } from './sim/simulator.js';
@@ -11,13 +10,14 @@ import { Simulator } from './sim/simulator.js';
 const canvas = document.getElementById('app');
 
 async function boot() {
+    const scene = sceneNamed(new URLSearchParams(window.location.search).get('scene'));
     const app = await createApp(canvas);
 
-    const { camera } = createStage(app);
-    createTank(app);
+    const { camera } = createStage(app, scene.bounds);
+    scene.decorate(app);
 
-    const bodies = await createBodies();
-    const sim = new Simulator(app.graphicsDevice, bodies, TANK_BOUNDS);
+    const bodies = await scene.createBodies();
+    const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
     sim.autoSubsteps();
 
     // Two ways of looking at the same deformation: the surface, and the solver's
@@ -55,19 +55,20 @@ async function boot() {
 
     app.start();
 
-    report(sim.stats());
+    report(scene.name, sim.stats());
 
     // Handy from the console; the panel covers everything routine.
-    Object.assign(window, { app, sim, bodies, latticeViews });
+    Object.assign(window, { app, sim, scene, bodies, latticeViews });
     return app;
 }
 
 /**
+ * @param {string} name - Which scene is being shown.
  * @param {ReturnType<import('./sim/simulator.js').Simulator['stats']>} stats - Setup report.
  */
-function report(stats) {
+function report(name, stats) {
     console.info(
-        `[softbody] device=${stats.deviceType} bodies=${stats.bodyCount} ` +
+        `[softbody] scene=${name} device=${stats.deviceType} bodies=${stats.bodyCount} ` +
         `cells=${stats.cells} tets=${stats.tets} nodes=${stats.nodes} ` +
         `substeps=${stats.substeps} (advised ${stats.advised}) cfl=${stats.cfl.toFixed(2)} ` +
         `limited by "${stats.limitedBy}"`
