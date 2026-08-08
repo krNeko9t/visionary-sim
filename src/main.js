@@ -34,10 +34,7 @@ async function boot() {
     // first looks wrong.
     const latticeViews = sim.simBodies.map(({ body, lattice }, index) => {
         const field = sim.deformationOf(index);
-
-        if (body.renderMesh) {
-            app.root.addChild(createMeshView(app, body.renderMesh, field, { tint: body.tint }));
-        }
+        drawBody(app, body, field);
 
         const view = createLatticeView(app, lattice, field);
         view.enabled = false;
@@ -69,6 +66,24 @@ async function boot() {
     // Handy from the console; the panel covers everything routine.
     Object.assign(window, { app, sim, scene, bodies, latticeViews });
     return app;
+}
+
+/**
+ * Puts a body on screen with whichever representation it brought.
+ *
+ * One representation so far, and the switch is here anyway: this is the place a
+ * second one gets added, and it is assembly rather than a decision -- every
+ * representation takes the same deformation field and none of them knows the
+ * others exist.
+ *
+ * @param {import('playcanvas').AppBase} app - The application.
+ * @param {import('./body/softBody.js').SoftBody} body - The body to draw.
+ * @param {import('./deformation/bind.js').DeformationField} field - Its deformation.
+ */
+function drawBody(app, body, field) {
+    if (body.render?.kind === 'mesh') {
+        app.root.addChild(createMeshView(app, body.render.mesh, field, { tint: body.tint }));
+    }
 }
 
 /**

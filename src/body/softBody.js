@@ -9,8 +9,17 @@ import { DEFAULT_MATERIAL } from './material.js';
  * not know what a node is. The simulation side reads a body and decides all of
  * that, which is what lets that decision change without touching this file.
  *
+ * The two geometries are separate fields because they are separate things. The
+ * source is what the solver is given to cut up; the render payload is what gets
+ * drawn and carried along by the result. Today they are both triangles and both
+ * are tagged anyway, because a representation that is not a mesh is exactly what
+ * M6 is for, and a field called `renderMesh` would have had to be renamed or
+ * lied about the moment one arrived.
+ *
  * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }
  *         | { kind: 'shape', shape: import('../assets/shapes.js').Shape }} RestGeometry
+ *
+ * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }} RenderGeometry
  */
 export class SoftBody {
     /**
@@ -18,17 +27,17 @@ export class SoftBody {
      * @param {string} options.name - Identifier, also used in the UI.
      * @param {RestGeometry} options.source - Rest shape, already placed in the world.
      * @param {import('./material.js').Material} [options.material] - Material parameters.
-     * @param {import('../assets/objLoader.js').TriangleMesh} [options.renderMesh] - Rest-space render geometry.
+     * @param {RenderGeometry} [options.render] - Rest-space geometry to draw.
      * @param {number} [options.resolution] - Requested simulation detail along the longest
      *   axis. A hint to the simulator, not a property of the object; it lives here only so
      *   that everything an author sets about a body is set in one place.
      * @param {number[]} [options.tint] - Linear RGB base colour.
      */
-    constructor({ name, source, material, renderMesh = null, resolution = 16, tint = [0.92, 0.45, 0.26] }) {
+    constructor({ name, source, material, render = null, resolution = 16, tint = [0.92, 0.45, 0.26] }) {
         this.name = name;
         this.source = source;
         this.material = { ...DEFAULT_MATERIAL, ...material };
-        this.renderMesh = renderMesh;
+        this.render = render;
         this.resolution = resolution;
         this.tint = tint;
     }

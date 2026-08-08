@@ -3,7 +3,7 @@ import { restOnGround, translateShape } from '../assets/shapes.js';
 import { SoftBody } from './softBody.js';
 
 /**
- * Builds bodies from the two rest-geometry sources the scene uses.
+ * Builds bodies from the two rest-geometry sources the scenes use.
  *
  * In both cases `position` is where the *base* of the body sits, and the
  * geometry is placed there before the body is built. A body's rest shape is
@@ -30,7 +30,7 @@ export async function meshBody(url, { name, size, position, resolution, material
     return new SoftBody({
         name,
         source: { kind: 'mesh', mesh },
-        renderMesh: mesh,
+        render: { kind: 'mesh', mesh },
         material,
         resolution,
         tint
@@ -55,7 +55,7 @@ export function shapeBody(shape, { name, position, resolution, material, tint })
         source: { kind: 'shape', shape: placed },
         // The shape's own triangles, taken after placement so the render
         // geometry and the distance function describe the same rest pose.
-        renderMesh: placed.surface,
+        render: { kind: 'mesh', mesh: placed.surface },
         material,
         resolution,
         tint
