@@ -5,6 +5,7 @@ import {
     ContainerHandler,
     DEVICETYPE_WEBGPU,
     FILLMODE_FILL_WINDOW,
+    GSplatComponentSystem,
     LightComponentSystem,
     RESOLUTION_AUTO,
     RenderComponentSystem,
@@ -52,11 +53,15 @@ export async function createApp(canvas) {
 
     const options = new AppOptions();
     options.graphicsDevice = device;
+    // Systems are registered rather than pulled in by a bundle, so each one is
+    // here because something draws with it: meshes, the camera, the lights, the
+    // camera controls, and Gaussian clouds.
     options.componentSystems = [
         RenderComponentSystem,
         CameraComponentSystem,
         LightComponentSystem,
-        ScriptComponentSystem
+        ScriptComponentSystem,
+        GSplatComponentSystem
     ];
     options.resourceHandlers = [TextureHandler, ContainerHandler];
 

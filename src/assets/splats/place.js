@@ -64,22 +64,23 @@ export function orientCloud(cloud, convention) {
 }
 
 /**
- * Orients, scales and places a cloud, in place.
+ * Scales a cloud to a size and stands it at a position, in place.
+ *
+ * Expects a cloud that is already y-up and already cleaned: which axis is the
+ * longest depends on the first, and how long it is depends on the second.
+ * {@link import('./capture.js').loadCapture} is what puts the three in order.
  *
  * @param {import('./cloud.js').SplatCloud} cloud - Modified in place.
  * @param {object} options - Placement.
- * @param {string} options.convention - Source frame, a key of {@link CONVENTIONS}.
  * @param {number} options.size - Size of the longest axis afterwards, in metres.
  * @param {number[]} options.position - Where the base of the cloud ends up.
  * @returns {{ scale: number, extent: number[] }} What was applied, and the
  *   final extent -- worth reporting, because it is the first number that says
  *   whether the declared convention and size were the right ones.
  */
-export function placeCloud(cloud, { convention, size, position }) {
-    orientCloud(cloud, convention);
-
-    // Measured after orienting and after whatever cleaning the caller did, for
-    // the same reason `measure.js` trims: a size taken from junk is not a size.
+export function placeCloud(cloud, { size, position }) {
+    // Trimmed rather than raw, for the same reason `measure.js` trims: a size
+    // taken from junk is not a size.
     const bounds = robustBounds(cloud);
     const extent = sizeOf(bounds);
     const scale = size / Math.max(extent[0], extent[1], extent[2]);

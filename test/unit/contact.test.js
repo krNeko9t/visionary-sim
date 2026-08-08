@@ -118,6 +118,16 @@ describe('the broadphase grid', () => {
         expect(bucketOf(grid, [100, 100, 100])).toBe(grid.bucketCount - 1);
     });
 
+    it('stays finite when there is nothing to bucket', () => {
+        // A scene that is all backdrop and no bodies has no contact diameter to
+        // size a bucket with. Falling through divides by zero, and the symptom
+        // is not "no bodies" but WebGPU refusing a buffer of infinite length.
+        const empty = broadphaseGrid(bounds, 0);
+        expect(Number.isFinite(empty.bucketCount)).toBe(true);
+        expect(empty.bucketCount).toBeGreaterThan(0);
+        expect(empty.cell).toBeGreaterThan(0);
+    });
+
     it('never separates two points that could touch by more than one bucket', () => {
         // This is the whole correctness claim of the broadphase, and it is why
         // the bucket is one contact diameter across: a node searches the

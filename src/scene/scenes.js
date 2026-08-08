@@ -1,4 +1,5 @@
 import { bunnyScene, tankScene } from './tank.js';
+import { splatScene } from './splats.js';
 
 /**
  * Which scenes there are, and how to ask for one.
@@ -24,12 +25,17 @@ import { bunnyScene, tankScene } from './tank.js';
  *   drawn that is not a body.
  * @property {() => Promise<import('../body/softBody.js').SoftBody[]>} createBodies -
  *   What is simulated.
+ * @property {(() => Promise<import('../assets/splats/capture.js').Capture[]>)} [scenery] -
+ *   Captures that are drawn but not stepped. A scene-scale scan arrives split
+ *   across several files, and only some of them are ever going to be objects;
+ *   the rest are there so the scene is whole.
  */
 
 /** @type {Record<string, Scene>} */
 export const SCENES = {
     tank: tankScene,
-    bunny: bunnyScene
+    bunny: bunnyScene,
+    splats: splatScene
 };
 
 /** Shown when nothing else is asked for. */

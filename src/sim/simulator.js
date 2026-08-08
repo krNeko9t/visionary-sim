@@ -127,8 +127,11 @@ export class Simulator {
      * @returns {number} The CFL number; keep it below 1.
      */
     cflNumber(frameTime = 1 / 60) {
-        const { body, lattice } = this.worst();
-        return waveRatio(body.material, lattice) * (frameTime / this.params.substeps);
+        const limiting = this.worst();
+        if (!limiting) {
+            return 0;
+        }
+        return waveRatio(limiting.body.material, limiting.lattice) * (frameTime / this.params.substeps);
     }
 
     /**
@@ -138,9 +141,16 @@ export class Simulator {
      * Every stability query goes through this one reduction, so there is a
      * single definition of "which body is the problem".
      *
-     * @returns {SimBody} The limiting body.
+     * @returns {SimBody|null} The limiting body, or null if there are none.
      */
     worst() {
+        // A scene can be all backdrop: rendered captures that nothing steps.
+        // Then no body sets the substep requirement, and the honest answer is
+        // that there is no answer rather than the first element of an empty
+        // reduction.
+        if (this.simBodies.length === 0) {
+            return null;
+        }
         return this.simBodies.reduce((worst, entry) =>
             (waveRatio(entry.body.material, entry.lattice) >
              waveRatio(worst.body.material, worst.lattice) ? entry : worst));
@@ -153,8 +163,12 @@ export class Simulator {
      * @returns {number} Recommended substeps.
      */
     recommendedSubsteps(frameTime = 1 / 60) {
-        const { body, lattice } = this.worst();
-        return Math.max(1, Math.ceil((frameTime * waveRatio(body.material, lattice)) / CFL_TARGET));
+        const limiting = this.worst();
+        if (!limiting) {
+            return 1;
+        }
+        const ratio = waveRatio(limiting.body.material, limiting.lattice);
+        return Math.max(1, Math.ceil((frameTime * ratio) / CFL_TARGET));
     }
 
     /**
@@ -188,7 +202,7 @@ export class Simulator {
             substeps: this.params.substeps,
             advised: this.recommendedSubsteps(frameTime),
             cfl: this.cflNumber(frameTime),
-            limitedBy: this.worst().body.name,
+            limitedBy: this.worst()?.body.name ?? 'nothing',
             perBody: this.simBodies.map(({ body, lattice }) => {
                 const { gamma } = elementCompliance(body.material, lattice);
                 return {
@@ -240,6 +254,13 @@ export class Simulator {
     advance(dt) {
         const { substeps, gravity } = this.params;
         if (dt <= 0 || substeps < 1) {
+            return;
+        }
+        // A scene can be all backdrop, and a solver with no degrees of freedom
+        // has nothing to do. Said here rather than left to the kernels: they
+        // would still be dispatched, bind a zero-length buffer, and fail
+        // validation every frame for the whole run.
+        if (this.particles.nodeCount === 0) {
             return;
         }
 

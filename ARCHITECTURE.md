@@ -15,8 +15,8 @@ PlayCanvas engine 承担渲染与场景，物理以 WGSL compute 运行在 WebGP
 替换代价：等同于换项目。
 
 落点是 `scene/`、`sim/state/particles.js`、`sim/constraints/elasticCells.js`、
-`sim/constraints/bodyContact.js`、`sim/solver/stepper.js`、`render/mesh.js`——引擎的
-buffer、compute、材质插桩都在这几处。两个 `wgsl/` 目录**不在**其中：那些 WGSL 除了方言
+`sim/constraints/bodyContact.js`、`sim/solver/stepper.js`、`render/mesh.js`、
+`render/splats.js`——引擎的 buffer、compute、材质插桩都在这几处。两个 `wgsl/` 目录**不在**其中：那些 WGSL 除了方言
 （`uniform x: T;`、storage 绑定交给引擎分配）之外是可移植的，换引擎是机械替换，不是重写。
 最深的一处是 `render/mesh.js`，它插进标准材质的 chunk 点、用常量钉住引擎版本、直接写引擎
 内部 varying——那是内部 ABI，换来的是光照与阴影，是笔明账。
@@ -88,6 +88,10 @@ sim/  ──────►  deformation/  ◄──────  render/
 （`uniform x: T;` 反过来读作 `uniform.x`，storage 绑定交给引擎分配）。那处耦合是真的，这条
 规则够不到它，它要等 GPU 资源层那道缝一起走。
 
+第一条靠一个约定维持：**`render/` 收普通 typed array，几何的形状写在自己文件里**
+（`mesh.js` 的 `RestSurface`、`splats.js` 的 `RestCloud`），不从 `assets/` 引类型。理由与上
+一段同源——在标注里写下别人的类型就是知道了别人，`import` 与否不改变这件事。
+
 ## 五、当前实现选择
 
 | 选择 | 落在 | 替换代价 |
@@ -98,7 +102,7 @@ sim/  ──────►  deformation/  ◄──────  render/
 | 接触=边界节点的球，均匀网格粗筛 + Jacobi | `sim/constraints/bodyContact.js`、`sim/constraints/broadphase.js` | 换成 SDF 或连续碰撞只动这两个文件。接触因此发生在**代理几何的分辨率**上：两个静止物体之间留下约一格的缝，那是点阵的粒度，不是求解器的误差 |
 | 先网格、后 3DGS | `render/` | M6 之后网格路径去留自定 |
 | 高斯的球谐只留 DC 项 | `assets/splats/cloud.js` | 45 个 `f_rest` 读都不读。视角依赖的波瓣本该随材料一起转，而形变里不转，留着等于买一堆一动就指错方向的高光。代价是比普通 viewer 平一点，要加时通道两侧都得动 |
-| 每份扫描的坐标约定与尺度由人写死，附实测报告 | `assets/splats/place.js`、`assets/splats/measure.js` | 文件里没有这两样东西，只能声明。仓库里这两份资产一个 y-up 一个 z-up，因此不存在"选一个当标准"这个选项 |
+| 每份扫描的坐标约定与尺度由人写死，附实测报告 | `assets/splats/place.js`、`assets/splats/capture.js` | 文件里没有这两样东西，只能声明。仓库里这两份资产一个 y-up 一个 z-up，因此不存在"选一个当标准"这个选项 |
 | 场景边界是解算器里的六个解析平面，玻璃只是它的画法 | `scene/`、`sim/` | 把边界改成「一个被渲染、同时作为接触边界的物体」是另一套设计：它要有静止形状、要进窄相、要能被抓。现在两者只共享一份 `bounds` 数字，换过去的代价落在 `sim/constraints/` 而不是 `scene/` |
 | 借引擎标准材质的顶点钩子，而非自写着色 | `render/mesh.wgsl` | 换来光照与阴影，代价是随引擎版本复核钩子 |
 | 解析形状自带参数化表面 | `assets/tessellate.js` | 换成任意 SDF 要 marching cubes |
@@ -119,6 +123,6 @@ sim/  ──────►  deformation/  ◄──────  render/
 | `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
 | `sim/debug/` | 使求解状态可见 |
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |
-| `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条 |
+| `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条。现有两种：三角网格、3D 高斯 |
 | `ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
 | `assets/` | 几何进入系统的入口。`splats/` 是 3DGS 那道门：容器、解激活、清洗、量、摆 |

@@ -182,7 +182,7 @@ describe('placing a cloud in the world', () => {
 
     it('sizes and stands the cloud the way a mesh body is sized and stood', () => {
         const cloud = cloudOf([0, 0, 0, 2, 1, 0.5]);
-        const { scale } = placeCloud(cloud, { convention: 'y-up', size: 0.4, position: [10, 5, -3] });
+        const { scale } = placeCloud(cloud, { size: 0.4, position: [10, 5, -3] });
 
         expect(scale).toBeCloseTo(0.2, 6);
         // Longest axis at the requested size, base on the given height, centred
@@ -198,7 +198,7 @@ describe('placing a cloud in the world', () => {
         // Scaling positions but not scales is not a subtle bug: the body comes
         // out the right size and made of boulders.
         const cloud = cloudOf([0, 0, 0, 2, 0, 0], { scales: new Float32Array([1, 1, 1, 1, 1, 1]) });
-        placeCloud(cloud, { convention: 'y-up', size: 0.4, position: [0, 0, 0] });
+        placeCloud(cloud, { size: 0.4, position: [0, 0, 0] });
         expect(cloud.scales[0]).toBeCloseTo(0.2, 6);
     });
 });

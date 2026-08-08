@@ -26,16 +26,26 @@
  * of margin buckets is added so a body resting against a wall is still indexed
  * rather than clamped.
  *
+ * A scene with nothing in it offers no contact diameter, and so no bucket size.
+ * That case is real -- a scene can be all backdrop and no bodies -- so it is
+ * answered here rather than left to fall through: dividing by zero makes the
+ * grid infinitely fine, and the symptom is WebGPU refusing a buffer of infinite
+ * length, a long way from anything that mentions bodies. One bucket spanning the
+ * whole region is as arbitrary as it looks; nothing is ever binned into it.
+ *
  * @param {{ min: number[], max: number[] }} bounds - Region to cover.
  * @param {number} cell - Bucket edge length: the largest contact diameter.
  * @returns {{ origin: number[], cell: number, dims: number[], bucketCount: number }} The layout.
  */
 export function broadphaseGrid(bounds, cell) {
+    const edge = cell > 0
+        ? cell
+        : Math.max(...bounds.min.map((min, axis) => bounds.max[axis] - min));
     const dims = bounds.min.map((min, axis) =>
-        Math.max(1, Math.ceil((bounds.max[axis] - min) / cell)) + 2);
+        Math.max(1, Math.ceil((bounds.max[axis] - min) / edge)) + 2);
     return {
-        origin: bounds.min.map(min => min - cell),
-        cell,
+        origin: bounds.min.map(min => min - edge),
+        cell: edge,
         dims,
         bucketCount: dims[0] * dims[1] * dims[2]
     };

@@ -130,7 +130,7 @@ export class BodyContact {
         };
 
         const perNode = Math.ceil(this.surfaceCount / WORKGROUP_SIZE);
-        this.dispatches = [
+        this.dispatches = this.surfaceCount === 0 ? [] : [
             this.pass('bin', perNode),
             this.pass('collide', perNode),
             // The closing pass also empties the grid, so it covers whichever of

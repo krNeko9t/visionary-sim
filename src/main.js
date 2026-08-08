@@ -1,6 +1,7 @@
 import { attachGrabber } from './ui/grab.js';
 import { createMeshView } from './render/mesh.js';
 import { createPanel } from './ui/panel.js';
+import { createSplatView } from './render/splats.js';
 import { createStage } from './scene/stage.js';
 import { sceneNamed } from './scene/scenes.js';
 import { WebGpuUnavailableError, createApp } from './scene/app.js';
@@ -15,6 +16,14 @@ async function boot() {
 
     const { camera } = createStage(app, scene.bounds);
     scene.decorate(app);
+
+    // Drawn but not stepped. Each capture reports what it measured, because
+    // which way up it is and how big it is were declared by hand and a
+    // declaration nobody checks is a guess.
+    for (const capture of await (scene.scenery?.() ?? [])) {
+        console.info(`[splats] ${capture.report}`);
+        app.root.addChild(createSplatView(app, capture.name, capture.cloud));
+    }
 
     const bodies = await scene.createBodies();
     const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);

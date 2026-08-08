@@ -79,10 +79,15 @@ export function createPanel(sim, { onLatticeToggle }) {
     let sinceRefresh = REFRESH;
     let fps = 60;
 
+    // A scene can be all backdrop -- rendered captures that nothing steps. Then
+    // there is no material to edit and no body to report on, and the honest
+    // panel is the one without those controls rather than one showing zeroes.
+    const hasBodies = sim.simBodies.length > 0;
+
     const selector = chips(sim.simBodies.map(({ body }) => body.name), index => select(index));
     const material = () => sim.simBodies[selected].body.material;
 
-    const controls = MATERIAL_CONTROLS.map(control => ({
+    const controls = !hasBodies ? [] : MATERIAL_CONTROLS.map(control => ({
         ...control,
         widget: slider({
             ...control,
@@ -114,7 +119,9 @@ export function createPanel(sim, { onLatticeToggle }) {
 
     const panel = element('div', 'ui-panel');
     panel.append(
-        section('物体', [selector.element, ...controls.map(c => c.widget.element)]),
+        section('物体', hasBodies
+            ? [selector.element, ...controls.map(c => c.widget.element)]
+            : [element('p', 'ui-note', '这个场景里没有被模拟的物体。')]),
         section('解算', [
             ...Object.values(readouts).map(readout => readout.element),
             buttonRow([
@@ -127,7 +134,11 @@ export function createPanel(sim, { onLatticeToggle }) {
             note
         ])
     );
-    select(0);
+    if (hasBodies) {
+        select(0);
+    } else {
+        refresh();
+    }
 
     /**
      * @param {number} index - Body to show the sliders for.
@@ -151,10 +162,12 @@ export function createPanel(sim, { onLatticeToggle }) {
             ? `${stats.substeps} / 需 ${stats.advised}`
             : `${stats.substeps}`, stats.advised > stats.substeps ? 'warn' : '');
         readouts.collapse.set(
-            `压到 ${(body.collapseScale * 100).toFixed(0)}%`,
-            body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
+            body ? `压到 ${(body.collapseScale * 100).toFixed(0)}%` : '—',
+            body && body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
         );
-        readouts.size.set(`${body.cells} / ${stats.cells} 格 · ${stats.contactNodes} 触点`);
+        readouts.size.set(body
+            ? `${body.cells} / ${stats.cells} 格 · ${stats.contactNodes} 触点`
+            : '—');
         readouts.rate.set(`${fps.toFixed(0)} fps`);
 
         for (const control of controls) {
