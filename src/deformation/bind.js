@@ -1,3 +1,4 @@
+import covarianceWgsl from './covariance.wgsl?raw';
 import sampleWgsl from './sample.wgsl?raw';
 
 /**
@@ -15,6 +16,12 @@ import sampleWgsl from './sample.wgsl?raw';
  *   1. {@link SAMPLE_WGSL}, spliced into its shader wherever declarations go.
  *   2. {@link deformationParameters}, whose result it feeds to its own shader.
  *
+ * A consumer whose geometry has a shape as well as a place -- a Gaussian, where
+ * a mesh vertex has only a place and a normal -- splices {@link COVARIANCE_WGSL}
+ * after the first. It is a separate export rather than part of it because it is
+ * the more expensive half by an order of magnitude, and a surface should not pay
+ * to compile what it will never call.
+ *
  * @typedef {object} DeformationField
  * @property {object} nodePositions - Live deformed node positions for the whole
  *   scene, vec4f per node. An opaque storage-buffer handle: this file passes it
@@ -29,6 +36,13 @@ import sampleWgsl from './sample.wgsl?raw';
 
 /** The channel's GPU half, as shader source. See `sample.wgsl`. */
 export const SAMPLE_WGSL = sampleWgsl;
+
+/**
+ * What a Gaussian does with the gradient {@link SAMPLE_WGSL} hands it, as shader
+ * source. Depends on nothing but that gradient, so it is spliced after it. See
+ * `covariance.wgsl`, and `covariance.js` for why it is the size it is.
+ */
+export const COVARIANCE_WGSL = covarianceWgsl;
 
 /**
  * What a copy of {@link SAMPLE_WGSL} has to be given to point at one field:

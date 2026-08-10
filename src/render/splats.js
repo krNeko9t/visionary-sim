@@ -1,4 +1,7 @@
-import { Entity, GSplatData, GSplatResource } from 'playcanvas';
+import { Entity, GSplatData, GSplatResource, WORKBUFFER_UPDATE_ALWAYS } from 'playcanvas';
+
+import { COVARIANCE_WGSL, SAMPLE_WGSL, deformationParameters } from '../deformation/bind.js';
+import modifierWgsl from './splats.wgsl?raw';
 
 /**
  * A cloud of 3D Gaussians, seen.
@@ -9,9 +12,18 @@ import { Entity, GSplatData, GSplatResource } from 'playcanvas';
  * path uses, and the reason `render/` can claim to depend on nothing but the
  * deformation channel.
  *
- * Nothing here deforms yet: this draws the capture where it stands. The work
- * buffer modifier that carries each Gaussian along the field is the next slice,
- * and it hangs off this same component.
+ * A cloud may be bound to a deformation field or not, and both are real uses: a
+ * captured backdrop is drawn once and never moves, while a captured object that
+ * was handed to the solver has to follow it. The difference is one argument
+ * because it is one difference -- the same cloud, the same resource, the same
+ * everything, with a hook installed or not.
+ *
+ * Where the mesh path extends a material, this one extends the engine's *work
+ * buffer* pass. That is not a variation for its own sake: a splat is not drawn
+ * from the arrays below, it is drawn from a buffer the engine bakes them into,
+ * and the sort order and the projection are computed from that buffer. Deforming
+ * anywhere later would move the Gaussians without moving what the renderer
+ * believes about them.
  *
  * @typedef {object} RestCloud
  * @property {number} count - Number of Gaussians.
@@ -29,9 +41,11 @@ const SH_C0 = 0.28209479177387814;
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {string} name - What to call the entity.
  * @param {RestCloud} cloud - Gaussians, already standing in world space.
+ * @param {import('../deformation/bind.js').DeformationField} [field] - Deformation
+ *   to follow. Omitted for a capture that is only ever scenery.
  * @returns {Entity} An entity drawing the cloud.
  */
-export function createSplatView(app, name, cloud) {
+export function createSplatView(app, name, cloud, field = null) {
     const entity = new Entity(`splat-view-${name}`);
     entity.addComponent('gsplat', {
         resource: new GSplatResource(app.graphicsDevice, splatData(cloud)),
@@ -39,10 +53,24 @@ export function createSplatView(app, name, cloud) {
     });
 
     // The entity transform stays identity, and that is a rule rather than a
-    // default: the work buffer modifier this component will carry is handed
-    // *world*-space centres, so a translated entity would ask the deformation
-    // field about points outside itself and get extrapolation. Placement is
-    // baked into the cloud instead, which is also how mesh bodies work.
+    // default: the modifier below is handed *world*-space centres, so a
+    // translated entity would ask the deformation field about points outside
+    // itself and get extrapolation. Placement is baked into the cloud instead,
+    // which is also how mesh bodies work.
+    if (field) {
+        entity.gsplat.setWorkBufferModifier({
+            wgsl: `${SAMPLE_WGSL}\n${COVARIANCE_WGSL}\n${modifierWgsl}`
+        });
+        // The nodes move every frame and nothing tells the engine so: from its
+        // side this cloud is a static resource under a static transform, and it
+        // would bake the work buffer once. This is the cost of the whole
+        // approach, and it is a re-bake of every splat in the body per frame.
+        entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
+
+        for (const [parameter, value] of Object.entries(deformationParameters(field))) {
+            entity.gsplat.setParameter(parameter, value);
+        }
+    }
     return entity;
 }
 

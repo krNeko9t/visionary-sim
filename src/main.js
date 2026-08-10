@@ -91,10 +91,7 @@ function drawBody(app, body, field) {
     if (body.render?.kind === 'mesh') {
         app.root.addChild(createMeshView(app, body.render.mesh, field, { tint: body.tint }));
     } else if (body.render?.kind === 'splats') {
-        // Static for now: the work buffer modifier that carries each Gaussian
-        // along `field` is the next slice. Until it lands, the lattice view is
-        // what shows this body moving.
-        app.root.addChild(createSplatView(app, body.name, body.render.cloud));
+        app.root.addChild(createSplatView(app, body.name, body.render.cloud, field));
     }
 }
 
