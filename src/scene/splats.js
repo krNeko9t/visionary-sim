@@ -16,6 +16,14 @@ import { splatBody } from '../body/factory.js';
  * `wolf` is scenery: drawn, never stepped, costing nothing but its pixels. That
  * is not a demonstration, it is what a scene-scale capture needs -- it arrives
  * split across several files and only some of them will ever be objects.
+ *
+ * What neither file states is what it is a picture *of*, and that matters once:
+ * `bread` is a loaf, and `wolf` is a sitting plush toy, limbs tucked against its
+ * body rather than a realistic animal's. The tucking is why
+ * `sim/discretize/cloudVolume.js` argues the seal width against this capture --
+ * it is the one here with gaps a seal could wrongly bridge. Both are 61 MB
+ * binaries no test opens, so this is the only place either shape is written
+ * down; anything else describing them is being written from memory.
  */
 
 /** Room enough for both, and the same open-topped box the fish tank uses. */
