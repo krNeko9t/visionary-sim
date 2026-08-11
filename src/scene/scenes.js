@@ -1,5 +1,5 @@
 import { bunnyScene, tankScene } from './tank.js';
-import { splatScene } from './splats.js';
+import { splatContactScene, splatScene } from './splats.js';
 
 /**
  * Which scenes there are, and how to ask for one.
@@ -35,7 +35,8 @@ import { splatScene } from './splats.js';
 export const SCENES = {
     tank: tankScene,
     bunny: bunnyScene,
-    splats: splatScene
+    splats: splatScene,
+    'splats-contact': splatContactScene
 };
 
 /** Shown when nothing else is asked for. */

@@ -42,17 +42,42 @@ const BOUNDS = {
  */
 const CRUMB = { youngsModulus: 1.2e4, poissonRatio: 0.40, density: 700, friction: 0.5 };
 
+/** Softer and lighter than the loaf, with enough friction for the loaf to settle on it. */
+const PLUSH = { youngsModulus: 6e3, poissonRatio: 0.35, density: 450, friction: 0.7 };
+
+/** Shared capture declarations: file coordinates are properties of the asset, not of a scene. */
+const BREAD = {
+    url: '/splats/bread.ply',
+    name: 'bread',
+    convention: 'y-up',
+    size: 0.18,
+    position: [-0.13, 0.0, 0.0]
+};
+const WOLF = {
+    url: '/splats/wolf.ply',
+    name: 'wolf',
+    convention: 'z-up',
+    size: 0.24,
+    position: [0.13, 0.0, 0.0]
+};
+
+/** Loads one declared capture as scenery, keeping its asset declaration in one place. */
+function captureOf({ url, ...options }, overrides = {}) {
+    return loadCapture(url, { ...options, ...overrides });
+}
+
+/** Loads the same declaration as a body, adding only simulation-specific choices. */
+function bodyOf({ url, ...options }, overrides) {
+    return splatBody(url, { ...options, ...overrides });
+}
+
 /** @type {import('./scenes.js').Scene} */
 export const splatScene = {
     name: 'splats',
     bounds: BOUNDS,
     decorate: app => createGlassBox(app, BOUNDS),
     createBodies: () => Promise.all([
-        splatBody('/splats/bread.ply', {
-            name: 'bread',
-            convention: 'y-up',
-            size: 0.18,
-            position: [-0.13, 0.0, 0.0],
+        bodyOf(BREAD, {
             // 9.4 mm cells. Finer than this and the stamped shell of this
             // particular capture starts needing the seal in
             // `sim/discretize/cloudVolume.js` to stay solid at all.
@@ -61,11 +86,33 @@ export const splatScene = {
         })
     ]),
     scenery: () => Promise.all([
-        loadCapture('/splats/wolf.ply', {
-            name: 'wolf',
-            convention: 'z-up',
-            size: 0.24,
-            position: [0.13, 0.0, 0.0]
+        captureOf(WOLF)
+    ])
+};
+
+/**
+ * Both captures as bodies. The wolf starts on the floor and the loaf falls onto
+ * it, so the scene exercises the same cross-body contact path as mesh bodies.
+ * Twelve cells on the longest axis deliberately favours the Gen12LP GPU: it
+ * cuts elastic and contact work and, through the larger cells, needs fewer CFL
+ * substeps. It does not reduce the per-frame work-buffer bake of either cloud.
+ *
+ * @type {import('./scenes.js').Scene}
+ */
+export const splatContactScene = {
+    name: 'splats-contact',
+    bounds: BOUNDS,
+    decorate: splatScene.decorate,
+    createBodies: () => Promise.all([
+        bodyOf(BREAD, {
+            position: [0.0, 0.30, 0.0],
+            resolution: 12,
+            material: CRUMB
+        }),
+        bodyOf(WOLF, {
+            position: [0.0, 0.0, 0.0],
+            resolution: 12,
+            material: PLUSH
         })
     ])
 };
