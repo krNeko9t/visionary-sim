@@ -8,7 +8,7 @@ import {
 } from 'playcanvas';
 
 import { STATE_WGSL } from '../state/particles.js';
-import { broadphaseGrid } from './broadphase.js';
+import { broadphaseGrid, worstCaseBucketOccupancy } from './broadphase.js';
 import { surfaceNodes } from '../discretize/lattice.js';
 import binWgsl from './wgsl/bin.wgsl?raw';
 import collideWgsl from './wgsl/collide.wgsl?raw';
@@ -41,7 +41,7 @@ import sortWgsl from './wgsl/sort.wgsl?raw';
 const WORKGROUP_SIZE = 64;
 
 /** Nodes a grid bucket holds; must match `BUCKET_SLOTS` in `wgsl/contacts.wgsl`. */
-const BUCKET_SLOTS = 32;
+export const BUCKET_SLOTS = 32;
 
 /** Surface record size in bytes, matching `struct Surface` in `wgsl/contacts.wgsl`. */
 const SURFACE_STRIDE = 32;
@@ -90,11 +90,13 @@ export class BodyContact {
         /** @type {{ node: number, body: number, radius: number }[]} */
         const records = [];
         let widest = 0;
+        let finestH = Infinity;
         for (let b = 0; b < bodies.length; b++) {
             const { lattice } = bodies[b];
             const offset = particles.offsetOf(b);
             const radius = lattice.h * RADIUS_CELLS;
             widest = Math.max(widest, radius);
+            finestH = Math.min(finestH, lattice.h);
             for (const node of surfaceNodes(lattice)) {
                 records.push({ node: offset + node, body: b, radius });
             }
@@ -102,6 +104,25 @@ export class BodyContact {
 
         this.surfaceCount = records.length;
         this.grid = broadphaseGrid(bounds, widest * 2);
+
+        // The bucket is sized from the coarsest body (`widest`), so a much
+        // finer body sharing the scene can pack far more than the coarse
+        // body's own ~1 node per bucket. Past `BUCKET_SLOTS` that turns
+        // `wgsl/sort.wgsl`'s rare overflow scan into a routine one -- worth
+        // catching here, at scene setup, rather than as an unexplained frame
+        // time regression later.
+        if (Number.isFinite(finestH)) {
+            const worstCase = worstCaseBucketOccupancy(this.grid.cell, finestH);
+            if (worstCase > BUCKET_SLOTS) {
+                console.warn(
+                    `[contact] the finest body's node spacing (${finestH.toFixed(4)}m) can pack ` +
+                    `up to ${worstCase} nodes into one ${this.grid.cell.toFixed(4)}m contact ` +
+                    `bucket, over the ${BUCKET_SLOTS}-slot capacity. Buckets that dense fall back ` +
+                    'to an O(surfaceCount) scan every substep instead of staying rare -- narrow ' +
+                    'the resolution gap between bodies in this scene.'
+                );
+            }
+        }
 
         const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
         const words = new ArrayBuffer(Math.max(1, records.length) * SURFACE_STRIDE);

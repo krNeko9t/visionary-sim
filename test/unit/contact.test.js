@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { broadphaseGrid, bucketOf } from '../../src/sim/constraints/broadphase.js';
+import { broadphaseGrid, bucketOf, worstCaseBucketOccupancy } from '../../src/sim/constraints/broadphase.js';
+
+/** Must match `BUCKET_SLOTS` in `sim/constraints/bodyContact.js` and `wgsl/contacts.wgsl`. */
+const BUCKET_SLOTS = 32;
 
 /**
  * What contact between bodies rests on, in the two halves it actually has.
@@ -181,6 +184,29 @@ describe('the broadphase grid', () => {
             expect(Math.abs(ay - by)).toBeLessThanOrEqual(1);
             expect(Math.abs(az - bz)).toBeLessThanOrEqual(1);
         }
+    });
+});
+
+describe('worst-case bucket occupancy', () => {
+    it('gives a small, fixed bound when a body shares its own cell size', () => {
+        // The cell a body itself sets (via `widest` in bodyContact.js) is its
+        // own node spacing, so at most a couple of its nodes share one bucket.
+        expect(worstCaseBucketOccupancy(0.01, 0.01)).toBe(2 ** 3);
+        expect(worstCaseBucketOccupancy(0.01, 0.01)).toBeLessThanOrEqual(BUCKET_SLOTS);
+    });
+
+    it('grows fast for a body much finer than the grid cell', () => {
+        // A body an order of magnitude finer than the cell that some coarser
+        // body in the scene set can pack far more than BUCKET_SLOTS nodes into
+        // one bucket in the worst case.
+        expect(worstCaseBucketOccupancy(0.05, 0.005)).toBeGreaterThan(BUCKET_SLOTS);
+    });
+
+    it('stays within capacity for every current scene\'s resolution spread', () => {
+        // tank.js / splats.js keep every body in a scene within about a 1.3x
+        // resolution ratio of each other; that should never trip the check
+        // bodyContact.js runs against BUCKET_SLOTS.
+        expect(worstCaseBucketOccupancy(0.01417, 0.01111)).toBeLessThanOrEqual(BUCKET_SLOTS);
     });
 });
 

@@ -69,7 +69,6 @@ describe('Simulator owns the timing seam', () => {
         const sim = steppingSimulator();
         sim.setGrab = vi.fn();
         sim.particles.reset = vi.fn();
-        sim.stepCount = 12;
         sim.pendingStep = true;
         sim.clock.consume(0.2);
 
@@ -83,8 +82,41 @@ describe('Simulator owns the timing seam', () => {
             backlogTime: 0,
             droppedTime: 0
         });
-        expect(sim.stepCount).toBe(0);
         expect(sim.pendingStep).toBe(false);
+    });
+
+    it('still banks the frame\'s wall time when single-stepped while running', () => {
+        const sim = steppingSimulator();
+
+        Simulator.prototype.requestStep.call(sim);
+        Simulator.prototype.step.call(sim, 0.0005);
+
+        expect(sim.dispatch).toHaveBeenCalledExactlyOnceWith(1);
+        expect(sim.pendingStep).toBe(false);
+        // The forced step didn't consume the frame's real elapsed time, so it
+        // has to still be sitting in backlog rather than having disappeared.
+        expect(sim.clock.snapshot().backlogTime).toBeCloseTo(0.0005, 12);
+        expect(sim.clock.snapshot().droppedTime).toBe(0);
+    });
+
+    it('does not add an extra step when single-stepping lands on an already-due frame', () => {
+        const sim = steppingSimulator();
+
+        Simulator.prototype.requestStep.call(sim);
+        Simulator.prototype.step.call(sim, 0.003);
+
+        expect(sim.dispatch).toHaveBeenCalledExactlyOnceWith(1);
+        expect(sim.clock.snapshot().backlogTime).toBeCloseTo(0.001, 12);
+    });
+
+    it('treats a non-finite or negative dt as no elapsed time instead of throwing', () => {
+        const sim = steppingSimulator();
+
+        expect(() => Simulator.prototype.step.call(sim, -1)).not.toThrow();
+        expect(() => Simulator.prototype.step.call(sim, NaN)).not.toThrow();
+        expect(() => Simulator.prototype.step.call(sim, Number.POSITIVE_INFINITY)).not.toThrow();
+        expect(sim.clock.snapshot().backlogTime).toBe(0);
+        expect(sim.clock.snapshot().totalSteps).toBe(0);
     });
 
     it('a material change reconfigures only future fixed steps', () => {

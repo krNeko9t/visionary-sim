@@ -81,7 +81,6 @@ export class Simulator {
         }
 
         this.grab = { body: -1, node: -1, target: [0, 0, 0] };
-        this.stepCount = 0;
         /** Set by {@link requestStep}, consumed by the next {@link step}. */
         this.pendingStep = false;
     }
@@ -222,15 +221,31 @@ export class Simulator {
             return;
         }
 
+        // `dt` is the one input here that can arrive from outside the render
+        // loop (`window.sim.step(...)` from the console; see main.js). Garbage
+        // is treated as a frame carrying no elapsed time rather than left to
+        // throw through FixedTimestep's stricter internal contract, which
+        // exists to catch bugs in this class's own bookkeeping, not to police
+        // console input.
+        const elapsed = Number.isFinite(dt) && dt >= 0 ? dt : 0;
+
+        const pendingStep = this.pendingStep;
+        this.pendingStep = false;
+
         let timing;
-        if (this.pendingStep) {
-            this.pendingStep = false;
+        if (this.params.paused) {
+            if (!pendingStep) {
+                this.clock.idle();
+                return;
+            }
             timing = this.clock.singleStep();
-        } else if (this.params.paused) {
-            this.clock.idle();
-            return;
         } else {
-            timing = this.clock.consume(dt);
+            // A pending request while running still has to go through the
+            // ordinary accumulator so this frame's wall time is banked,
+            // dropped or simulated exactly as it would be without the
+            // request -- `forceStep` only guarantees a step happens even if
+            // the accumulator alone would not have produced one.
+            timing = this.clock.consume(elapsed, { forceStep: pendingStep });
         }
 
         this.dispatch(timing.steps);
@@ -265,7 +280,6 @@ export class Simulator {
         });
 
         this.device.computeDispatch(this.stepper.sequence(steps), 'softbody-step');
-        this.stepCount += steps;
     }
 
     /**
@@ -379,7 +393,6 @@ export class Simulator {
         this.setGrab(-1, -1);
         this.particles.reset();
         this.clock.reset();
-        this.stepCount = 0;
         this.pendingStep = false;
     }
 

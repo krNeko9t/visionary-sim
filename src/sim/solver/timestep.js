@@ -87,9 +87,16 @@ export class FixedTimestep {
      * Adds one render frame's elapsed time and plans its physical work.
      *
      * @param {number} elapsed - Wall time since the previous render frame, seconds.
+     * @param {object} [options] - Planning override.
+     * @param {boolean} [options.forceStep] - Guarantee at least one step this
+     *   frame, on top of the ordinary accounting below rather than instead of
+     *   it: `elapsed` is still banked, dropped or simulated exactly as it
+     *   would be without the flag, so a forced step never makes wall time
+     *   disappear -- it only lets a manual single-step request go through on
+     *   a frame that would otherwise have produced zero steps.
      * @returns {ReturnType<FixedTimestep['snapshot']>} Current clock report.
      */
-    consume(elapsed) {
+    consume(elapsed, { forceStep = false } = {}) {
         if (!Number.isFinite(elapsed) || elapsed < 0) {
             throw new RangeError(`elapsed must be a finite non-negative number, got ${elapsed}`);
         }
@@ -97,7 +104,7 @@ export class FixedTimestep {
         this.accumulator += elapsed;
         const epsilon = this.stepDuration * 1e-9;
         const available = Math.floor((this.accumulator + epsilon) / this.stepDuration);
-        const steps = Math.min(available, this.maxStepsPerFrame);
+        let steps = Math.min(available, this.maxStepsPerFrame);
         const droppedSteps = available - steps;
         const consumedSteps = steps + droppedSteps;
 
@@ -106,6 +113,10 @@ export class FixedTimestep {
         // not expose the tiny negative residue it can leave as negative backlog.
         if (this.accumulator < 0 && this.accumulator > -epsilon) {
             this.accumulator = 0;
+        }
+
+        if (forceStep && steps === 0) {
+            steps = 1;
         }
 
         this.lastSteps = steps;

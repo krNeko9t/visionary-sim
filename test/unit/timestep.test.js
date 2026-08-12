@@ -86,6 +86,27 @@ describe('the fixed physical timestep', () => {
         expect(stepped.backlogTime).toBe(before.backlogTime);
     });
 
+    it('forceStep guarantees one step without hiding elapsed time', () => {
+        const clock = new FixedTimestep(0.1);
+        const report = clock.consume(0.01, { forceStep: true });
+
+        expect(report.steps).toBe(1);
+        expect(report.simulatedTime).toBeCloseTo(0.1, 12);
+        // The forced step didn't touch the accumulator, so the elapsed time
+        // it rode in on is still fully accounted for as backlog rather than
+        // vanishing.
+        expect(report.backlogTime).toBeCloseTo(0.01, 12);
+        expect(report.droppedTime).toBe(0);
+    });
+
+    it('forceStep does not add a second step when one was already due', () => {
+        const clock = new FixedTimestep(0.002);
+        const report = clock.consume(0.0025, { forceStep: true });
+
+        expect(report.steps).toBe(1);
+        expect(report.backlogTime).toBeCloseTo(0.0005, 12);
+    });
+
     it('preserves accumulated seconds when a material changes the stable duration', () => {
         const clock = new FixedTimestep(0.004);
         clock.consume(0.003);

@@ -52,6 +52,27 @@ export function broadphaseGrid(bounds, cell) {
 }
 
 /**
+ * Upper bound on how many of one body's own nodes could ever land in a
+ * single bucket, given its own node spacing.
+ *
+ * A hard bound, not a probabilistic guess: nodes on a lattice are never
+ * closer together than `h`, so an axis-aligned cube of edge `cell` can never
+ * contain more than `ceil(cell / h) + 1` of them along any one axis. The cell
+ * size is set from the coarsest body in the scene (`bodyContact.js`), so a
+ * much finer body sharing it can pack far more than a coarse body's own ~1
+ * node per bucket -- this is what lets `bodyContact.js` warn about that
+ * before the resulting bucket overflow becomes routine instead of rare.
+ *
+ * @param {number} cell - Bucket edge length.
+ * @param {number} h - The body's own node spacing.
+ * @returns {number} Worst-case node count in one bucket.
+ */
+export function worstCaseBucketOccupancy(cell, h) {
+    const perAxis = Math.ceil(cell / h) + 1;
+    return perAxis ** 3;
+}
+
+/**
  * Which bucket a world point falls in.
  *
  * The clamp is the same one `gridCoord` applies in `wgsl/contacts.wgsl`, and
