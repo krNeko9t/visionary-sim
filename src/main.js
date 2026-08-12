@@ -77,22 +77,38 @@ async function boot() {
 }
 
 /**
- * Puts a body on screen with whichever representation it brought.
+ * How each kind of render geometry becomes an entity.
  *
- * The one place the two render paths are told apart, and it is assembly rather
- * than a decision: both take the same deformation field, and neither knows the
- * other exists.
+ * A table rather than a chain of conditionals, for the same reason
+ * `sim/discretize/discretize.js`'s `VOXELIZERS` is one: the number of entries is
+ * what grows, so a new representation should mean adding a line here rather than
+ * editing a branch. This is still the one place the two render paths are told
+ * apart -- it is assembly rather than a decision, since both take the same
+ * deformation field and neither knows the other exists.
+ *
+ * @type {Record<string, (app: import('playcanvas').AppBase,
+ *   body: import('./body/softBody.js').SoftBody,
+ *   field: import('./deformation/bind.js').DeformationField) => import('playcanvas').Entity>}
+ */
+const VIEWS = {
+    mesh: (app, body, field) => createMeshView(app, body.render.mesh, field, { tint: body.tint }),
+    splats: (app, body, field) => createSplatView(app, body.name, body.render.cloud, field)
+};
+
+/**
+ * Puts a body on screen with whichever representation it brought.
  *
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {import('./body/softBody.js').SoftBody} body - The body to draw.
  * @param {import('./deformation/bind.js').DeformationField} field - Its deformation.
  */
 function drawBody(app, body, field) {
-    if (body.render?.kind === 'mesh') {
-        app.root.addChild(createMeshView(app, body.render.mesh, field, { tint: body.tint }));
-    } else if (body.render?.kind === 'splats') {
-        app.root.addChild(createSplatView(app, body.name, body.render.cloud, field));
+    const kind = body.render?.kind;
+    const createView = VIEWS[kind];
+    if (!createView) {
+        throw new Error(`no render path for a body of render kind "${kind}"`);
     }
+    app.root.addChild(createView(app, body, field));
 }
 
 /**

@@ -40,13 +40,13 @@ const BOUNDS = {
  * same as multiplying the stiffness. At 9.4 mm cells this sits around 15
  * substeps of a 60 Hz frame, which leaves headroom under the cap.
  */
-const CRUMB = { youngsModulus: 1.2e4, poissonRatio: 0.40, density: 700, friction: 0.5 };
+export const CRUMB = { youngsModulus: 1.2e4, poissonRatio: 0.40, density: 700, friction: 0.5 };
 
 /** Softer and lighter than the loaf, with enough friction for the loaf to settle on it. */
 const PLUSH = { youngsModulus: 6e3, poissonRatio: 0.35, density: 450, friction: 0.7 };
 
 /** Shared capture declarations: file coordinates are properties of the asset, not of a scene. */
-const BREAD = {
+export const BREAD = {
     url: '/splats/bread.ply',
     name: 'bread',
     convention: 'y-up',

@@ -1,4 +1,5 @@
 import { bunnyScene, tankScene } from './tank.js';
+import { mixedScene } from './mixed.js';
 import { splatContactScene, splatScene } from './splats.js';
 
 /**
@@ -36,7 +37,8 @@ export const SCENES = {
     tank: tankScene,
     bunny: bunnyScene,
     splats: splatScene,
-    'splats-contact': splatContactScene
+    'splats-contact': splatContactScene,
+    mixed: mixedScene
 };
 
 /** Shown when nothing else is asked for. */
