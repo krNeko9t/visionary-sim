@@ -6,11 +6,11 @@ import { button, chips, element, section, slider, stat, toggle } from './widgets
 /**
  * The knobs this simulation has, and what it is currently costing to turn them.
  *
- * The panel shows the two limits rather than hiding them behind clamps. Both
- * are real and neither is obvious from the outside: a material can be stiffer
- * than the substep budget can carry, and a compressible one has a squash it
- * does not come back from. Crossing either collapses the body, so the numbers
- * that say how close you are sit next to the sliders that move you.
+ * The panel shows the two limits rather than hiding them. Both are real and
+ * neither is obvious from the outside: a stable fixed step can cost more work
+ * than one render frame can carry, and a compressible material has a squash it
+ * does not come back from. The former loses wall time rather than corrupting
+ * physics; the latter is a constitutive barrier.
  *
  * What the panel deliberately does not do is decide anything. Every value it
  * writes goes through `Simulator`, and every value it reads comes from
@@ -94,9 +94,6 @@ export function createPanel(sim, { onLatticeToggle }) {
             value: material()[control.key],
             onInput: (value) => {
                 sim.setMaterial(selected, { [control.key]: value });
-                // Stiffness and density both move the wave speed, so the
-                // substep count that keeps the solver stable moves with them.
-                sim.autoSubsteps();
                 refresh();
             }
         })
@@ -104,7 +101,8 @@ export function createPanel(sim, { onLatticeToggle }) {
 
     const readouts = {
         cfl: stat('CFL'),
-        substeps: stat('子步'),
+        steps: stat('物理步'),
+        timing: stat('时序'),
         collapse: stat('塌陷'),
         size: stat('规模'),
         rate: stat('帧率')
@@ -156,11 +154,11 @@ export function createPanel(sim, { onLatticeToggle }) {
     function refresh() {
         const stats = sim.stats();
         const body = stats.perBody[selected];
+        const timing = timingReadouts(stats);
 
         readouts.cfl.set(`${stats.cfl.toFixed(2)} · ${stats.limitedBy}`, cflTone(stats.cfl));
-        readouts.substeps.set(stats.advised > stats.substeps
-            ? `${stats.substeps} / 需 ${stats.advised}`
-            : `${stats.substeps}`, stats.advised > stats.substeps ? 'warn' : '');
+        readouts.steps.set(timing.steps.text, timing.steps.tone);
+        readouts.timing.set(timing.clock.text, timing.clock.tone);
         readouts.collapse.set(
             body ? `压到 ${(body.collapseScale * 100).toFixed(0)}%` : '—',
             body && body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
@@ -189,6 +187,32 @@ export function createPanel(sim, { onLatticeToggle }) {
 }
 
 /**
+ * Presents the clock facts without forming a second opinion about them.
+ *
+ * Kept pure so overload reporting is tested without constructing a DOM. Lost
+ * wall time remains visible until reset because a one-frame warning refreshed
+ * at 6 Hz would usually never be seen.
+ *
+ * @param {ReturnType<import('../sim/simulator.js').Simulator['stats']>} stats - Timing report.
+ * @returns {{ steps: { text: string, tone: string }, clock: { text: string, tone: string } }}
+ */
+export function timingReadouts(stats) {
+    const backlog = `积 ${(stats.backlogTime * 1000).toFixed(1)} ms`;
+    return {
+        steps: {
+            text: `${stats.steps} × ${(stats.stepDuration * 1000).toFixed(2)} ms`,
+            tone: stats.overloaded ? 'bad' : ''
+        },
+        clock: {
+            text: stats.droppedTime > 0
+                ? `${backlog} · 丢 ${(stats.droppedTime * 1000).toFixed(0)} ms`
+                : backlog,
+            tone: stats.droppedTime > 0 ? 'bad' : ''
+        }
+    };
+}
+
+/**
  * @param {number} cfl - Current CFL number.
  * @returns {string} Tone for the readout.
  */
@@ -210,8 +234,7 @@ function cflTone(cfl) {
  */
 function warningFor(key, stats, body) {
     if ((key === 'youngsModulus' || key === 'density') && stats.cfl >= CFL_LIMIT) {
-        return `CFL ${stats.cfl.toFixed(2)} ≥ 1：偏斜约束会被硬投影，物体将塌成一点。` +
-            `软化材料、加大格子，或提高 params.maxSubsteps。`;
+        return `CFL ${stats.cfl.toFixed(2)} ≥ 1：固定时序器的稳定性约束已失效。`;
     }
     if (key === 'poissonRatio' && body.collapseScale > COLLAPSE_LIMIT) {
         return `gamma ${body.gamma.toFixed(2)}：压到 ${(body.collapseScale * 100).toFixed(0)}% 以下能量就一路往零走，` +

@@ -106,9 +106,8 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 - work buffer 存的是四元数加三轴长，不是协方差。于是每帧每个高斯要解一次 3×3 对称特征值，把
   形变通道交出的椭球拆回轴。这是这条根收的费，不是形变的成本，所以那段翻译落在
   `render/ellipsoid.js`：换掉这条根就删掉那个文件，通道两侧都不动。
-- 排序在 CPU worker 里，读的是**静止位姿**的中心——引擎只在资源首次出现时上传一次中心，形变
-  后的中心它看不见。所以遮挡顺序始终是按静止形状算的近似。要修就得让排序读 GPU 上那份形变后
-  的中心，即换成 GPU 排序；回读到 worker 比排序本身还贵。
+- WebGPU 路径显式选择 GPU 排序；它与投影都读形变修改器写过的 work buffer，所以中心、剔除和
+  遮挡顺序一起随物体运动。引擎另有 CPU worker 路径，但它只看静止资源中心，本项目不使用。
 
 **不**受它约束：两个 `wgsl/` 目录。那些着色器除方言（`uniform x: T;`、storage 绑定交给引擎
 分配）之外可移植，换引擎是机械替换。
@@ -134,10 +133,16 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 
 逼出来的：
 
+- 渲染帧只决定何时提交，不决定一次物理步有多长。`sim/solver/timestep.js` 按最坏材料与格子选定
+  CFL≤0.75 的固定量子，累积浏览器的可变帧长后只改变本帧量子数；单帧最多追赶 24 个，超出的
+  整量子被显式计为丢时，不能靠放大 `dt` 把过载伪装成实时。
 - 两条越界即塌的边界。CFL 属于求解器，塌陷势垒属于本构模型、加子步没有用。界面把两个当前值
   摆在会推着你越界的滑杆旁边。
 - 接触约束跨物体耦合，4.2 那条奇偶前提当场作废，所以接触走 Jacobi：各自收集、平均、再施加。
   **批次规则因此属于每一种约束自己**，不是求解框架的属性。
+- GPU 原子操作只负责把接触面节点放进粗筛桶，不负责定义邻居顺序。桶在窄相前由一个局部 pass
+  按 surface index 规范化；正常桶只排自己的短前缀，溢出桶确定性保留最低 32 个。这样线程到达
+  顺序不会改变接触集合或浮点累加顺序，这个确定性策略也没有越出 `BodyContact`。
 - 粗筛只能是水缸范围内一张世界空间均匀网格，每子步在 GPU 上重填。查物体自己的占据网格不行:
   那张网格在静止空间，查它得先反解形变。
 
@@ -180,6 +185,9 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 上面§二那张表 ↔ `src/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
 | 两条渲染路径并列且互不知情，声明的表示法都已接上 | `test/unit/renderPaths.test.js` |
+| 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
+| 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `test/unit/timestep.test.js`、`simulatorTiming.test.js` |
+| 接触桶不受 GPU 原子插入顺序影响 | `test/unit/contact.test.js` |
 
 这些约束的**推导写在它约束的那段代码旁边**，不在这里：泊松比下限在 `body/material.js`，
 封口宽度在 `sim/discretize/cloudVolume.js`，填充在 `sim/discretize/voxelize.js`。文档复述

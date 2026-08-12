@@ -14,6 +14,7 @@ import binWgsl from './wgsl/bin.wgsl?raw';
 import collideWgsl from './wgsl/collide.wgsl?raw';
 import contactsWgsl from './wgsl/contacts.wgsl?raw';
 import settleWgsl from './wgsl/settle.wgsl?raw';
+import sortWgsl from './wgsl/sort.wgsl?raw';
 
 /**
  * The second kind of constraint: bodies do not pass through each other.
@@ -24,7 +25,7 @@ import settleWgsl from './wgsl/settle.wgsl?raw';
  * batch them by parity; contact does not know a single one of its own until the
  * substep is under way, and could not colour them if it did, because a contact
  * couples two bodies and parity is only disjoint within one. So this one is
- * Jacobi -- gather, average, apply -- in three dispatches that the stepper
+ * Jacobi -- bin, canonicalise, gather, apply -- in four dispatches that the stepper
  * dispatches without knowing what any of them do.
  *
  * The tank's walls are deliberately not here. They are five fixed planes known
@@ -40,7 +41,7 @@ import settleWgsl from './wgsl/settle.wgsl?raw';
 const WORKGROUP_SIZE = 64;
 
 /** Nodes a grid bucket holds; must match `BUCKET_SLOTS` in `wgsl/contacts.wgsl`. */
-const BUCKET_SLOTS = 8;
+const BUCKET_SLOTS = 32;
 
 /** Surface record size in bytes, matching `struct Surface` in `wgsl/contacts.wgsl`. */
 const SURFACE_STRIDE = 32;
@@ -116,15 +117,16 @@ export class BodyContact {
         this.surface = new StorageBuffer(device, words.byteLength, usage);
         this.surface.write(0, new Uint8Array(words));
 
-        // Counters first, then the slots behind them. Zeroed here so that the
-        // first substep meets the same empty grid every later one does; after
-        // that `settle.wgsl` is what keeps it true.
+        // Counters first, then slots behind them. Only counters need an empty
+        // value: the bin pass overwrites every slot below the new count, and
+        // the local sort pass orders exactly that live prefix.
         const gridWords = this.grid.bucketCount * (1 + BUCKET_SLOTS);
         this.contactGrid = new StorageBuffer(device, gridWords * 4, usage);
         this.contactGrid.write(0, new Uint32Array(gridWords));
 
         this.shaders = {
             bin: this.kernel('sim-contact-bin', binWgsl),
+            sort: this.kernel('sim-contact-sort', sortWgsl),
             collide: this.kernel('sim-contact-collide', collideWgsl),
             settle: this.kernel('sim-contact-settle', settleWgsl)
         };
@@ -132,6 +134,10 @@ export class BodyContact {
         const perNode = Math.ceil(this.surfaceCount / WORKGROUP_SIZE);
         this.dispatches = this.surfaceCount === 0 ? [] : [
             this.pass('bin', perNode),
+            // One thread owns one bucket and sorts its short live prefix. This
+            // pass is the barrier between nondeterministic atomic arrival and
+            // deterministic collision accumulation.
+            this.pass('sort', Math.ceil(this.grid.bucketCount / WORKGROUP_SIZE)),
             this.pass('collide', perNode),
             // The closing pass also empties the grid, so it covers whichever of
             // the two is longer.
@@ -154,7 +160,7 @@ export class BodyContact {
     }
 
     /**
-     * @param {string} name - Which of the three kernels.
+     * @param {string} name - Which of the four kernels.
      * @param {number} groups - Workgroups to dispatch.
      * @returns {Compute} The configured dispatch.
      */

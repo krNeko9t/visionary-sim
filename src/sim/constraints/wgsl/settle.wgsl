@@ -1,4 +1,4 @@
-// Pass three of three: apply what each node gathered, and leave the grid as it
+// Pass four of four: apply what each node gathered, and leave the grid as it
 // was found.
 //
 // The average, not the sum. A node wedged between two others is asked by both
@@ -10,7 +10,7 @@
 // (`gain` and not "relaxation": the material already spends that word on its
 // Kelvin-Voigt time, and the two have nothing to do with each other.)
 //
-// The clearing is here rather than in a fourth pass because this is the last
+// The clearing is here rather than in a fifth pass because this is the last
 // thing that happens in a substep: the invariant is that the grid is empty
 // between substeps, and the way to keep an invariant is to restore it where it
 // is broken. Only the counters need it -- a slot past its bucket's count is

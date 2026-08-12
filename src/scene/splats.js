@@ -37,8 +37,8 @@ const BOUNDS = {
  *
  * Lighter than the tank's jelly because a loaf is, and that costs substeps: the
  * wave speed is `sqrt((lambda + 2 mu) / rho)`, so dividing the density is the
- * same as multiplying the stiffness. At 9.4 mm cells this sits around 15
- * substeps of a 60 Hz frame, which leaves headroom under the cap.
+ * same as multiplying the stiffness. At 9.4 mm cells this costs roughly 15
+ * fixed physical steps per 1/60 s of wall time.
  */
 export const CRUMB = { youngsModulus: 1.2e4, poissonRatio: 0.40, density: 700, friction: 0.5 };
 
@@ -94,8 +94,9 @@ export const splatScene = {
  * Both captures as bodies. The wolf starts on the floor and the loaf falls onto
  * it, so the scene exercises the same cross-body contact path as mesh bodies.
  * Twelve cells on the longest axis deliberately favours the Gen12LP GPU: it
- * cuts elastic and contact work and, through the larger cells, needs fewer CFL
- * substeps. It does not reduce the per-frame work-buffer bake of either cloud.
+ * cuts elastic and contact work and, through the larger cells, permits a longer
+ * stable physical step. It does not reduce the per-frame work-buffer bake of
+ * either cloud.
  *
  * @type {import('./scenes.js').Scene}
  */

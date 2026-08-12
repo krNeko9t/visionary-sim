@@ -100,13 +100,13 @@ export class Stepper {
      * their parameters are identical every substep -- `computeDispatch` writes
      * each instance's uniform buffer once and then records every dispatch.
      *
-     * @param {number} substeps - Substeps this frame.
+     * @param {number} steps - Fixed physical steps this render frame.
      * @returns {Compute[]} The sequence to dispatch.
      */
-    sequence(substeps) {
+    sequence(steps) {
         const projections = this.constraints.flatMap(constraint => constraint.passes);
         const list = [];
-        for (let s = 0; s < substeps; s++) {
+        for (let s = 0; s < steps; s++) {
             list.push(this.predict, ...projections, this.finalize);
         }
         return list;

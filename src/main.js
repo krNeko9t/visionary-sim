@@ -35,7 +35,6 @@ async function boot() {
     }
 
     const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
-    sim.autoSubsteps();
 
     // Two ways of looking at the same deformation: the surface, and the solver's
     // own insides. The second starts hidden -- it is what you turn on when the
@@ -119,7 +118,8 @@ function report(name, stats) {
     console.info(
         `[softbody] scene=${name} device=${stats.deviceType} bodies=${stats.bodyCount} ` +
         `cells=${stats.cells} tets=${stats.tets} nodes=${stats.nodes} ` +
-        `substeps=${stats.substeps} (advised ${stats.advised}) cfl=${stats.cfl.toFixed(2)} ` +
+        `step=${(stats.stepDuration * 1000).toFixed(3)}ms cfl=${stats.cfl.toFixed(2)} ` +
+        `maxSteps/frame=${stats.maxStepsPerFrame} ` +
         `limited by "${stats.limitedBy}"`
     );
     for (const body of stats.perBody) {
@@ -131,8 +131,7 @@ function report(name, stats) {
     if (stats.cfl >= 1) {
         console.warn(
             `[softbody] CFL ${stats.cfl.toFixed(2)} >= 1: the deviatoric constraint will be ` +
-            'projected hard and bodies will collapse. Soften the material, enlarge the cells, ' +
-            'or raise params.maxSubsteps.'
+            'projected hard and bodies will collapse. The fixed timestep failed its invariant.'
         );
     }
 }

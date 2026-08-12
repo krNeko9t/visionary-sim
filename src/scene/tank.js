@@ -30,9 +30,9 @@ const BOUNDS = {
  * `c * dt_substep / h` with `c = sqrt((lambda + 2 mu) / rho)`, so a material is
  * only as stiff as the cell size and substep count can carry.
  *
- * At `h ~ 1.2 cm` and 22 substeps of a 60 Hz frame, the ceiling is around
- * 14 m/s of wave speed, which is where these two sit. `Simulator.cflNumber`
- * reports the live margin, and the UI surfaces it.
+ * The fixed physical step is chosen from that ratio at startup and whenever a
+ * material changes. Render refresh only changes how many such steps are
+ * submitted; `Simulator.cflNumber` reports the invariant margin.
  */
 export const JELLY = { youngsModulus: 1.5e4, poissonRatio: 0.42, density: 1050, friction: 0.35 };
 /** Stiffer and denser: lands with a thud and holds its shape. */

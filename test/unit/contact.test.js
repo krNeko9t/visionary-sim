@@ -27,6 +27,21 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const length = a => Math.sqrt(dot(a, a));
 
+/** CPU transcription of `sort.wgsl`'s local canonicalisation. */
+function canonicalBucket(arrivals, capacity) {
+    const slots = [...arrivals];
+    for (let i = 1; i < slots.length; i++) {
+        const value = slots[i];
+        let at = i;
+        while (at > 0 && slots[at - 1] > value) {
+            slots[at] = slots[at - 1];
+            at--;
+        }
+        slots[at] = value;
+    }
+    return slots.slice(0, capacity);
+}
+
 /**
  * One node's share of one contact, transcribed from `collide.wgsl`.
  *
@@ -165,6 +180,22 @@ describe('the broadphase grid', () => {
             expect(Math.abs(ax - bx)).toBeLessThanOrEqual(1);
             expect(Math.abs(ay - by)).toBeLessThanOrEqual(1);
             expect(Math.abs(az - bz)).toBeLessThanOrEqual(1);
+        }
+    });
+});
+
+describe('a deterministic contact bucket', () => {
+    it('keeps the same sorted neighbours in every insertion order', () => {
+        const values = [17, 2, 31, 5, 11, 29, 3, 23, 7, 19];
+        const expected = [...values].sort((a, b) => a - b).slice(0, 6);
+        const orders = [
+            values,
+            [...values].reverse(),
+            [5, 29, 2, 23, 17, 7, 31, 3, 19, 11]
+        ];
+
+        for (const order of orders) {
+            expect(canonicalBucket(order, 6)).toEqual(expected);
         }
     });
 });

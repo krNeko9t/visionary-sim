@@ -21,6 +21,7 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const RENDER = join(SRC, 'render');
 const BODY_JS = join(SRC, 'body/softBody.js');
 const MAIN_JS = join(SRC, 'main.js');
+const APP_JS = join(SRC, 'scene/app.js');
 
 /** Files that draw the mesh path, versus the files that draw the splat path. */
 const MESH_PATH = ['mesh.js', 'normals.js'];
@@ -89,5 +90,13 @@ describe('the two render paths stand side by side', () => {
                 .map(target => `${file} -> ${relative(SRC, target)}`);
         });
         expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('pins WebGPU splats to the sorter that reads the deformed work buffer', () => {
+        const text = readFileSync(APP_JS, 'utf8');
+        expect(text).toContain('GSPLAT_RENDERER_RASTER_GPU_SORT');
+        expect(text).toMatch(
+            /app\.scene\.gsplat\.renderer\s*=\s*GSPLAT_RENDERER_RASTER_GPU_SORT/
+        );
     });
 });

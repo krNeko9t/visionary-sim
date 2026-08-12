@@ -1,4 +1,4 @@
-// Pass one of three: put every boundary node into the grid bucket it currently
+// Pass one of four: put every boundary node into the grid bucket it currently
 // occupies.
 //
 // This is the whole broadphase. It is rebuilt from nothing every substep, which
@@ -15,9 +15,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     let bucket = bucketAt(gridCoord(nodePos[surface[s].node].xyz));
     let slot = atomicAdd(&contactGrid[bucket], 1u);
-    // Past the bucket's capacity the count keeps rising and the node is simply
-    // not recorded. Readers clamp, so an overfull bucket is consistent rather
-    // than corrupt.
+    // Arrival order is unspecified, so this is not yet an order collision may
+    // use. The following sort pass owns each bucket and canonicalises it.
     if (slot < BUCKET_SLOTS) {
         atomicStore(&contactGrid[uniform.bucketCount + bucket * BUCKET_SLOTS + slot], s);
     }

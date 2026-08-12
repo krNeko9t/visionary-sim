@@ -3,7 +3,7 @@
 // where a substep's corrections are gathered before they are applied.
 //
 // `bodyContact.js` prepends `state.wgsl` and then this file to each of its
-// three kernels. Nothing outside this constraint includes it, and it includes
+// four kernels. Nothing outside this constraint includes it, and it includes
 // nothing of the elastic constraint's -- the two share the nodes and not one
 // line more.
 //
@@ -47,15 +47,16 @@ var<storage, read_write> surface: array<Surface>;
 var<storage, read_write> contactGrid: array<atomic<u32>>;
 
 // How many nodes a bucket can hold. Mirrored in `bodyContact.js`, which sizes
-// the buffer.
+// the buffer. `sort.wgsl` puts the live prefix in ascending surface-index order
+// before any collision reads it, so equal positions produce equal neighbours
+// regardless of GPU thread order.
 //
 // A bucket is one contact diameter across, so it can only be crowded where
-// material is dense, and past eight the extra nodes are dropped rather than
-// stored: the ones already in the bucket are the ones nearby anyway. Choosing
-// to lose a contact here is what buys a broadphase with no prefix sum, no
-// sorting and no allocation -- the cost is bounded and the rebuild is two
-// dispatches.
-const BUCKET_SLOTS: u32 = 8u;
+// material is dense. Thirty-two covers both bodies' lattice corners in an
+// ordinary overlap; past it the highest surface indices are dropped
+// only after the fixed capacity. This bounded local list avoids a prefix sum,
+// global sort and variable allocation.
+const BUCKET_SLOTS: u32 = 32u;
 
 uniform gridOrigin: vec3f;
 uniform gridDims: vec3u;

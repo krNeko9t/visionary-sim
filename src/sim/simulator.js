@@ -5,6 +5,7 @@ import { BodyContact } from './constraints/bodyContact.js';
 import { ElasticCells } from './constraints/elasticCells.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
+import { FixedTimestep, stableStepDuration } from './solver/timestep.js';
 import { collapseScale, elementCompliance, waveRatio } from './constraints/compliance.js';
 
 /**
@@ -23,16 +24,8 @@ import { collapseScale, elementCompliance, waveRatio } from './constraints/compl
 
 const DEFAULT_PARAMS = {
     gravity: [0, -9.81, 0],
-    substeps: 20,
-    /** Ceiling on substeps, so a stiff material costs accuracy rather than frames. */
-    maxSubsteps: 24,
-    paused: false,
-    /** Frame time is clamped so a stall cannot fire a huge, unstable step. */
-    maxFrameTime: 1 / 30
+    paused: false
 };
-
-/** Target CFL number, kept below 1 so the projections stay compliance-damped. */
-const CFL_TARGET = 0.75;
 
 export class Simulator {
     /**
@@ -75,6 +68,12 @@ export class Simulator {
         // was resting on, and only one of the two is allowed to be wrong about
         // that.
         this.stepper = new Stepper(device, this.particles, [this.elastic, this.contact]);
+
+        // Render frames decide when GPU work may be recorded, but not how much
+        // physical time one solve represents. The clock turns their irregular
+        // dt into a count of fixed stable steps and knows nothing about the
+        // dispatches that will execute them; this class is their only seam.
+        this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
 
         for (let b = 0; b < this.simBodies.length; b++) {
             const { damping, friction } = this.simBodies[b].body.material;
@@ -124,15 +123,10 @@ export class Simulator {
      * a hard projection of the deviatoric constraint `||F|| -> 0` collapses the
      * body to a point.
      *
-     * @param {number} [frameTime] - Frame duration in seconds.
      * @returns {number} The CFL number; keep it below 1.
      */
-    cflNumber(frameTime = 1 / 60) {
-        const limiting = this.worst();
-        if (!limiting) {
-            return 0;
-        }
-        return waveRatio(limiting.body.material, limiting.lattice) * (frameTime / this.params.substeps);
+    cflNumber() {
+        return this.waveRate() * this.clock.stepDuration;
     }
 
     /**
@@ -158,40 +152,26 @@ export class Simulator {
     }
 
     /**
-     * Substeps needed to hold the CFL number at {@link CFL_TARGET}.
+     * Fastest elastic wave in cell crossings per second.
      *
-     * @param {number} [frameTime] - Frame duration in seconds.
-     * @returns {number} Recommended substeps.
+     * Kept next to {@link worst} so the material/discretisation reduction has
+     * one definition whether the clock is configured or the UI is reporting it.
+     *
+     * @returns {number} Scene stability rate, or zero with no bodies.
      */
-    recommendedSubsteps(frameTime = 1 / 60) {
+    waveRate() {
         const limiting = this.worst();
-        if (!limiting) {
-            return 1;
-        }
-        const ratio = waveRatio(limiting.body.material, limiting.lattice);
-        return Math.max(1, Math.ceil((frameTime * ratio) / CFL_TARGET));
-    }
-
-    /**
-     * Applies {@link recommendedSubsteps}, capped by `params.maxSubsteps`.
-     *
-     * @param {number} [frameTime] - Frame duration in seconds.
-     * @returns {{ advised: number, applied: number, cfl: number }} What was chosen.
-     */
-    autoSubsteps(frameTime = 1 / 60) {
-        const advised = this.recommendedSubsteps(frameTime);
-        this.params.substeps = Math.min(Math.max(advised, 4), this.params.maxSubsteps);
-        return { advised, applied: this.params.substeps, cfl: this.cflNumber(frameTime) };
+        return limiting ? waveRatio(limiting.body.material, limiting.lattice) : 0;
     }
 
     /**
      * Everything worth reporting about the current setup, so that callers can
      * print or display it without reaching into the arena or the lattices.
      *
-     * @param {number} [frameTime] - Frame duration in seconds.
      * @returns {object} A flat report.
      */
-    stats(frameTime = 1 / 60) {
+    stats() {
+        const timing = this.clock.snapshot();
         return {
             deviceType: this.device.deviceType,
             bodyCount: this.simBodies.length,
@@ -200,9 +180,15 @@ export class Simulator {
             nodes: this.particles.nodeCount,
             contactNodes: this.contact.surfaceCount,
             contact: this.contact.enabled,
-            substeps: this.params.substeps,
-            advised: this.recommendedSubsteps(frameTime),
-            cfl: this.cflNumber(frameTime),
+            steps: timing.steps,
+            stepDuration: timing.stepDuration,
+            maxStepsPerFrame: timing.maxStepsPerFrame,
+            simulatedTime: timing.simulatedTime,
+            backlogTime: timing.backlogTime,
+            frameDroppedTime: timing.frameDroppedTime,
+            droppedTime: timing.droppedTime,
+            overloaded: timing.overloaded,
+            cfl: this.cflNumber(),
             limitedBy: this.worst()?.body.name ?? 'nothing',
             perBody: this.simBodies.map(({ body, lattice }) => {
                 const { gamma } = elementCompliance(body.material, lattice);
@@ -226,19 +212,32 @@ export class Simulator {
      * @param {number} dt - Elapsed seconds since the last frame.
      */
     step(dt) {
+        // A scene can be all backdrop, and a solver with no degrees of freedom
+        // has neither work nor physical time to advance. Said here rather than
+        // left to the kernels: they would bind zero-length buffers and fail
+        // validation every frame.
+        if (this.particles.nodeCount === 0) {
+            this.pendingStep = false;
+            this.clock.idle();
+            return;
+        }
+
+        let timing;
         if (this.pendingStep) {
             this.pendingStep = false;
-            this.advance(Math.min(dt, this.params.maxFrameTime));
+            timing = this.clock.singleStep();
+        } else if (this.params.paused) {
+            this.clock.idle();
             return;
+        } else {
+            timing = this.clock.consume(dt);
         }
-        if (this.params.paused) {
-            return;
-        }
-        this.advance(Math.min(dt, this.params.maxFrameTime));
+
+        this.dispatch(timing.steps);
     }
 
     /**
-     * Asks for exactly one frame, paused or not.
+     * Asks for exactly one fixed physical step, paused or not.
      *
      * Deferred rather than run here, because a dispatch is only legal inside
      * the render frame and the thing that wants a single step is a button
@@ -250,31 +249,23 @@ export class Simulator {
     }
 
     /**
-     * @param {number} dt - Frame duration in seconds.
+     * @param {number} steps - Number of fixed physical steps to dispatch.
      */
-    advance(dt) {
-        const { substeps, gravity } = this.params;
-        if (dt <= 0 || substeps < 1) {
-            return;
-        }
-        // A scene can be all backdrop, and a solver with no degrees of freedom
-        // has nothing to do. Said here rather than left to the kernels: they
-        // would still be dispatched, bind a zero-length buffer, and fail
-        // validation every frame for the whole run.
-        if (this.particles.nodeCount === 0) {
+    dispatch(steps) {
+        if (steps < 1) {
             return;
         }
 
         this.stepper.setFrameParameters({
-            substepDt: dt / substeps,
-            gravity,
+            substepDt: this.clock.stepDuration,
+            gravity: this.params.gravity,
             tankMin: this.tank.min,
             tankMax: this.tank.max,
             grabTarget: this.grab.target
         });
 
-        this.device.computeDispatch(this.stepper.sequence(substeps), 'softbody-step');
-        this.stepCount += substeps;
+        this.device.computeDispatch(this.stepper.sequence(steps), 'softbody-step');
+        this.stepCount += steps;
     }
 
     /**
@@ -304,6 +295,9 @@ export class Simulator {
             friction: body.material.friction
         });
         this.elastic.uploadParams();
+        // Stiffness and density change the wave rate. The fractional backlog is
+        // kept as seconds by the clock; only all future physical steps change.
+        this.clock.setStepDuration(stableStepDuration(this.waveRate()));
     }
 
     /**
@@ -384,7 +378,9 @@ export class Simulator {
     reset() {
         this.setGrab(-1, -1);
         this.particles.reset();
+        this.clock.reset();
         this.stepCount = 0;
+        this.pendingStep = false;
     }
 
     destroy() {

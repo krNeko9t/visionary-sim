@@ -5,6 +5,7 @@ import {
     ContainerHandler,
     DEVICETYPE_WEBGPU,
     FILLMODE_FILL_WINDOW,
+    GSPLAT_RENDERER_RASTER_GPU_SORT,
     GSplatComponentSystem,
     LightComponentSystem,
     RESOLUTION_AUTO,
@@ -67,6 +68,11 @@ export async function createApp(canvas) {
 
     const app = new AppBase(canvas);
     app.init(options);
+    // WebGPU's GPU sorter reads the same work buffer the deformation modifier
+    // writes. Make that data path explicit instead of relying on AUTO's current
+    // engine-version default; the CPU sorter only sees the static resource
+    // centres and would silently sort a moving body in its rest pose.
+    app.scene.gsplat.renderer = GSPLAT_RENDERER_RASTER_GPU_SORT;
     app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
     app.setCanvasResolution(RESOLUTION_AUTO);
 
