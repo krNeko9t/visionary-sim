@@ -18,8 +18,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (n >= uniform.nodeCount) {
         return;
     }
-    // Inert nodes are lattice corners no cell touches, plus whatever the
-    // grabber has pinned this frame.
+    // Inert nodes are lattice corners no cell touches, plus whatever a
+    // constraint has prescribed for itself to drive this frame.
     if (nodeInvMass[n] == 0.0) {
         return;
     }

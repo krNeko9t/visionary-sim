@@ -128,6 +128,11 @@ export function createPanel(sim, { onLatticeToggle }) {
                 button('重置', () => sim.reset())
             ]),
             toggle({ label: '物体互碰', value: true, onChange: on => sim.setContact(on) }).element,
+            toggle({
+                label: '刚性抓取',
+                value: true,
+                onChange: on => sim.setDriveLaw(on ? 'hard' : 'compliant')
+            }).element,
             toggle({ label: '显示点阵', value: false, onChange: onLatticeToggle }).element,
             note
         ])

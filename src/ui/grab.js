@@ -70,12 +70,18 @@ export function attachGrabber(app, camera, sim) {
     };
 
     /**
-     * Moves the grabbed node to wherever the pointer now points, on the plane
+     * Moves the held node to wherever the pointer now points, on the plane
      * the grab started from.
      */
     const dragToPointer = () => {
         const ray = press.ray;
         const normal = camera.forward;
+        // Read straight off `ray` rather than off whatever `rayThrough` left
+        // in the module-level scratch vector -- the two happen to agree
+        // whenever this runs today, but only because every caller calls
+        // `rayThrough` immediately before it. Setting `direction` from `ray`
+        // here removes that assumption instead of relying on it.
+        direction.set(ray.direction[0], ray.direction[1], ray.direction[2]);
         toPlane.set(
             press.plane[0] - ray.origin[0],
             press.plane[1] - ray.origin[1],
@@ -88,7 +94,7 @@ export function attachGrabber(app, camera, sim) {
 
         const distance = normal.dot(toPlane) / along;
         const { min, max } = sim.tank;
-        sim.setGrabTarget([0, 1, 2].map(axis => Math.min(
+        sim.moveGrab([0, 1, 2].map(axis => Math.min(
             Math.max(ray.origin[axis] + ray.direction[axis] * distance, min[axis] - REACH),
             max[axis] + REACH
         )));
@@ -96,7 +102,7 @@ export function attachGrabber(app, camera, sim) {
 
     const release = () => {
         press = null;
-        sim.setGrab(-1, -1);
+        sim.releaseGrab();
         canvas.style.cursor = '';
     };
 
@@ -112,7 +118,7 @@ export function attachGrabber(app, camera, sim) {
         const started = { ray: rayThrough(event), plane: null };
         press = started;
 
-        sim.pick(started.ray.origin, started.ray.direction).then((hit) => {
+        sim.grab(started.ray.origin, started.ray.direction).then((hit) => {
             // The pointer may have been released, or pressed again, while the
             // readback was in flight.
             if (press !== started) {
@@ -123,7 +129,6 @@ export function attachGrabber(app, camera, sim) {
                 return;
             }
             started.plane = hit.position;
-            sim.setGrab(hit.bodyIndex, hit.node);
             canvas.style.cursor = 'grabbing';
             dragToPointer();
         });

@@ -67,14 +67,14 @@ describe('Simulator owns the timing seam', () => {
 
     it('reset clears pending, accumulated, simulated and dropped time', () => {
         const sim = steppingSimulator();
-        sim.setGrab = vi.fn();
+        sim.releaseGrab = vi.fn();
         sim.particles.reset = vi.fn();
         sim.pendingStep = true;
         sim.clock.consume(0.2);
 
         Simulator.prototype.reset.call(sim);
 
-        expect(sim.setGrab).toHaveBeenCalledWith(-1, -1);
+        expect(sim.releaseGrab).toHaveBeenCalledOnce();
         expect(sim.particles.reset).toHaveBeenCalledOnce();
         expect(sim.clock.snapshot()).toMatchObject({
             totalSteps: 0,

@@ -18,8 +18,9 @@ import stateWgsl from './state.wgsl?raw';
  * stays independent of the number of bodies, and one dispatch can cover work
  * that spans several of them.
  *
- * Nothing here is read back per frame. The only readback in the system is a
- * single node index when the pointer goes down.
+ * Nothing here is read back per frame. The one readback this file offers
+ * returns every position at once; whatever calls it decides how rarely that
+ * is worth doing.
  *
  * @typedef {object} BodyNodes
  * @property {Float32Array} restPositions - Rest positions, 3 floats per node.
@@ -38,8 +39,7 @@ const PARAMS_FIELDS = {
     nodeOffset: 0, // u32
     nodeCount: 1, //  u32
     damping: 2, //    f32
-    friction: 3, //   f32
-    grabNode: 4 //    i32
+    friction: 3 //    f32
 };
 
 const PARAMS_WORDS = PARAMS_STRIDE / 4;
@@ -78,6 +78,15 @@ export class Particles {
         this.restPositions = positions;
         this.invMass = invMass;
 
+        // Which nodes currently read as inert on the GPU whatever their
+        // material inverse mass says. Kept apart from `invMass` itself so
+        // that whatever asked for it -- a constraint driving those nodes some
+        // other way -- can be undone without forgetting what they actually
+        // weigh.
+        this.prescribed = new Set();
+        /** GPU-facing copy of `invMass`, with prescribed nodes forced to zero. */
+        this.gpuInvMass = new Float32Array(invMass);
+
         const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
         this.nodePos = new StorageBuffer(device, positions.byteLength, usage);
         this.nodePrev = new StorageBuffer(device, positions.byteLength, usage);
@@ -88,17 +97,16 @@ export class Particles {
         this.nodePos.write(0, positions);
         this.nodePrev.write(0, positions);
         this.nodeVel.write(0, new Float32Array(total * 4));
-        this.nodeInvMass.write(0, invMass);
+        this.nodeInvMass.write(0, this.gpuInvMass);
 
-        // One staging copy reused for every parameter update, so dragging a
-        // slider does not allocate.
+        // One staging copy reused for every parameter update, so a material
+        // change does not allocate.
         this.paramWords = new ArrayBuffer(bodies.length * PARAMS_STRIDE);
         this.paramFloats = new Float32Array(this.paramWords);
         this.paramUints = new Uint32Array(this.paramWords);
-        this.paramInts = new Int32Array(this.paramWords);
 
         /** Per-body values the node passes read; set through {@link setParams}. */
-        this.params = bodies.map(() => ({ damping: 0, friction: 0, grabNode: -1 }));
+        this.params = bodies.map(() => ({ damping: 0, friction: 0 }));
         this.uploadParams();
     }
 
@@ -121,38 +129,43 @@ export class Particles {
         this.uploadParams();
     }
 
-    /**
-     * Pins one node to the pointer, releasing whatever was held before.
-     *
-     * @param {number} bodyIndex - Body being grabbed, or -1 to release all.
-     * @param {number} nodeIndex - Node index in the shared arrays, or -1.
-     */
-    setGrab(bodyIndex, nodeIndex) {
-        for (const params of this.params) {
-            params.grabNode = -1;
-        }
-        if (bodyIndex >= 0) {
-            this.params[bodyIndex].grabNode = nodeIndex;
-        }
-        this.uploadParams();
-    }
-
     /** Rewrites the per-body node parameter buffer. */
     uploadParams() {
-        const { paramFloats, paramUints, paramInts } = this;
+        const { paramFloats, paramUints } = this;
 
         for (let b = 0; b < this.bodies.length; b++) {
             const base = b * PARAMS_WORDS;
-            const { damping, friction, grabNode } = this.params[b];
+            const { damping, friction } = this.params[b];
 
             paramUints[base + PARAMS_FIELDS.nodeOffset] = this.offsets[b];
             paramUints[base + PARAMS_FIELDS.nodeCount] = this.bodies[b].nodeCount;
             paramFloats[base + PARAMS_FIELDS.damping] = damping;
             paramFloats[base + PARAMS_FIELDS.friction] = friction;
-            paramInts[base + PARAMS_FIELDS.grabNode] = grabNode;
         }
 
         this.nodeParams.write(0, new Uint8Array(this.paramWords));
+    }
+
+    /**
+     * Forces a set of nodes' inverse mass to read as zero on the GPU, whatever
+     * their material says.
+     *
+     * This is the one thing `sim/state` knows how to do for a constraint that
+     * wants to drive some nodes itself: it does not learn why, or who is
+     * asking, or what "prescribed" means to the caller. Replaces whatever set
+     * was prescribed before -- there is one driver at a time.
+     *
+     * @param {number[]} nodes - Global node indices to prescribe.
+     */
+    setPrescribed(nodes) {
+        this.prescribed = new Set(nodes);
+        this.uploadGpuMasses();
+    }
+
+    /** Releases every prescribed node back to its material inverse mass. */
+    clearPrescribed() {
+        this.prescribed = new Set();
+        this.uploadGpuMasses();
     }
 
     /**
@@ -166,15 +179,33 @@ export class Particles {
         for (let b = 0; b < this.bodies.length; b++) {
             this.invMass.set(this.bodies[b].invMass, this.offsets[b]);
         }
-        this.nodeInvMass.write(0, this.invMass);
+        this.uploadGpuMasses();
+    }
+
+    /**
+     * Rewrites the GPU inverse-mass buffer from the material truth, with
+     * every currently prescribed node forced back to zero.
+     *
+     * A density change and a constraint newly prescribing this set are
+     * independent events that both touch this buffer; routing both through
+     * here is what keeps a mass update from reviving a node a constraint is
+     * currently driving.
+     */
+    uploadGpuMasses() {
+        this.gpuInvMass.set(this.invMass);
+        for (const node of this.prescribed) {
+            this.gpuInvMass[node] = 0;
+        }
+        this.nodeInvMass.write(0, this.gpuInvMass);
     }
 
     /**
      * Copies the live node positions back to the CPU.
      *
-     * The only readback in the system, and it happens once per pointer press.
-     * Anything that wanted this per frame would be asking the CPU to wait for
-     * the GPU, which is the one thing these buffers are arranged to avoid.
+     * The only readback in the system. Anything that wanted this per frame
+     * would be asking the CPU to wait for the GPU, which is the one thing
+     * these buffers are arranged to avoid -- so this is meant to be called
+     * rarely, not every frame.
      *
      * @returns {Promise<Float32Array>} Positions, 4 floats per node. Reused
      *   between calls, so read it before awaiting anything else.

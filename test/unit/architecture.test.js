@@ -117,6 +117,24 @@ const DISCRETISATION = [
 ];
 
 /**
+ * Words that belong to whoever is reaching into the scene from outside it.
+ *
+ * `sim/state` holds the degrees of freedom and must not know what any of them
+ * are for; `sim/solver` runs whatever constraints it is handed and must stay
+ * unable to name them. A prescribed node -- one a constraint has told rather
+ * than solved for -- used to be exactly the leak this catches: a `grabNode`
+ * field in the shared node state, a `grabTarget` uniform the stepper carried
+ * and branched on. Both are gone, and this is what keeps them from coming
+ * back by the same route: `sim/state` now offers only the neutral
+ * `setPrescribed`/`clearPrescribed`, which say nothing about who is asking or
+ * why.
+ *
+ * `handle` is deliberately not on this list: `sim/solver/stepper.js` already
+ * uses the word for something else ("handles the read-after-write hazards").
+ */
+const INTERACTION = [/\bgrab/i, /\bpointer/i, /\bdrag/i, /\bgrip/i];
+
+/**
  * @param {string} dir - Directory to walk.
  * @returns {string[]} Source paths relative to `src`, using forward slashes.
  */
@@ -237,6 +255,25 @@ describe('the layering the file tree claims', () => {
             .flatMap((file) => {
                 const text = readFileSync(join(SRC, file), 'utf8');
                 return DISCRETISATION
+                    .filter(pattern => pattern.test(text))
+                    .map(pattern => `src/${file} matches ${pattern}`);
+            });
+
+        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('keeps the degrees of freedom and the stepper free of interaction', () => {
+        // The mirror of the discretisation rule above, guarding the other
+        // structural commitment: `sim/state` does not know what a degree of
+        // freedom is for, and `sim/solver` cannot name a constraint. Both
+        // guarantees are import-invisible in the same way -- a privileged
+        // channel reads and writes ordinary fields, it does not import
+        // anything to do it -- so this checks by name instead.
+        const leaks = sourceFiles()
+            .filter(file => areaOf(file) === 'sim/state' || areaOf(file) === 'sim/solver')
+            .flatMap((file) => {
+                const text = readFileSync(join(SRC, file), 'utf8');
+                return INTERACTION
                     .filter(pattern => pattern.test(text))
                     .map(pattern => `src/${file} matches ${pattern}`);
             });

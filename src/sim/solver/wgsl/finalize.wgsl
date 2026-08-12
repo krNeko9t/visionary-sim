@@ -9,14 +9,13 @@
 // The tank is here rather than among the constraints because it is a property
 // of the world, fixed and known, not of any object -- five planes that never
 // move and never have to be discovered. Contact *between bodies* is the
-// opposite on every count, which is why it will arrive as a constraint set of
-// its own rather than as more planes in this file.
+// opposite on every count, which is why it arrives as a constraint set of its
+// own rather than as more planes in this file.
 
 uniform nodeCount: u32;
 uniform dt: f32;
 uniform tankMin: vec3f;
 uniform tankMax: vec3f;
-uniform grabTarget: vec3f;
 
 // Resolves one half-space, normal pointing into the valid region.
 //
@@ -49,14 +48,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let prev = nodePrev[n].xyz;
     var p = nodePos[n].xyz;
 
-    // A grabbed node is driven, not simulated: it is pinned to the pointer ray
-    // and keeps whatever velocity that implies.
-    if (np.grabNode >= 0 && u32(np.grabNode) == n) {
-        nodePos[n] = vec4f(uniform.grabTarget, 0.0);
-        nodeVel[n] = vec4f((uniform.grabTarget - prev) / uniform.dt, 0.0);
-        return;
-    }
-
+    // Inert nodes -- lattice corners no cell touches, or nodes some other
+    // constraint has prescribed this frame -- were left exactly where that
+    // constraint put them.
     if (nodeInvMass[n] == 0.0) {
         return;
     }

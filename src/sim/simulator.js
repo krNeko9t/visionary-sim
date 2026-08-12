@@ -3,6 +3,7 @@ import { latticeField } from '../deformation/bind.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
 import { ElasticCells } from './constraints/elasticCells.js';
+import { KinematicDrive } from './constraints/kinematicDrive.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
 import { FixedTimestep, stableStepDuration } from './solver/timestep.js';
@@ -12,9 +13,9 @@ import { collapseScale, elementCompliance, waveRatio } from './constraints/compl
  * The simulation's only public surface.
  *
  * Everything outside `sim/` talks to this object: the scene hands it bodies,
- * the UI changes materials, the grabber pins a node. Nothing outside touches a
- * buffer, a kernel or a dispatch -- and nothing outside decides how a body is
- * cut up, which is this object's first act.
+ * the UI changes materials, {@link grab} holds a node for the pointer.
+ * Nothing outside touches a buffer, a kernel or a dispatch -- and nothing
+ * outside decides how a body is cut up, which is this object's first act.
  *
  * @typedef {object} SimBody
  * @property {import('../body/softBody.js').SoftBody} body - What the author described.
@@ -48,7 +49,8 @@ export class Simulator {
         // else. They are listed in dependency order and each knows only the one
         // before it: the nodes exist, constraints move them, a stepper runs the
         // constraints. The stepper never learns what kind of constraint it is
-        // running, which is what left room for the second kind.
+        // running, which is what left room for a second kind, and now a third:
+        // nodes that are not solved for, but told.
         // Spelled out rather than handing the lattice over whole: these three
         // arrays are the entire set of things the node storage is allowed to
         // know, and writing them at the seam is what keeps that visible.
@@ -57,17 +59,21 @@ export class Simulator {
             invMass: lattice.invMass,
             nodeCount: lattice.nodeCount
         })));
+        this.drive = new KinematicDrive(device, this.particles);
         this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
             ({ body, lattice }) => ({ lattice, material: body.material })
         ));
         this.contact = new BodyContact(
             device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })), tank
         );
-        // Order is solve order. Contact goes last so it has the final word on
-        // where a node may be: elasticity can push a node back into whatever it
-        // was resting on, and only one of the two is allowed to be wrong about
-        // that.
-        this.stepper = new Stepper(device, this.particles, [this.elastic, this.contact]);
+        // Order is solve order. Driven nodes go first: under the hard law
+        // nothing else can move them anyway, and this is what lets the
+        // compliant law's nudge still be shaped by elasticity and contact
+        // afterwards, in the same substep. Contact goes last of the other two
+        // so it has the final word on where a node may be: elasticity can push
+        // a node back into whatever it was resting on, and only one of the two
+        // is allowed to be wrong about that.
+        this.stepper = new Stepper(device, this.particles, [this.drive, this.elastic, this.contact]);
 
         // Render frames decide when GPU work may be recorded, but not how much
         // physical time one solve represents. The clock turns their irregular
@@ -80,7 +86,12 @@ export class Simulator {
             this.particles.setParams(b, { damping, friction });
         }
 
-        this.grab = { body: -1, node: -1, target: [0, 0, 0] };
+        // Where the handle is, and where it was last frame -- the only two
+        // numbers `dispatch` needs to hand `this.drive` a velocity for this
+        // frame's substeps. `previousTarget` only advances when a dispatch
+        // actually runs, so a frame with nothing to simulate never loses the
+        // motion in between.
+        this.handle = { target: [0, 0, 0], previousTarget: [0, 0, 0] };
         /** Set by {@link requestStep}, consumed by the next {@link step}. */
         this.pendingStep = false;
     }
@@ -275,9 +286,21 @@ export class Simulator {
             substepDt: this.clock.stepDuration,
             gravity: this.params.gravity,
             tankMin: this.tank.min,
-            tankMax: this.tank.max,
-            grabTarget: this.grab.target
+            tankMax: this.tank.max
         });
+
+        // The handle's velocity this frame, not read off any input device:
+        // just how far its target moved since last frame's dispatch, divided
+        // among this frame's substeps. Skipped while nothing is held, so an
+        // idle scene never pays for it and `previousTarget` never drifts away
+        // from `target` in between holds.
+        if (this.drive.drivenCount > 0) {
+            const { target, previousTarget } = this.handle;
+            const frameDt = steps * this.clock.stepDuration;
+            this.drive.setHandle(target, [0, 1, 2].map(axis =>
+                (target[axis] - previousTarget[axis]) / frameDt));
+            this.handle.previousTarget = target;
+        }
 
         this.device.computeDispatch(this.stepper.sequence(steps), 'softbody-step');
     }
@@ -328,34 +351,35 @@ export class Simulator {
     }
 
     /**
-     * What a line through the scene hits, as something {@link setGrab} accepts.
+     * What a line through the scene hits, holding it if it hit something.
      *
      * Asynchronous because the answer lives on the GPU. That is a property of
      * where the simulation runs, not an accident: the caller has to be willing
-     * to learn what it grabbed a frame after asking.
+     * to learn what it hit a frame after asking. The node found becomes the
+     * one node {@link KinematicDrive} holds; {@link moveGrab} moves it from
+     * there.
      *
      * @param {number[]} origin - Ray origin in world space.
      * @param {number[]} direction - Unit ray direction.
-     * @param {object} [options] - Tolerance.
-     * @param {number} [options.radius] - How far off the ray a node may be.
-     *   Defaults to a little over the coarsest cell, so that anything the
-     *   pointer is visibly over has a node within reach.
-     * @returns {Promise<{ bodyIndex: number, node: number, position: number[] }|null>}
-     *   The grabbable node, or null if the ray missed.
+     * @returns {Promise<{ bodyIndex: number, position: number[] }|null>}
+     *   Which body was hit and where, or null if the ray missed everything.
      */
-    async pick(origin, direction, { radius = this.coarsestCell() * 1.2 } = {}) {
+    async grab(origin, direction) {
         const nodes = await this.particles.readPositions();
+        // A little over the coarsest cell, so that anything visibly over a
+        // body has a node within reach.
+        const radius = this.coarsestCell() * 1.2;
         const found = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, radius);
         if (found < 0) {
             return null;
         }
 
-        const bodyIndex = bodyOfNode(this.particles.offsets, found);
-        return {
-            bodyIndex,
-            node: found - this.particles.offsetOf(bodyIndex),
-            position: [nodes[found * 4], nodes[found * 4 + 1], nodes[found * 4 + 2]]
-        };
+        const position = [nodes[found * 4], nodes[found * 4 + 1], nodes[found * 4 + 2]];
+        this.drive.hold([found], [[0, 0, 0]]);
+        this.handle.target = position;
+        this.handle.previousTarget = position;
+
+        return { bodyIndex: bodyOfNode(this.particles.offsets, found), position };
     }
 
     /** @returns {number} Cell edge length of the coarsest body in the scene. */
@@ -364,33 +388,31 @@ export class Simulator {
     }
 
     /**
-     * Pins a node to a world position for dragging.
+     * Moves the handle {@link grab} attached to a world position.
      *
-     * @param {number} bodyIndex - Index into the body list, or -1 to release.
-     * @param {number} localNodeIndex - Node index within that body.
+     * @param {number[]} position - World position to move the handle to.
      */
-    setGrab(bodyIndex, localNodeIndex) {
-        if (bodyIndex < 0 || localNodeIndex < 0) {
-            this.grab.body = -1;
-            this.grab.node = -1;
-            this.particles.setGrab(-1, -1);
-            return;
-        }
-        this.grab.body = bodyIndex;
-        this.grab.node = this.particles.offsetOf(bodyIndex) + localNodeIndex;
-        this.particles.setGrab(bodyIndex, this.grab.node);
+    moveGrab(position) {
+        this.handle.target = position;
+    }
+
+    /** Releases whatever {@link grab} is currently holding. */
+    releaseGrab() {
+        this.drive.release();
     }
 
     /**
-     * @param {number[]} position - World position to drag the grabbed node to.
+     * Switches how a held node is driven toward the handle.
+     *
+     * @param {import('./constraints/kinematicDrive.js').DriveLaw} law - The drive law.
      */
-    setGrabTarget(position) {
-        this.grab.target = position;
+    setDriveLaw(law) {
+        this.drive.law = law;
     }
 
     /** Returns every body to its rest state, at rest. */
     reset() {
-        this.setGrab(-1, -1);
+        this.releaseGrab();
         this.particles.reset();
         this.clock.reset();
         this.pendingStep = false;
@@ -400,6 +422,7 @@ export class Simulator {
         this.stepper.destroy();
         this.contact.destroy();
         this.elastic.destroy();
+        this.drive.destroy();
         this.particles.destroy();
     }
 }

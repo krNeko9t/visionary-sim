@@ -77,16 +77,14 @@ export class Stepper {
      * @param {number[]} params.gravity - Gravity vector.
      * @param {number[]} params.tankMin - Tank interior minimum.
      * @param {number[]} params.tankMax - Tank interior maximum.
-     * @param {number[]} params.grabTarget - World position a grabbed node is pinned to.
      */
-    setFrameParameters({ substepDt, gravity, tankMin, tankMax, grabTarget }) {
+    setFrameParameters({ substepDt, gravity, tankMin, tankMax }) {
         this.predict.setParameter('dt', substepDt);
         this.predict.setParameter('gravity', gravity);
 
         this.finalize.setParameter('dt', substepDt);
         this.finalize.setParameter('tankMin', tankMin);
         this.finalize.setParameter('tankMax', tankMax);
-        this.finalize.setParameter('grabTarget', grabTarget);
 
         for (const constraint of this.constraints) {
             constraint.setSubstepDt(substepDt);

@@ -18,17 +18,17 @@ var<storage, read_write> nodeVel: array<vec4f>;
 var<storage, read> nodeInvMass: array<f32>;
 
 // Per-body parameters that belong to the nodes rather than to any constraint:
-// what slows them, what they rub against, which one the pointer is holding.
-// 32 bytes, written by `particles.js` to this exact layout.
+// what slows them down, what they rub against. 32 bytes, written by
+// `particles.js` to this exact layout.
 struct NodeParams {
     nodeOffset: u32,
     nodeCount: u32,
     damping: f32,
     friction: f32,
-    grabNode: i32,
     pad0: u32,
     pad1: u32,
     pad2: u32,
+    pad3: u32,
 }
 
 var<storage, read> nodeParams: array<NodeParams>;

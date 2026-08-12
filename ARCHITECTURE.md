@@ -73,7 +73,8 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 
 `sim/state/` 什么都不依赖，只管节点的位置、历史和逆质量。这是允许出现第二种约束的那道缝：
 接触与弹性除了"移动同一批节点"之外毫无共同点，于是节点成了两者唯一都能看见的东西，而两者
-互相看不见。
+互相看不见。第三种约束沿同一道缝进来：一个自由度也可以是被**规定**而非被**解出**的——`sim/
+state/` 对此仍然只知道一件事，某个逆质量此刻读作零，不知道是谁在规定、为什么规定。
 
 `sim/solver/` 看得见 `sim/state/`，**看不见 `sim/constraints/`**。步进器按顺序派发别人交给
 它的约束，且必须无法叫出它们的名字——一旦能，"加一种约束"就又变回"改循环"。
@@ -139,7 +140,8 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 - 两条越界即塌的边界。CFL 属于求解器，塌陷势垒属于本构模型、加子步没有用。界面把两个当前值
   摆在会推着你越界的滑杆旁边。
 - 接触约束跨物体耦合，4.2 那条奇偶前提当场作废，所以接触走 Jacobi：各自收集、平均、再施加。
-  **批次规则因此属于每一种约束自己**，不是求解框架的属性。
+  **批次规则因此属于每一种约束自己**，不是求解框架的属性。运动学驱动是第三种批次规则：一趟
+  Jacobi，但集合不是每子步发现的，是在被抓住的那一刻确定、直到松手前都不变。
 - GPU 原子操作只负责把接触面节点放进粗筛桶，不负责定义邻居顺序。桶在窄相前由一个局部 pass
   按 surface index 规范化；正常桶只排自己的短前缀，溢出桶确定性保留最低 32 个。这样线程到达
   顺序不会改变接触集合或浮点累加顺序，这个确定性策略也没有越出 `BodyContact`。
@@ -188,6 +190,8 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
 | 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `test/unit/timestep.test.js`、`simulatorTiming.test.js` |
 | 接触桶不受 GPU 原子插入顺序影响 | `test/unit/contact.test.js` |
+| 两种驱动律各自的位移/修正公式；被规定节点在弹性投影里不再分走修正 | `test/unit/kinematicDrive.test.js`、`elastic.test.js` |
+| `sim/state`、`sim/solver` 不出现抓取/指针/拖拽一类的交互词汇（知识边） | `test/unit/architecture.test.js` |
 
 这些约束的**推导写在它约束的那段代码旁边**，不在这里：泊松比下限在 `body/material.js`，
 封口宽度在 `sim/discretize/cloudVolume.js`，填充在 `sim/discretize/voxelize.js`。文档复述

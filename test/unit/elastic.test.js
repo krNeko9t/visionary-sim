@@ -397,6 +397,47 @@ describe('the coupled 2x2 projection', () => {
     });
 });
 
+describe('an inert corner in the coupled projection', () => {
+    // `w[i] = 0` is what `Particles.setPrescribed` (`sim/state/particles.js`)
+    // asks for on behalf of the hard kinematic drive law: a corner some other
+    // constraint is driving this substep, and whose own share of whatever this
+    // one computes for it will be discarded regardless. These two tests are
+    // the elastic constraint's half of that contract.
+    const setup = restTet(0.3);
+    const squashed = setup.p.map(q => [q[0], q[1] * 0.85, q[2]]);
+    const driven = [0, ...setup.w.slice(1)];
+
+    it('applies none of its own correction once its weight is zero', () => {
+        const after = projectCoupled(squashed, setup.B, driven, setup.c);
+
+        expect(moved([squashed[0]], [after[0]])).toBe(0);
+    });
+
+    it('changes what the other three corners receive, rather than leaving it at whatever a since-discarded weight implied', () => {
+        // Before the hard drive law existed, a grabbed node kept its ordinary
+        // inverse mass through the whole projection and was only overwritten
+        // afterwards, in `finalize.wgsl`. The gram matrix above still counted
+        // that corner's mass while solving for how far *every* corner should
+        // move -- as if the grabbed corner were going to share the correction,
+        // when it was always going to be handed back unmoved. Zeroing its
+        // weight before the solve runs, what `setPrescribed` now does, removes
+        // it from that sum. Which direction the other three corners' own
+        // correction shifts by is not a fixed rule -- it is a coupled 2x2
+        // solve, and swapping which weight is zero moves both the deviatoric
+        // and the hydrostatic result together, not the "give the rest what
+        // the grabbed corner isn't keeping" split a one-dimensional intuition
+        // suggests. What is fixed is that it *does* shift: the old code was
+        // not solving an equivalent problem, only a wrong one that happened
+        // to run.
+        const discarded = projectCoupled(squashed, setup.B, setup.w, setup.c);
+        const prescribed = projectCoupled(squashed, setup.B, driven, setup.c);
+
+        for (let i = 1; i < 4; i++) {
+            expect(moved([discarded[i]], [prescribed[i]]), `corner ${i}`).toBeGreaterThan(1e-9);
+        }
+    });
+});
+
 describe('the Kelvin-Voigt damping term', () => {
     /** A generous relaxation time over the substep -- 40 ms, the slider's top. */
     const RELAX = 0.04 / DT;
