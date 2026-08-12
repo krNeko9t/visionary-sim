@@ -10,7 +10,6 @@ import {
 } from 'playcanvas';
 
 import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../discretize/lattice.js';
-import { SAMPLE_WGSL, deformationParameters } from '../../deformation/bind.js';
 import { CUBE_CORNERS } from '../../deformation/corners.js';
 
 /**
@@ -58,8 +57,17 @@ const CUBE_EDGES = [
     [0, 4], [1, 5], [2, 6], [3, 7]
 ];
 
-const VERTEX_WGSL = /* wgsl */ `
-    ${SAMPLE_WGSL}
+/**
+ * Built per field rather than once, because the field brings its own sampler
+ * text. `deformedNode` is the lattice sampler's own entry point, not part of what
+ * every field promises -- and asking a lattice field for it is exactly this
+ * view's job.
+ *
+ * @param {import('../../deformation/bind.js').DeformationField} field - Field to read.
+ * @returns {string} The vertex shader.
+ */
+const vertexWgsl = field => /* wgsl */ `
+    ${field.shader}
 
     attribute vertex_position: vec3f;
     // xyz: rest-space offset towards the cell centre. w: this body's node index.
@@ -157,7 +165,7 @@ export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
 
         const material = new ShaderMaterial({
             uniqueName: 'lattice-view',
-            vertexWGSL: VERTEX_WGSL,
+            vertexWGSL: vertexWgsl(field),
             fragmentWGSL: FRAGMENT_WGSL,
             attributes: {
                 vertex_position: SEMANTIC_POSITION,
@@ -166,7 +174,7 @@ export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
         });
         const tint = GROUP_TINTS[group];
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
-        for (const [name, value] of Object.entries(deformationParameters(field))) {
+        for (const [name, value] of Object.entries(field.parameters)) {
             material.setParameter(name, value);
         }
         material.update();

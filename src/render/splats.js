@@ -1,6 +1,7 @@
 import { Entity, GSplatData, GSplatResource, WORKBUFFER_UPDATE_ALWAYS } from 'playcanvas';
 
-import { COVARIANCE_WGSL, SAMPLE_WGSL, deformationParameters } from '../deformation/bind.js';
+import { COVARIANCE_WGSL } from '../deformation/bind.js';
+import ellipsoidWgsl from './ellipsoid.wgsl?raw';
 import modifierWgsl from './splats.wgsl?raw';
 
 /**
@@ -59,7 +60,7 @@ export function createSplatView(app, name, cloud, field = null) {
     // which is also how mesh bodies work.
     if (field) {
         entity.gsplat.setWorkBufferModifier({
-            wgsl: `${SAMPLE_WGSL}\n${COVARIANCE_WGSL}\n${modifierWgsl}`
+            wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
         });
         // The nodes move every frame and nothing tells the engine so: from its
         // side this cloud is a static resource under a static transform, and it
@@ -67,7 +68,7 @@ export function createSplatView(app, name, cloud, field = null) {
         // approach, and it is a re-bake of every splat in the body per frame.
         entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
 
-        for (const [parameter, value] of Object.entries(deformationParameters(field))) {
+        for (const [parameter, value] of Object.entries(field.parameters)) {
             entity.gsplat.setParameter(parameter, value);
         }
     }

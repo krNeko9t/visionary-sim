@@ -5,32 +5,45 @@
 // the deformed cloud, which is the reason this hooks that pass rather than the
 // final draw.
 //
+// This file is the adapter between the deformation channel and one engine. Both
+// things it does are adapter's work: it knows this host's calling convention, and
+// it knows this host's storage format.
+//
 // The centres arriving here are in world space, because the engine has already
-// applied the entity's transform. `splats.js` keeps that transform at identity
-// so that they are also rest-space positions, which is what the field expects.
+// applied the entity's transform. `splats.js` keeps that transform at identity so
+// that they are also rest-space positions, which is what the field expects.
+
+// The gradient at the splat currently being processed, kept from the centre call
+// for the shape call. `setWorkBufferModifier` splices this chunk into the work
+// buffer bake and only there, and that pass calls the two back to back within one
+// invocation, so the second may read what the first left. If it ever did not, the
+// stash would be the zero matrix and the body would render as nothing at all --
+// quiet enough to be worth naming here.
+//
+// Depending on that order is exactly what an adapter is for. The channel itself
+// must not: a chunk pasted into somebody else's shader cannot assume how that
+// somebody calls it, which is why `deformationAt` returns both answers at once
+// and stays free of state. Asking it twice instead would be honest and cost every
+// splat a second sampling of the field, every frame.
+var<private> splatGradient: mat3x3f;
 
 fn modifySplatCenter(center: ptr<function, vec3f>) {
-    *center = deformationAt(*center).position;
+    let deformation = deformationAt(*center);
+    splatGradient = deformation.gradient;
+    *center = deformation.position;
 }
 
-// `originalCenter` is the rest centre, before this file moved it, so the field
-// can be asked about it a second time. That is one extra trilinear fetch per
-// splat, and it is paid on purpose: the alternative is to stash the gradient
-// from the call above in a module-scope variable, which would make this file
-// correct only for callers that invoke the two in order. The engine does, in all
-// three of its passes -- but a chunk pasted into somebody else's shader should
-// not need that to be true.
 fn modifySplatRotationScale(
     originalCenter: vec3f,
     modifiedCenter: vec3f,
     rotation: ptr<function, vec4f>,
     scale: ptr<function, vec3f>
 ) {
-    let moved = deformedGaussian(
-        deformationAt(originalCenter).gradient, *rotation, *scale
-    );
-    *rotation = moved.rotation;
-    *scale = moved.scale;
+    // The channel says what the ellipsoid is; this line says it in the shape the
+    // engine's work buffer stores.
+    let axes = ellipsoidAxes(deformedCovariance(splatGradient, *rotation, *scale));
+    *rotation = axes.rotation;
+    *scale = axes.scale;
 }
 
 // Colour rides along unchanged. A capture's colour is a property of the surface,

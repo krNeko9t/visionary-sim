@@ -1,4 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
+import { latticeField } from '../deformation/bind.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
 import { ElasticCells } from './constraints/elasticCells.js';
@@ -102,14 +103,14 @@ export class Simulator {
      */
     deformationOf(bodyIndex) {
         const { lattice } = this.simBodies[bodyIndex];
-        return {
+        return latticeField({
             nodePositions: this.particles.nodePos,
             origin: lattice.origin,
             h: lattice.h,
             cellDims: lattice.cellDims,
             nodeDims: lattice.nodeDims,
             nodeOffset: this.particles.offsetOf(bodyIndex)
-        };
+        });
     }
 
     /**

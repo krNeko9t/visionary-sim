@@ -1,6 +1,5 @@
 import { Color, Entity, Mesh, MeshInstance, SHADERLANGUAGE_WGSL, StandardMaterial } from 'playcanvas';
 
-import { SAMPLE_WGSL, deformationParameters } from '../deformation/bind.js';
 import { restNormals } from './normals.js';
 import vertexHookWgsl from './mesh.wgsl?raw';
 
@@ -9,7 +8,7 @@ import vertexHookWgsl from './mesh.wgsl?raw';
  *
  * The surface never changes; the field it is bound to does. Every vertex asks
  * the deformation channel where its rest position went and how the space around
- * it was stretched, so a mesh of any density rides a lattice of any coarseness
+ * it was stretched, so a mesh of any density rides a proxy of any coarseness
  * without the two knowing about each other.
  *
  * The engine's standard material does the actual shading. It is extended
@@ -47,9 +46,9 @@ export function createMeshView(app, surface, field, { tint = [0.92, 0.45, 0.26],
 
     material.shaderChunksVersion = CHUNKS_VERSION;
     const chunks = material.getShaderChunks(SHADERLANGUAGE_WGSL);
-    chunks.set('litUserDeclarationVS', SAMPLE_WGSL);
+    chunks.set('litUserDeclarationVS', field.shader);
     chunks.set('litUserMainEndVS', vertexHookWgsl);
-    for (const [name, value] of Object.entries(deformationParameters(field))) {
+    for (const [name, value] of Object.entries(field.parameters)) {
         material.setParameter(name, value);
     }
     material.update();

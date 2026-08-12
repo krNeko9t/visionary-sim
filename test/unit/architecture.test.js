@@ -96,6 +96,27 @@ const REQUIRED = [
 const RENDERER_API = ['playcanvas', 'setParameter', 'getShaderChunks', 'StorageBuffer'];
 
 /**
+ * How the proxy geometry happens to be cut up today. A word list rather than an
+ * import rule, for the same reason {@link RENDERER_API} is one: a render path
+ * that started reasoning about cells would not import anything to do it -- it
+ * would just read `field.h` off a field it was handed, and every import check
+ * would go on passing.
+ *
+ * `node` is not on the list. It is a word this engine also uses for a scene
+ * graph entity, so it cannot separate the two banks; `nodeDims` and `nodeOffset`
+ * are the parts that would actually leak, and they are caught by prefix.
+ */
+const DISCRETISATION = [
+    // On a word boundary, or "cell" red-lights the suite over the word
+    // "excellent" in a comment.
+    /\blattice/i, /\bvoxel/i, /\bcell/i, /\btetra/i,
+    // Every parameter the lattice sampler declares is `deform` then a capital,
+    // which catches the whole bag at once. Case-sensitive on purpose: a render
+    // path is entitled to say "deformation".
+    /\bdeform[A-Z]/
+];
+
+/**
  * @param {string} dir - Directory to walk.
  * @returns {string[]} Source paths relative to `src`, using forward slashes.
  */
@@ -198,6 +219,26 @@ describe('the layering the file tree claims', () => {
                 return RENDERER_API
                     .filter(name => text.includes(name))
                     .map(name => `src/${file} mentions "${name}"`);
+            });
+
+        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('keeps the render paths free of any discretisation', () => {
+        // The mirror of the rule above, and the one that decides whether the
+        // proxy geometry can actually be replaced. A field is handed over as
+        // shader text plus a bag of parameters precisely so that nothing here
+        // can read a cell size out of it; this checks that nothing tried.
+        //
+        // `sim/debug/` is deliberately outside the scope: it draws cells, and
+        // that is the whole reason it lives under `sim/` rather than in `render/`.
+        const leaks = sourceFiles()
+            .filter(file => areaOf(file) === 'render')
+            .flatMap((file) => {
+                const text = readFileSync(join(SRC, file), 'utf8');
+                return DISCRETISATION
+                    .filter(pattern => pattern.test(text))
+                    .map(pattern => `src/${file} matches ${pattern}`);
             });
 
         expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
