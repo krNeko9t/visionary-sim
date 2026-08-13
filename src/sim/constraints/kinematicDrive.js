@@ -46,8 +46,10 @@ const WORKGROUP_SIZE = 64;
 /**
  * Nodes this constraint can drive at once. Fixed rather than grown with the
  * held set, so a hold is one buffer write instead of a reallocation -- large
- * enough that a range hold (`sim/grip.js`, a later milestone) has room to
- * grow into without a second capacity decision.
+ * enough that `sim/grip.js`'s `withinRadius` range hold has room to grow into
+ * without a second capacity decision. Exposed as {@link KinematicDrive#capacity}
+ * for the one caller that has to decide which nodes to drop when a hold would
+ * exceed it.
  */
 const MAX_DRIVEN = 4096;
 
@@ -132,6 +134,11 @@ export class KinematicDrive {
         compute.setParameter('driven', this.driven);
         compute.setupDispatch(groups, 1, 1);
         return compute;
+    }
+
+    /** @returns {number} Most nodes one hold can carry, see {@link MAX_DRIVEN}. */
+    get capacity() {
+        return MAX_DRIVEN;
     }
 
     /**

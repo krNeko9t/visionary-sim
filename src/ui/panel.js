@@ -115,6 +115,20 @@ export function createPanel(sim, { onLatticeToggle }) {
 
     const note = element('p', 'ui-note', '左键拖动抓住物体，右键拖动旋转视角，中键平移，滚轮缩放。');
 
+    // Two of `sim.grip`'s two fields, worth having a switch for rather than
+    // only a constant -- same reasoning `setContact` earned: pull the toggle
+    // off and dragging goes back to feeling heavier the denser the lattice,
+    // which is the only way to see the fix by feel rather than by reading code.
+    const gripRadius = slider({
+        label: '抓取半径',
+        min: 0,
+        max: 0.06,
+        step: 0.005,
+        value: sim.grip.radius,
+        format: value => `${(value * 100).toFixed(1)} cm`,
+        onInput: value => sim.setGripRadius(value)
+    });
+
     const panel = element('div', 'ui-panel');
     panel.append(
         section('物体', hasBodies
@@ -133,6 +147,12 @@ export function createPanel(sim, { onLatticeToggle }) {
                 value: true,
                 onChange: on => sim.setDriveLaw(on ? 'hard' : 'compliant')
             }).element,
+            toggle({
+                label: '范围抓取',
+                value: sim.grip.strategy === 'withinRadius',
+                onChange: on => sim.setGrip(on ? 'withinRadius' : 'singleNode')
+            }).element,
+            gripRadius.element,
             toggle({ label: '显示点阵', value: false, onChange: onLatticeToggle }).element,
             note
         ])
@@ -176,6 +196,10 @@ export function createPanel(sim, { onLatticeToggle }) {
         for (const control of controls) {
             control.widget.warn(warningFor(control.key, stats, body));
         }
+        gripRadius.warn(stats.grip.worstCase > stats.grip.capacity
+            ? `半径内最多 ${stats.grip.worstCase} 个节点，超过 ${stats.grip.capacity} 的持有上限，` +
+              `抓取会截断到最近的那些——范围重新随点阵分辨率变化。`
+            : null);
     }
 
     return {

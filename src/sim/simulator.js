@@ -1,4 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
+import { DEFAULT_GRAB_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
 import { latticeField } from '../deformation/bind.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
@@ -92,6 +93,14 @@ export class Simulator {
         // actually runs, so a frame with nothing to simulate never loses the
         // motion in between.
         this.handle = { target: [0, 0, 0], previousTarget: [0, 0, 0] };
+        /**
+         * Which nodes a grab holds, and how big a hand `withinRadius` uses.
+         * `withinRadius` is the default: `singleNode` is what "拖哪里都很重，
+         * 点阵越密越重" was describing, kept only because a switchable strategy
+         * needs both a control and a fallback arm, same reasoning as keeping
+         * the compliant drive law alongside the hard one.
+         */
+        this.grip = { strategy: 'withinRadius', radius: DEFAULT_GRAB_RADIUS };
         /** Set by {@link requestStep}, consumed by the next {@link step}. */
         this.pendingStep = false;
     }
@@ -200,6 +209,12 @@ export class Simulator {
             overloaded: timing.overloaded,
             cfl: this.cflNumber(),
             limitedBy: this.worst()?.body.name ?? 'nothing',
+            grip: {
+                strategy: this.grip.strategy,
+                radius: this.grip.radius,
+                worstCase: worstCaseHeldNodes(this.grip.radius, this.finestCell()),
+                capacity: this.drive.capacity
+            },
             perBody: this.simBodies.map(({ body, lattice }) => {
                 const { gamma } = elementCompliance(body.material, lattice);
                 return {
@@ -355,9 +370,10 @@ export class Simulator {
      *
      * Asynchronous because the answer lives on the GPU. That is a property of
      * where the simulation runs, not an accident: the caller has to be willing
-     * to learn what it hit a frame after asking. The node found becomes the
-     * one node {@link KinematicDrive} holds; {@link moveGrab} moves it from
-     * there.
+     * to learn what it hit a frame after asking. Which node the ray hit is
+     * only the anchor: `this.grip.strategy` turns that anchor into the actual
+     * held set {@link KinematicDrive} drives, and {@link moveGrab} moves it
+     * from there.
      *
      * @param {number[]} origin - Ray origin in world space.
      * @param {number[]} direction - Unit ray direction.
@@ -367,24 +383,67 @@ export class Simulator {
     async grab(origin, direction) {
         const nodes = await this.particles.readPositions();
         // A little over the coarsest cell, so that anything visibly over a
-        // body has a node within reach.
-        const radius = this.coarsestCell() * 1.2;
-        const found = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, radius);
-        if (found < 0) {
+        // body has a node within reach. This is aim tolerance, not hand size:
+        // it stays a lattice property on purpose, see `sim/grip.js`.
+        const aimRadius = this.coarsestCell() * 1.2;
+        const anchor = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, aimRadius);
+        if (anchor < 0) {
             return null;
         }
 
-        const position = [nodes[found * 4], nodes[found * 4 + 1], nodes[found * 4 + 2]];
-        this.drive.hold([found], [[0, 0, 0]]);
+        const grip = GRIPS[this.grip.strategy](nodes, this.particles.invMass, anchor, {
+            radius: this.grip.radius,
+            nodeOffsets: this.particles.offsets,
+            limit: this.drive.capacity
+        });
+        if (grip.found > grip.nodes.length) {
+            console.warn(
+                `[grip] ${grip.found} nodes within ${this.grip.radius} m, only the nearest ` +
+                `${grip.nodes.length} held -- this grab's extent is resolution-dependent again.`
+            );
+        }
+
+        const position = [nodes[anchor * 4], nodes[anchor * 4 + 1], nodes[anchor * 4 + 2]];
+        this.drive.hold(grip.nodes, grip.offsets);
         this.handle.target = position;
         this.handle.previousTarget = position;
 
-        return { bodyIndex: bodyOfNode(this.particles.offsets, found), position };
+        return { bodyIndex: bodyOfNode(this.particles.offsets, anchor), position, held: grip.nodes.length };
     }
 
-    /** @returns {number} Cell edge length of the coarsest body in the scene. */
+    /** @returns {number} Cell edge length of the coarsest body in the scene, widest aim tolerance. */
     coarsestCell() {
         return this.simBodies.reduce((coarsest, { lattice }) => Math.max(coarsest, lattice.h), 0);
+    }
+
+    /**
+     * @returns {number} Cell edge length of the finest body in the scene --
+     *   the one a fixed-radius hand can hold the most nodes of, used to warn
+     *   before {@link grab} might need to truncate a hold.
+     */
+    finestCell() {
+        return this.simBodies.reduce(
+            (finest, { lattice }) => Math.min(finest, lattice.h), Infinity
+        );
+    }
+
+    /**
+     * Switches which nodes a grab holds once it finds an anchor.
+     *
+     * @param {keyof typeof GRIPS} strategy - `'singleNode'` or `'withinRadius'`.
+     */
+    setGrip(strategy) {
+        if (!GRIPS[strategy]) {
+            throw new Error(`[grip] unknown strategy "${strategy}"`);
+        }
+        this.grip.strategy = strategy;
+    }
+
+    /**
+     * @param {number} radius - World-space hand radius for `withinRadius`, metres.
+     */
+    setGripRadius(radius) {
+        this.grip.radius = radius;
     }
 
     /**

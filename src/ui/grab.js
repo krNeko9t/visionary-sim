@@ -25,7 +25,15 @@ import { Vec3 } from 'playcanvas';
  *     makes the body run towards or away from the viewer on its own.
  */
 
-/** How far outside the tank a dragged node may be pulled. */
+/**
+ * How far outside the tank the handle target may be pulled. Bounds the
+ * handle, not the held nodes directly: with `sim/grip.js`'s `withinRadius`
+ * strategy a held node can sit up to `REACH + this.grip.radius` outside the
+ * tank, since it follows the handle at a fixed offset. Not tightened to
+ * account for that -- those nodes carry zero inverse mass under the hard
+ * drive law, so the tank's planes could not reach them regardless, the same
+ * accepted cost `KinematicDrive` already carries for a single held node.
+ */
 const REACH = 0.02;
 
 /**

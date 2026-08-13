@@ -4,8 +4,8 @@
 
 - [x] M1 · 抓取从特权通道改成一等约束 `KinematicDrive`：`sim/state`、`sim/solver`
       不再出现抓取词汇，硬运动学 / 柔顺手柄两种驱动律可切换
-- [ ] M2 · 抓取语义脱离点阵分辨率：世界空间半径范围抓取，与 `singleNode`
-      并列的 `withinRadius` 策略
+- [x] M2 · 抓取语义脱离点阵分辨率：`sim/grip.js` 新增世界空间半径范围抓取
+      `withinRadius`，与 `singleNode` 并列可切换，默认 `withinRadius`
 
 ## 待评估问题
 
