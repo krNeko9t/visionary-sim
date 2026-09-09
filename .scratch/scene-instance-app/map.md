@@ -18,7 +18,7 @@ Assignee: unassigned
 - 环境碰撞由多个可移动、旋转、缩放的静态实心盒提供，用于近似地面、墙、桌面。
 - 模拟前先做坐标预设及手工旋转、整体尺度和平移校正，保持实例相对布局与碰撞盒对齐。开始模拟后再校正须回到准备阶段并重置模拟。
 - 保存数据引用、全局变换、手工碰撞盒和物性覆盖值；不保存运行中的形变和速度。
-- 既有 scene=splats/mixed 是 demo 应用拆分候选；具体职责尚未决定，不预设通用插件框架。
+- 应用分工及上游专属数据准备约束见[场景实例应用与模拟渲染内核如何分工](issues/03-app-boundary.md)；不预设通用插件框架。
 - 上游脚本：`/home/liaowanjun/Projects/AnySplat/scripts/run_iggt_phys_pipeline.py`。
 - 上游结果：`/home/liaowanjun/tmp/mx_runs/bench_504x336`。
 - 源场景：`/home/liaowanjun/Datas/instascene_preprocessed_data/3dovs/bench`。
@@ -35,6 +35,7 @@ Assignee: unassigned
 
 - [上游数据的几何、实例对应与物性契约是什么](issues/01-upstream-data.md)：确认三件套、标签和 SI 字段契约；两轴 surfel 无已知厚度，身份校验、全局尺度与模拟体积仍需设计。
 - [纯前端准备与本地恢复有哪些实际能力和限制](issues/02-browser-feasibility.md)：存在用户选文件、Worker 准备和浏览器存储路线；文件引用不等于持久权限，NPZ 需容器解码，整场景性能尚未实测。
+- [场景实例应用与模拟渲染内核如何分工](issues/03-app-boundary.md)：各应用拥有随上游变化的专属数据准备，共用模拟与渲染内核；加入失败保留原场景，明确模块职责和后续接口扩展。
 
 ## Not yet specified
 
