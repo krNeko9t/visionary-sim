@@ -12,11 +12,10 @@
 ## 工作规则
 
 - 接受新需求时，把计划按里程碑写入STATUS.md，带上[]。
-- 完成里程碑后运行 `npm test`。
 
 ## 新增内容规则
 
 - 新界面走 `ui/`，不在 `main.js` 里堆事件监听。
 - `render/` 增加新表示法走 `deformation/bind.js`，不新写一份绑定。
 - 新增目录：同时更新 `ARCHITECTURE.md` §二的表和 `test/unit/architecture.test.js` 的依赖表。
-- 依赖表在architecture.test.js，改依赖表意味着改设计，把理由追加进 `DECISIONS.md`。
+- 依赖表在architecture.test.js，改依赖表把理由追加进 `DECISIONS.md`。
