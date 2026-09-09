@@ -43,6 +43,8 @@ Assignee: unassigned
 
 - [场景容器如何封闭、编辑并参与接触](issues/11-scene-container.md)：六面封闭容器统一使用平移、旋转、缩放 gizmo；局部空间处理接触，动态能力与流程细节交由原型验证，简洁优先。
 
+- [两轴高斯表面怎样显示并成为可模拟的实体](issues/10-surface-to-volume.md)：显示接入 PlayCanvas 2DGS，模拟适配表面体素占据并复用既有封缝、填充与求解流程，具体问题据实际效果展开。
+
 ## Not yet specified
 
 - 首轮交互原型实际暴露的场景可用性问题，再据反馈展开体验取舍，不预先虚构操作难点或解决方案。
