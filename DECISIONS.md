@@ -322,3 +322,7 @@ of picking that can be checked without a GPU"和"one degree of freedom"当场变
 **M2 是上一条决策保留柔顺律的回报兑现处**：那条决策写下"一大片节点被柔顺地拉向手柄，比硬性
 钉住更接近'抓住布料的一角'"，当时只是预判——`withinRadius` 落地后这句话第一次有了会跑的
 集合去验证它。
+
+## 2026-09-09 · 场景全局校正规划已收束
+
+用户确认了坐标与尺度规划；决策详情及验收记录在[坐标预设与手工校正怎样得到一致的物理世界](.scratch/scene-instance-app/issues/05-world-transform.md#answer)，本次未实施功能或修改依赖表。
