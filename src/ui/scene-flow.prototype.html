@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>场景实例 · 流程原型</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f4;color:#233630;font:15px/1.65 system-ui,sans-serif}main{max-width:1160px;margin:auto;padding:30px}h1{margin:0;font-size:27px}h2{font-size:17px;margin:0 0 12px}p{margin:8px 0}small,.muted{color:#65756e}section{background:white;border:1px solid #dce4df;border-radius:12px;padding:20px;margin-top:16px}.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}.grid section{margin-top:0}button,select,input{font:inherit;border:1px solid #c5d3cb;border-radius:6px;padding:7px 10px;background:white;color:inherit}button{cursor:pointer;margin:3px}button:hover,button.active{background:#e2f3e9;border-color:#238359}button:disabled{opacity:.4;cursor:default}input[type=number]{width:100px}label{display:inline-flex;gap:8px;align-items:center;margin:4px}.notice{border-left:4px solid #28825b;padding:10px 16px;background:#eaf5ef;margin:16px 0}.pill{padding:3px 9px;background:#e7efea;border-radius:20px}.fields{display:grid;grid-template-columns:120px 1fr;gap:6px}dt{color:#65756e}dd{margin:0}table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid #e5ebe7;padding:7px;font-size:13px}svg{width:100%;background:#f6f8f7;border-radius:8px}svg [data-id]{cursor:pointer}#steps button{display:block;text-align:left;width:100%;margin:6px 0}.wide{grid-column:1/-1}@media(max-width:780px){.grid{grid-template-columns:1fr}main{padding:16px}}code{font-size:12px}
+</style>
+<main>
+<small>THROWAWAY PROTOTYPE · 交互流程草案</small><h1>从完整场景，到共同模拟</h1>
+<p>验证：能否理解导入、校正、实例加入、失败后继续，以及保存重开后的状态？点击场景或列表选择实例，再试下方操作。</p>
+<p class="muted">使用三个人工实例和手动结果按钮；不读取真实文件、不运行物理、不写浏览器存储。形变、等待与文件匹配均为情境演示，不能据此判断 bench 拾取、碰撞或性能。容器随校正变化及工具模式为待反馈提案。</p>
+<div id="message" class="notice" role="status" aria-live="polite"></div>
+<div class="grid"><section><h2>当前场景 <span id="phase" class="pill"></span></h2>
+<div id="scene"></div><div id="modes"></div><p id="modeHint" class="muted"></p>
+<table><thead><tr><th>实例</th><th>状态</th><th>运行状态（示意）</th></tr></thead><tbody id="instances"></tbody></table>
+</section><section><h2>当前状态与实例信息</h2><dl id="state" class="fields"></dl><div id="material"></div>
+<p class="muted">仅渲染内容不参与接触；选择不生成模拟资源。物性编辑不要求暂停。</p></section></div>
+<section><h2>自由操作</h2>
+<p><b>1 · 文件槽（示例文件）</b></p><div id="files"></div>
+<div id="importActions"></div><p class="muted">结构通过不代表已证明三件套同源。真实应用提供实例着色核查；此图仅示意实例分色。</p>
+<p><b>2 · 全局校正与容器</b></p>
+<div id="transforms"></div><div id="container"></div>
+<p class="muted">提案：初始容器包围场景并留少量余量；全局校正带动容器，单独编辑容器不改变实例。当前只演示数值与状态，尚无 3D gizmo 或动态接触。</p>
+<p><b>3 · 加入与运行</b></p><div id="simActions"></div>
+<p><b>4 · 保存与重开（内存模拟）</b></p><div id="saveActions"></div>
+</section>
+<section><h2>引导情境</h2><p class="muted">切换情境会重置演示。按顺序点击，每一步都会改变上方场景。自由操作会退出当前引导，可重新点情境开始。</p><div id="tabs"></div><p id="scenario"></p><div id="steps"></div></section>
+<section><h2>这轮还不能下结论的部分</h2><p>真实遮挡、背景与 floater 拾取；相机、gizmo 和抓取的真实手势冲突；旋转容器六面接触、动态摩擦和粗筛；bench 的设备、等待时间与资源上限。后续需要真实场景原型与测量记录。</p></section>
+</main>
+<script>
+// Pure state model. All values and results are illustrative fixtures.
+const initial=()=>({phase:'empty',files:[false,false,false],loaded:false,selected:1,mode:'select',pending:null,world:{meters:1,up:'+Y'},container:{x:0,y:0,z:0,rx:0,ry:0,rz:0,w:1.1,h:1.1,d:1.1},bodies:[{id:1,name:'座椅',rho:600,E:100000,nu:.3,joined:false,wanted:false,motion:0,error:''},{id:2,name:'桌子',rho:700,E:200000,nu:.3,joined:false,wanted:false,motion:0,error:''},{id:3,name:'花盆',rho:null,E:150000,nu:.3,joined:false,wanted:false,motion:0,error:''}],saved:null,exported:null,restore:null,note:'先选择示例文件，或点击下方引导情境。'});
+const config=s=>({world:structuredClone(s.world),container:structuredClone(s.container),bodies:s.bodies.map(({id,rho,E,nu,wanted})=>({id,rho,E,nu,wanted})),source:'示例三件套 A',version:1});
+const valid=b=>Number.isFinite(b.rho)&&b.rho>0&&Number.isFinite(b.E)&&b.E>0&&Number.isFinite(b.nu)&&b.nu>=0&&b.nu<.5;
+function reduce(prev,a){let s=structuredClone(prev),b=s.bodies.find(b=>b.id===s.selected);const say=n=>(s.note=n,s);
+ switch(a.type){
+ case 'file':s.files[a.i]=true;return say('已选择示例文件；尚未校验。');
+ case 'files':s.files=[true,true,true];return say('三个示例文件槽已齐备。');
+ case 'import':if(!s.files.every(Boolean)||s.pending)return say('请选齐文件，并结束当前准备。');s.pending={kind:'import'};return say('正在解码与关联检查；完整结果就绪前保留旧场景。');
+ case 'ok':if(!s.pending)return say('当前没有准备任务。');if(s.pending.kind==='import'){const saved=s.saved,exported=s.exported;s=initial();s.saved=saved;s.exported=exported;s.files=[true,true,true];s.loaded=true;s.phase='prepare';return say('示例结构检查通过，完整场景可见；模拟体为零。同源身份未证实。');}
+ for(const id of s.pending.ids){const body=s.bodies.find(b=>b.id===id);if(!valid(body))return say('最新物性无效，尚未提交；请修正，或取消。');}for(const id of s.pending.ids){const body=s.bodies.find(b=>b.id===id);body.joined=true;body.wanted=true;body.error='';}s.pending=null;s.phase='paused';return say('加入成功；已有位置、形变与速度保留。请手动继续。');
+ case 'fail':case 'cancel':if(!s.pending)return say('当前没有准备任务。');if(s.pending.kind==='join'){for(const id of s.pending.ids)s.bodies.find(b=>b.id===id).error=a.type==='fail'?'准备失败，可重试':'';s.phase='paused';}s.pending=null;return say(a.type==='fail'?'示例失败：准备资源不足。旧场景与已有运行状态保留。':'已取消；旧场景保留，迟到结果不再提交。');
+ case 'select':if(!s.loaded)return say('请先导入场景。');s.selected=a.id;return say('已选择实例；不分配模拟资源。');
+ case 'mode':s.mode=a.value;return say('工具模式已切换。');
+ case 'material':if(!s.loaded)return say('请先导入场景。');b[a.key]=a.value;return say('已更新覆盖值；运行状态不重置，加入提交使用最新有效值。');
+ case 'world':if(s.phase!=='prepare'||s.pending)return say('重新校正需先返回准备，丢弃运行状态并保留配置。');if(a.key==='meters'&&(!Number.isFinite(a.value)||a.value<=0))return say('最长边必须是正的有限米数。');if(a.key==='meters'){const k=a.value/s.world.meters;for(const key of ['x','y','z','w','h','d'])s.container[key]*=k;}s.world[a.key]=a.value;return say('全局校正已更新；示例采用容器随尺度变化的提案，模拟资源须重建。');
+ case 'container':if(!s.loaded)return say('请先导入场景。');if(!Number.isFinite(a.value)||(['w','h','d'].includes(a.key)&&a.value<=0))return say('容器位置与角度须有限，尺寸须大于零。');s.container[a.key]=a.value;return say('容器最新配置已更新；实例不随之移动或缩放。运行时接触尚未验证。');
+ case 'join':if(!s.loaded||s.pending||!b||b.joined)return say('请选中尚未加入的实例，并结束当前准备。');if(!valid(b))return say('补齐有效密度、杨氏模量与泊松比后才能加入。');s.pending={kind:'join',ids:[b.id]};s.phase='paused';s.mode='select';return say('共同模拟冻结，结束抓取；新实例仍显示原表示。');
+ case 'start':if(!s.loaded||s.pending)return say('先完成导入或当前准备。');const ids=s.bodies.filter(b=>b.wanted&&!b.joined).map(b=>b.id);if(ids.length){s.pending={kind:'join',ids};s.phase='paused';return say('按保留名单重新准备；尚未开始运行。');}if(!s.bodies.some(b=>b.joined))return say('先选择实例并加入模拟。');s.phase='running';return say('共同模拟运行中；本页通过“推进示意一步”展示运行状态变化。');
+ case 'pause':if(s.phase==='running')s.phase='paused';return say('已暂停，保留运行状态。');
+ case 'step':if(s.phase!=='running')return say('请先开始或继续。');s.bodies.filter(b=>b.joined).forEach(b=>b.motion++);return say('运行状态推进一格，仅为位置、形变和速度保留的示意。');
+ case 'reset':if(!s.loaded)return say('请先导入场景。');s.pending=null;s.phase='prepare';s.mode='select';s.bodies.forEach(b=>{b.joined=false;b.motion=0;b.error='';});return say('已返回准备：源布局恢复、速度清零；名单、覆盖值、最新容器保留。');
+ case 'save':case 'export':if(!s.loaded)return say('请先导入场景。');s[a.type==='save'?'saved':'exported']=config(s);return say(a.type==='save'?'本地保存成功（内存模拟）；未保存形变与速度。':'JSON 副本已生成（内存模拟），不包含源文件或运行状态。');
+ case 'saveFail':return say('本地保存失败（示例：配额不足）；内存编辑保留，可导出 JSON。');
+ case 'reopen':case 'importConfig':const c=s[a.type==='reopen'?'saved':'exported'];if(!c)return say('没有可用配置副本。');const saved=s.saved,exported=s.exported;s=initial();s.saved=saved;s.exported=exported;s.restore=structuredClone(c);return say('配置已读取；重新选择源文件并验证内容后才能恢复。');
+ case 'match':if(!s.restore||!s.files.every(Boolean))return say('先读取配置并选齐文件。');s.world=s.restore.world;s.container=s.restore.container;s.bodies.forEach(b=>Object.assign(b,s.restore.bodies.find(x=>x.id===b.id)));s.loaded=true;s.phase='prepare';s.restore=null;return say('示例内容匹配，已恢复配置与名单；源布局、无运行状态、无派生缓存，点击开始按需准备。');
+ case 'mismatch':if(!s.restore)return say('当前没有待关联配置。');s.restore=null;s.files=[true,true,true];return say('示例内容不同：旧配置未套用。可通过校验作为新场景导入。');
+ case 'invalid':return say('示例配置版本不支持：拒绝应用，当前场景保持原样。');
+ case 'clearSaved':s.saved=null;return say('浏览器记录已清理（示例）；已导出的副本仍可用于恢复。');
+ }return s;
+}
+</script>
+<script>
+let state=initial(),walk=-1,step=0;
+const $=id=>document.getElementById(id), phases={empty:'未导入',prepare:'准备阶段',paused:'已暂停',running:'运行中'};
+const act=(type,rest={})=>({type,...rest});
+const scenarios=[
+ ['首次加入','先显示完整场景，再按需准备一个实例。花盆故意缺少密度。',[
+ ['选齐三个文件',act('files')],['开始校验',act('import')],['示例校验通过',act('ok')],['选择花盆',act('select',{id:3})],['尝试加入：缺物性',act('join')],['补密度 900 kg/m³',act('material',{key:'rho',value:900})],['加入花盆',act('join')],['示例准备成功',act('ok')],['手动开始',act('start')]]],
+ ['运行中追加失败','观察座椅的运行状态：桌子失败、重试成功时，座椅都没有重置。',[
+ ['选文件',act('files')],['导入',act('import')],['导入成功',act('ok')],['加入座椅',act('join')],['准备成功',act('ok')],['开始',act('start')],['推进示意一步',act('step')],['选择桌子',act('select',{id:2})],['加入桌子：冻结座椅',act('join')],['示例资源失败',act('fail')],['重试桌子',act('join')],['准备期间改杨氏模量',act('material',{key:'E',value:300000})],['准备成功：仍暂停',act('ok')],['手动继续',act('start')]]],
+ ['保存与重开','运行状态不保存，最新容器与参与名单保留；文件改名但内容相同可关联。',[
+ ['选文件',act('files')],['导入',act('import')],['导入成功',act('ok')],['加入座椅',act('join')],['准备成功',act('ok')],['开始',act('start')],['推进示意一步',act('step')],['修改容器宽度为 0.7 米',act('container',{key:'w',value:.7})],['模拟保存失败',act('saveFail')],['导出配置副本',act('export')],['重新导入副本',act('importConfig')],['重新选取已改名的文件',act('files')],['示例内容相同：关联',act('match')],['开始：按名单重新准备',act('start')],['准备成功',act('ok')]]],
+ ['重新校正与错误文件','校正前明确返回准备；不把旧配置套在不同内容的文件上。',[
+ ['选文件',act('files')],['导入',act('import')],['导入成功',act('ok')],['加入座椅',act('join')],['成功',act('ok')],['开始',act('start')],['推进示意一步',act('step')],['尝试直接改尺度',act('world',{key:'meters',value:2})],['返回准备，清除运行状态',act('reset')],['最长边改为 2 米',act('world',{key:'meters',value:2})],['本地保存',act('save')],['打开不支持的配置',act('invalid')],['重开',act('reopen')],['选择同名不同内容的文件',act('files')],['示例内容不匹配',act('mismatch')]]]
+];
+function dispatch(a,guided=false){if(!guided)walk=-1;state=reduce(state,a);render();}
+function btn(label,a){const b=document.createElement('button');b.textContent=label;b.onclick=()=>dispatch(a);return b;}
+function group(id,items){$(id).replaceChildren(...items.map(([label,a])=>btn(label,a)));}
+function number(label,value,change){const l=document.createElement('label');l.append(label);const n=document.createElement('input');n.type='number';n.step='any';n.value=value??'';n.onchange=()=>change(n.value===''?null:Number(n.value));l.append(n);return l;}
+function render(){const s=state,b=s.bodies.find(b=>b.id===s.selected);$('message').textContent=s.note;$('phase').textContent=phases[s.phase];
+ $('state').innerHTML=`<dt>当前任务</dt><dd>${s.pending?(s.pending.kind==='import'?'导入检查':'实例准备'):'无'}</dd><dt>当前选择</dt><dd>${s.loaded?b.name+' · ID '+b.id:'无'}</dd><dt>参与名单</dt><dd>${s.bodies.filter(b=>b.wanted).map(b=>b.name).join('、')||'无'}</dd><dt>模拟体数量</dt><dd>${s.bodies.filter(b=>b.joined).length}</dd><dt>本地保存</dt><dd>${s.saved?'存在配置（内存）':'无'}</dd><dt>导出副本</dt><dd>${s.exported?'存在副本（内存）':'无'}</dd><dt>文件重新关联</dt><dd>${s.restore?'等待匹配源内容':'无待处理项'}</dd><dt>最长边 / 上轴</dt><dd>${s.world.meters} 米 / ${s.world.up}</dd>`;
+ $('instances').replaceChildren();if(s.loaded)for(const x of s.bodies){const tr=document.createElement('tr'),td=document.createElement('td');td.append(btn(x.name,act('select',{id:x.id})));tr.append(td);for(const text of [s.pending?.ids?.includes(x.id)?'正在准备':x.joined?(s.phase==='running'?'模拟中':'可模拟 · 暂停'):x.error||(!valid(x)?'仅渲染 · 待补物性':'仅渲染'),x.joined?`偏移 / 形变 / 速度示意 ${x.motion}`:'源布局 · 无速度']){const cell=document.createElement('td');cell.textContent=text;tr.append(cell);}$('instances').append(tr);}
+ $('material').replaceChildren();if(s.loaded){$('material').append(document.createTextNode('示例原值：密度 '+([600,700,'缺失'][b.id-1])+' kg/m³；E '+([100000,200000,150000][b.id-1])+' Pa；ν 0.3。当前覆盖：'));for(const [key,label]of [['rho','密度 kg/m³'],['E','杨氏模量 Pa'],['nu','泊松比']])$('material').append(number(label,b[key],value=>dispatch(act('material',{key,value}))));}
+ $('scene').innerHTML=s.loaded?`<svg viewBox="0 0 500 220" aria-label="实例平面示意图"><text x="15" y="22" fill="#65756e">平面示意 · 灰底为未追踪内容（仅渲染）</text><g transform="translate(${250+s.container.x*80},${125-s.container.y*80}) rotate(${s.container.rz})"><rect x="${-s.container.w/s.world.meters*180}" y="${-s.container.h/s.world.meters*65}" width="${s.container.w/s.world.meters*360}" height="${s.container.h/s.world.meters*130}" fill="none" stroke="#658275" stroke-dasharray="6 5"/></g>${s.bodies.map((x,i)=>`<g data-id="${x.id}" transform="translate(${100+i*140},${100+x.motion*8})"><rect width="80" height="55" rx="8" fill="${['#c9e3d4','#dfd9c4','#cddde8'][i]}" stroke="${s.selected===x.id?'#196f48':'#a5b8ac'}" stroke-width="${s.selected===x.id?3:1}"/><text x="40" y="32" text-anchor="middle">${x.name}</text></g>`).join('')}</svg>`:'<p class="muted">导入后显示示意场景。</p>';
+ $('scene').querySelectorAll('[data-id]').forEach(el=>el.onclick=()=>{if(s.mode!=='select'){state.note='当前为'+({camera:'观察',container:'容器',grab:'抓取'}[s.mode])+'模式；此流程图尚未实现真实手势。切回选择可点选实例。';render();}else dispatch(act('select',{id:Number(el.dataset.id)}));});
+ group('modes',[['选择',act('mode',{value:'select'})],['观察',act('mode',{value:'camera'})],['容器',act('mode',{value:'container'})],['抓取',act('mode',{value:'grab'})]]);$('modeHint').textContent='工具模式提案：'+({select:'点击实例选择；列表可辅助定位被遮挡实例。',camera:'鼠标拖动归相机。',container:'gizmo 归容器；数值入口共用同一配置。',grab:'拖动归模拟体抓取。'}[s.mode])+'（本页仅选择可实际点击。）';
+ group('files',['point_cloud.ply','labels.npz','instance_physics.json'].map((n,i)=>[(s.files[i]?'✓ ':'选择示例 ')+n,act('file',{i})]));
+ group('importActions',[['开始校验',act('import')],['示例成功',act('ok')],['示例失败',act('fail')],['取消准备',act('cancel')]]);
+ $('transforms').replaceChildren(number('场景最长边（米）',s.world.meters,value=>dispatch(act('world',{key:'meters',value}))));
+ $('container').replaceChildren();for(const [key,label]of [['x','位置 X'],['y','位置 Y'],['z','位置 Z'],['rx','角度 X°'],['ry','角度 Y°'],['rz','角度 Z°'],['w','宽（米）'],['h','高（米）'],['d','深（米）']])$('container').append(number(label,s.container[key],value=>dispatch(act('container',{key,value}))));
+ group('simActions',[['加入选中实例',act('join')],['示例准备成功',act('ok')],['示例准备失败',act('fail')],['取消',act('cancel')],['开始 / 继续',act('start')],['暂停',act('pause')],['推进示意一步',act('step')],['返回准备（清除运行状态）',act('reset')]]);
+ group('saveActions',[['本地保存',act('save')],['模拟保存失败',act('saveFail')],['导出副本',act('export')],['重开本地配置',act('reopen')],['导入副本',act('importConfig')],['示例内容相同',act('match')],['示例内容不同',act('mismatch')],['模拟版本不支持',act('invalid')],['模拟本地记录清理',act('clearSaved')]]);
+ $('tabs').replaceChildren();scenarios.forEach(([name],i)=>{const b=document.createElement('button');b.textContent=name;b.className=walk===i?'active':'';b.onclick=()=>{state=initial();walk=i;step=0;render();};$('tabs').append(b);});$('steps').replaceChildren();$('scenario').textContent=walk<0?'自由探索中；选择一个情境可开始引导。':scenarios[walk][1];if(walk>=0)scenarios[walk][2].forEach(([label,a],i)=>{const b=document.createElement('button');b.textContent=(i<step?'✓ ':`${i+1}. `)+label;b.disabled=i!==step;b.onclick=()=>{step++;dispatch(a,true);};$('steps').append(b);});
+}
+render();
+</script></html>

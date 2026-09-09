@@ -252,6 +252,21 @@ function materialBounds(cloud, sigma) {
 function cellMeetsEllipsoid(grid, i, j, k, centre, columns, radius) {
     const { origin, h } = grid;
 
+    if (radius[2] === 0 && radius[0] > 0 && radius[1] > 0) {
+        const delta = [origin[0] + (i + 0.5) * h - centre[0],
+            origin[1] + (j + 0.5) * h - centre[1],
+            origin[2] + (k + 0.5) * h - centre[2]];
+        const local = [0, 1, 2].map(axis => columns[axis * 3] * delta[0] +
+            columns[axis * 3 + 1] * delta[1] + columns[axis * 3 + 2] * delta[2]);
+        const tolerance = Math.sqrt(3) * h * 0.5;
+        if (Math.abs(local[2]) > tolerance) return false;
+        // The cell's circumsphere is bounded by this square in the tangent plane.
+        // Minimum ellipse equation over that square is conservative: extra cells
+        // are possible, but a surfel crossing the cell cannot be missed.
+        return (Math.max(0, Math.abs(local[0]) - tolerance) / radius[0]) ** 2 +
+            (Math.max(0, Math.abs(local[1]) - tolerance) / radius[1]) ** 2 <= 1;
+    }
+
     for (const [ox, oy, oz] of CELL_SAMPLES) {
         const dx = origin[0] + (i + ox) * h - centre[0];
         const dy = origin[1] + (j + oy) * h - centre[1];

@@ -301,7 +301,8 @@ export class Simulator {
             substepDt: this.clock.stepDuration,
             gravity: this.params.gravity,
             tankMin: this.tank.min,
-            tankMax: this.tank.max
+            tankMax: this.tank.max,
+            closedTop: this.tank.closedTop ?? false
         });
 
         // The handle's velocity this frame, not read off any input device:

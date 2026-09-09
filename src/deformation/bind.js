@@ -83,3 +83,21 @@ export function latticeField({ nodePositions, origin, h, cellDims, nodeDims, nod
         }
     };
 }
+
+
+/** Express a local field in a static world frame; rotation is column-major 3x3. */
+export function rigidFrameField(field, origin, rotation) {
+    return {
+        shader: `${field.shader.replace('fn deformationAt(', 'fn deformLocalAt(')}
+            uniform deformFrameOrigin: vec3f;
+            uniform deformFrameRotation: mat3x3f;
+            fn deformationAt(rest: vec3f) -> Deformation {
+                let r = uniform.deformFrameRotation;
+                let local = transpose(r) * (rest - uniform.deformFrameOrigin);
+                let d = deformLocalAt(local);
+                return Deformation(r * d.position + uniform.deformFrameOrigin,
+                    r * d.gradient * transpose(r));
+            }`,
+        parameters: { ...field.parameters, deformFrameOrigin: origin, deformFrameRotation: rotation }
+    };
+}

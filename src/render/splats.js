@@ -58,20 +58,7 @@ export function createSplatView(app, name, cloud, field = null) {
     // translated entity would ask the deformation field about points outside
     // itself and get extrapolation. Placement is baked into the cloud instead,
     // which is also how mesh bodies work.
-    if (field) {
-        entity.gsplat.setWorkBufferModifier({
-            wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
-        });
-        // The nodes move every frame and nothing tells the engine so: from its
-        // side this cloud is a static resource under a static transform, and it
-        // would bake the work buffer once. This is the cost of the whole
-        // approach, and it is a re-bake of every splat in the body per frame.
-        entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
-
-        for (const [parameter, value] of Object.entries(field.parameters)) {
-            entity.gsplat.setParameter(parameter, value);
-        }
-    }
+    if (field) bindSplatDeformation(entity, field);
     return entity;
 }
 
@@ -142,4 +129,20 @@ function harmonic(colors, count, channel) {
         out[i] = (colors[i * 3 + channel] - 0.5) / SH_C0;
     }
     return out;
+}
+
+/** Bind an existing splat resource through the shared deformation field. */
+export function bindSplatDeformation(entity, field, { surface = false } = {}) {
+        entity.gsplat.setWorkBufferModifier({
+            wgsl: `${surface ? "#define SPLAT_SURFACE\n" : ""}${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
+        });
+        // The nodes move every frame and nothing tells the engine so: from its
+        // side this cloud is a static resource under a static transform, and it
+        // would bake the work buffer once. This is the cost of the whole
+        // approach, and it is a re-bake of every splat in the body per frame.
+        entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
+
+        for (const [parameter, value] of Object.entries(field.parameters)) {
+            entity.gsplat.setParameter(parameter, value);
+        }
 }

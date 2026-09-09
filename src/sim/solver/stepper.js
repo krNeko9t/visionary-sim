@@ -78,13 +78,14 @@ export class Stepper {
      * @param {number[]} params.tankMin - Tank interior minimum.
      * @param {number[]} params.tankMax - Tank interior maximum.
      */
-    setFrameParameters({ substepDt, gravity, tankMin, tankMax }) {
+    setFrameParameters({ substepDt, gravity, tankMin, tankMax, closedTop = false }) {
         this.predict.setParameter('dt', substepDt);
         this.predict.setParameter('gravity', gravity);
 
         this.finalize.setParameter('dt', substepDt);
         this.finalize.setParameter('tankMin', tankMin);
         this.finalize.setParameter('tankMax', tankMax);
+        this.finalize.setParameter('closedTop', closedTop ? 1 : 0);
 
         for (const constraint of this.constraints) {
             constraint.setSubstepDt(substepDt);

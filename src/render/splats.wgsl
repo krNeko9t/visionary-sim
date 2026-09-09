@@ -41,7 +41,19 @@ fn modifySplatRotationScale(
 ) {
     // The channel says what the ellipsoid is; this line says it in the shape the
     // engine's work buffer stores.
-    let axes = ellipsoidAxes(deformedCovariance(splatGradient, *rotation, *scale));
+    var axes = ellipsoidAxes(deformedCovariance(splatGradient, *rotation, *scale));
+#ifdef SPLAT_SURFACE
+    // Jacobi eigenvectors are unordered. 2DGS needs the two tangent axes in XY,
+    // with the collapsed normal axis in Z. Cyclic permutations preserve handedness.
+    if (axes.scale.x <= axes.scale.y && axes.scale.x <= axes.scale.z) {
+        axes.scale = axes.scale.yzx;
+        axes.rotation = ellipsoidQuaternionProduct(axes.rotation, vec4f(0.5, 0.5, 0.5, 0.5));
+    } else if (axes.scale.y <= axes.scale.x && axes.scale.y <= axes.scale.z) {
+        axes.scale = axes.scale.zxy;
+        axes.rotation = ellipsoidQuaternionProduct(axes.rotation, vec4f(-0.5, -0.5, -0.5, 0.5));
+    }
+    axes.scale.z = 0.0;
+#endif
     *rotation = axes.rotation;
     *scale = axes.scale;
 }

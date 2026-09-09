@@ -1,0 +1,24 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bench · 场景交互原型</title><link rel="stylesheet" href="./bench.prototype.css"></head><body>
+<canvas id="app"></canvas>
+<header><div><small>SCENE LAB / PROTOTYPE</small><h1>Bench <span>实例场景</span></h1></div><div class="header-actions"><button id="home">完整场景</button><button id="gridToggle" aria-pressed="true">网格：开</button><button id="containerMode">编辑容器</button><button id="sceneMode">校正场景</button><button id="simPlay" hidden>继续模拟</button><button id="simGrab" hidden>抓取：关</button><button id="simReset" hidden>返回准备</button><button id="open">选择三件套</button></div></header>
+<aside id="catalog"><h2>场景实例 <span id="count">—</span></h2><p class="muted">点击画面选中，双击实例列表聚焦。</p><div id="list"></div><label class="toggle"><input id="isolate" type="checkbox">仅看选中实例</label></aside>
+<aside id="inspector"><small id="kind">SELECTION</small><h2 id="name">点击场景中的物体</h2><div id="details"></div><div id="transformTools" hidden><div class="segmented"><button data-tool="move">移动 W</button><button data-tool="rotate">旋转 E</button><button data-tool="scale">缩放 R</button></div><div id="numbers"></div></div><div id="physical"></div><p id="explanation" class="muted">直接点击高斯表面拾取实例；不会开始模拟。</p></aside>
+<footer><span id="hint">左键点选 · 右键拖动环绕 · 中键平移 · 滚轮缩放 · F 聚焦</span><span id="metrics"></span></footer>
+<div id="notice" role="status">加载原型…</div>
+<div id="variants"><button id="prevVariant">←</button><span id="variantName"></span><button id="nextVariant">→</button></div>
+<dialog id="files"><h2>导入本机三件套</h2><p>文件只在浏览器内读取。结构匹配不证明同源。</p><label>场景 PLY<input id="plyFile" type="file" accept=".ply"></label><label>实例 labels.npz<input id="labelsFile" type="file" accept=".npz"></label><label>instance_physics.json<input id="physicsFile" type="file" accept=".json"></label><p id="fileError"></p><button id="loadFiles">显示场景</button><button id="closeFiles">取消</button></dialog>
+<script type="module">
+import { createApp } from '../scene/app.js';
+import { createStage } from '../scene/stage.js';
+import { createBenchViews, bindBenchSimulation } from '../render/bench.prototype.js';
+import { createBenchSimulation } from '../scene/bench-simulation.prototype.js';
+import { createGroundGrid } from '../render/ground-grid.prototype.js';
+import { mountBenchPrototype } from './bench.prototype.js';
+const status = message => document.getElementById('notice').textContent = message;
+const app = await createApp(document.getElementById('app')).catch(error => { status('需要支持 WebGPU 的桌面浏览器：'+error.message); throw error; });
+const {camera,controls} = createStage(app,{min:[-.5,-.5,-.5],max:[.5,.5,.5]});
+controls.enabled=false;
+const grid = createGroundGrid(app,camera);
+function prepare(ply,labels,physics){return new Promise((resolve,reject)=>{const worker=new Worker(new URL('../assets/bench.prototype.worker.js',import.meta.url),{type:'module'});worker.onmessage=({data})=>{if(data.message)status(data.message);else{worker.terminate();data.error?reject(new Error(data.error)):resolve(data.result);}};worker.onerror=event=>{worker.terminate();reject(new Error(event.message));};worker.postMessage({ply,labels,physics},[ply,labels]);});}
+await mountBenchPrototype({app,camera,grid,status,prepare,startSimulation:(view,world,container)=>{const session=createBenchSimulation(app,view,world,container);try{session.unbind=bindBenchSimulation(session);return session;}catch(error){session.destroy();throw error;}},createViews:groups=>createBenchViews(app,groups)});
+</script></body></html>

@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prototype:bench": "vite --config vite.bench.prototype.config.js --open /src/ui/bench.prototype.html"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",

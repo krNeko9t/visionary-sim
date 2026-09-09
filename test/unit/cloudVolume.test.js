@@ -218,3 +218,22 @@ describe('mat3FromQuat', () => {
         }
     });
 });
+
+
+it('covers a rotated two-axis surfel away from its centre without dividing by zero', () => {
+    const cloud = cloudAt([0, 0, 0], 0.2);
+    cloud.scales.set([0.2, 0.1, 0]);
+    cloud.rotations.set([Math.sin(Math.PI / 6), 0, 0, Math.cos(Math.PI / 6)]);
+    const grid = voxelizeCloud(cloud, { resolution: 24, fill: false });
+    const columns = new Float32Array(9);
+    mat3FromQuat(cloud.rotations, 0, columns);
+    for (let n = 0; n < 32; n++) {
+        const angle = n * Math.PI / 16;
+        const x = 0.38 * Math.cos(angle), y = 0.19 * Math.sin(angle);
+        const point = [0, 1, 2].map(k => columns[k] * x + columns[k + 3] * y);
+        const cell = point.map((v, k) => Math.floor((v - grid.origin[k]) / grid.h));
+        const index = cell[0] + grid.dims[0] * (cell[1] + grid.dims[1] * cell[2]);
+        expect(grid.occupancy[index], `surface point ${point}`).toBe(1);
+    }
+    expect(countOccupied(grid)).toBeGreaterThan(100);
+});

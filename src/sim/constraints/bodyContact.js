@@ -91,7 +91,8 @@ export class BodyContact {
         const records = [];
         let widest = 0;
         let finestH = Infinity;
-        for (let b = 0; b < bodies.length; b++) {
+        // A single body has no cross-body pairs; avoid a scene-wide bucket allocation.
+        for (let b = 0; bodies.length > 1 && b < bodies.length; b++) {
             const { lattice } = bodies[b];
             const offset = particles.offsetOf(b);
             const radius = lattice.h * RADIUS_CELLS;

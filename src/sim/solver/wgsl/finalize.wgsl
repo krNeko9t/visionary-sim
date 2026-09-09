@@ -16,6 +16,7 @@ uniform nodeCount: u32;
 uniform dt: f32;
 uniform tankMin: vec3f;
 uniform tankMax: vec3f;
+uniform closedTop: u32;
 
 // Resolves one half-space, normal pointing into the valid region.
 //
@@ -55,13 +56,17 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         return;
     }
 
-    // The tank is open at the top, so there is no y = max plane.
+    // Existing tanks are open; a scene container opts into the sixth plane.
     let fr = np.friction;
     p = resolvePlane(p, prev, vec3f(0.0, 1.0, 0.0), uniform.tankMin.y - p.y, fr);
     p = resolvePlane(p, prev, vec3f(1.0, 0.0, 0.0), uniform.tankMin.x - p.x, fr);
     p = resolvePlane(p, prev, vec3f(-1.0, 0.0, 0.0), p.x - uniform.tankMax.x, fr);
     p = resolvePlane(p, prev, vec3f(0.0, 0.0, 1.0), uniform.tankMin.z - p.z, fr);
     p = resolvePlane(p, prev, vec3f(0.0, 0.0, -1.0), p.z - uniform.tankMax.z, fr);
+
+    if (uniform.closedTop != 0u) {
+        p = resolvePlane(p, prev, vec3f(0.0, -1.0, 0.0), p.y - uniform.tankMax.y, fr);
+    }
 
     nodePos[n] = vec4f(p, 0.0);
 
