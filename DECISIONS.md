@@ -347,3 +347,7 @@ of picking that can be checked without a GPU"和"one degree of freedom"当场变
 ## 2026-09-09 · 撤回无必要的物性编辑限制
 
 在场景实例生命周期规划中，曾建议“暂停才能改物性”及加入准备期间锁定修改。用户指出现有能力允许随时修改且无需增加规则；核对 setMaterial 后撤回了限制，沿用了随时修改，准备候选的参数一致性由内部提交处理。完整决策记录在[实例加入共同模拟时怎样保留已有物体的状态](.scratch/scene-instance-app/issues/06-promotion-lifecycle.md#answer)。
+
+## 2026-09-09 · 场景准备配置保存规划收束
+
+用户确认了保存、恢复、源文件关联与会话缓存建议；决策详情及原型验证移交记录在[准备配置与派生缓存怎样保存和恢复](.scratch/scene-instance-app/issues/08-preparation-persistence.md#answer)。本次只更新了规划与术语，未实施功能或修改依赖表。
