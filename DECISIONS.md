@@ -326,3 +326,11 @@ of picking that can be checked without a GPU"和"one degree of freedom"当场变
 ## 2026-09-09 · 场景全局校正规划已收束
 
 用户确认了坐标与尺度规划；决策详情及验收记录在[坐标预设与手工校正怎样得到一致的物理世界](.scratch/scene-instance-app/issues/05-world-transform.md#answer)，本次未实施功能或修改依赖表。
+
+## 2026-09-09 · 场景边界需求纠正
+
+用户澄清了原始需求为包住整个场景的容器，并将运动学障碍物排除在本轮终点之外。此前将盒解释为多个实心障碍物的规划被撤回；[原票](.scratch/scene-instance-app/issues/07-manual-colliders.md#scope-disposition)按范围关闭，未决问题转入[场景容器如何封闭、编辑并参与接触](.scratch/scene-instance-app/issues/11-scene-container.md)。本次仅修正规划与术语，未修改内核。
+
+## 2026-09-09 · 统一场景容器交互规划收束
+
+用户否定了“仅平移缩放”的特例限制，确认以简洁为优先收尾提交。规划采用六面封闭场景容器，共用 gizmo、配置与局部空间接触方向；运行时动态控制保留为需原型验证的可选能力，没有宣称现有内核已经支持。决策详情及后续验证移交记录在[场景容器如何封闭、编辑并参与接触](.scratch/scene-instance-app/issues/11-scene-container.md#answer)。本次未实施功能或修改依赖表。

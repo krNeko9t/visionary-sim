@@ -7,12 +7,15 @@
 - [x] M3 · 建立本地决策地图、10 张子票与阻塞关系；完成两张研究票，归档证据。
 - [x] M4 · 与用户解决「场景实例应用与模拟渲染内核如何分工」，记录上游专属准备与失败保留契约，更新地图。
 - [ ] M5 · 按前沿逐会话解决后续决策、展开新问题，直至实现前的路线清晰。
-- [x] 本会话 · 与用户厘清「坐标预设与手工校正怎样得到一致的物理世界」，记录变换契约和验收，更新地图前沿。
+- [x] 本会话 M1 · 认领「多个可旋转静态碰撞盒如何编辑并参与接触」，核对已有决策和接触实现。
+- [x] 本会话 M2 · 与用户收束统一场景容器方向，将动态能力与流程细节移交已有原型票验证。
+- [x] 本会话 M3 · 记录用户确认的决策，更新地图、术语及后续前沿。
+- [x] 本会话 M4 · 检查规划文件链接、阻塞依赖和差异格式，将本次变更纳入收尾提交。
 
 ## 本次规划终点
 
 - 用户已确认：形成可交给后续实现的规格与决策地图，覆盖数据准备、实例选择与转模拟、
-  全局坐标校正、手工碰撞体，以及应用层与模拟/渲染内核的边界；本轮不实施功能。
+  全局坐标校正、场景容器，以及应用层与模拟/渲染内核的边界；本轮不实施功能。
 - 上游脚本：`/home/liaowanjun/Projects/AnySplat/scripts/run_iggt_phys_pipeline.py`。
 - 处理结果：`/home/liaowanjun/tmp/mx_runs/bench_504x336`。
 - 源场景：`/home/liaowanjun/Datas/instascene_preprocessed_data/3dovs/bench`。
@@ -20,7 +23,8 @@
 - 用户确认全部纯前端；其余首版范围已记录在[决策地图](.scratch/scene-instance-app/map.md)。
 - 已解决：[场景实例应用与模拟渲染内核如何分工](.scratch/scene-instance-app/issues/03-app-boundary.md)。
 - 已解决：[坐标预设与手工校正怎样得到一致的物理世界](.scratch/scene-instance-app/issues/05-world-transform.md)。
-- 下一前沿：[多个可旋转静态碰撞盒如何编辑并参与接触](.scratch/scene-instance-app/issues/07-manual-colliders.md)，尚未认领；本会话不继续解决其他决策票。
+- 已解决：[场景容器如何封闭、编辑并参与接触](.scratch/scene-instance-app/issues/11-scene-container.md)；原实心障碍盒票已因范围纠正关闭。
+- 下一前沿：[两轴高斯表面怎样显示并成为可模拟的实体](.scratch/scene-instance-app/issues/10-surface-to-volume.md)，尚未认领；本会话不继续其他决策。
 
 ## 待评估问题
 
