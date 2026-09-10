@@ -29,6 +29,96 @@ const DEFAULT_PARAMS = {
     paused: false
 };
 
+/**
+ * Everything that exists because a particular list of bodies does.
+ *
+ * These five were assembled inline in the constructor for as long as the body
+ * list could only be decided once. They are pulled out here because that stopped
+ * being true, and the shape of the thing that changed is exactly this: node
+ * storage is one allocation for the whole scene, and every constraint and the
+ * stepper are built against *that* allocation, so a body list that grows
+ * replaces all five together or none of them. Naming the set is what makes
+ * "build a second one, then swap" expressible at all -- see {@link
+ * Simulator#prepareAppend}.
+ *
+ * Listed in dependency order and each knows only the one before it: the nodes
+ * exist, constraints move them, a stepper runs the constraints. The stepper
+ * never learns what kind of constraint it is running, which is what left room
+ * for a second kind, and then a third: nodes that are not solved for, but told.
+ *
+ * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+ * @param {SimBody[]} simBodies - Bodies and their discretisations, in scene order.
+ * @param {{ min: number[], max: number[] }} tank - Tank interior bounds.
+ * @returns {object} The five, or nothing at all: a partial build is destroyed
+ *   rather than returned, so a failed append never leaks half an arena.
+ */
+function buildArena(device, simBodies, tank) {
+    const arena = { particles: null, drive: null, elastic: null, contact: null, stepper: null };
+    try {
+        // Spelled out rather than handing the lattice over whole: these three
+        // arrays are the entire set of things the node storage is allowed to
+        // know, and writing them at the seam is what keeps that visible.
+        arena.particles = new Particles(device, simBodies.map(({ lattice }) => ({
+            restPositions: lattice.restPositions,
+            invMass: lattice.invMass,
+            nodeCount: lattice.nodeCount
+        })));
+        arena.drive = new KinematicDrive(device, arena.particles);
+        arena.elastic = new ElasticCells(device, arena.particles, simBodies.map(
+            ({ body, lattice }) => ({ lattice, material: body.material })
+        ));
+        arena.contact = new BodyContact(
+            device, arena.particles, simBodies.map(({ lattice }) => ({ lattice })), tank
+        );
+        // Order is solve order. Driven nodes go first: under the hard law
+        // nothing else can move them anyway, and this is what lets the
+        // compliant law's nudge still be shaped by elasticity and contact
+        // afterwards, in the same substep. Contact goes last of the other two
+        // so it has the final word on where a node may be: elasticity can push
+        // a node back into whatever it was resting on, and only one of the two
+        // is allowed to be wrong about that.
+        arena.stepper = new Stepper(
+            device, arena.particles, [arena.drive, arena.elastic, arena.contact]
+        );
+    } catch (error) {
+        destroyArena(arena);
+        throw error;
+    }
+    return arena;
+}
+
+/**
+ * @param {object} arena - A whole or partial arena; missing pieces are skipped.
+ */
+function destroyArena(arena) {
+    for (const part of ['stepper', 'contact', 'elastic', 'drive', 'particles']) {
+        arena[part]?.destroy();
+    }
+}
+
+/**
+ * One body's lattice as a deformation field over a given node allocation.
+ *
+ * Shared by the live simulator and by a not-yet-committed append, so that a
+ * consumer binding to a candidate is binding to the same thing it will be
+ * reading after the swap.
+ *
+ * @param {Particles} particles - Where those nodes live.
+ * @param {import('./discretize/lattice.js').Lattice} lattice - How the body was cut up.
+ * @param {number} bodyIndex - Index into the body list.
+ * @returns {import('../deformation/bind.js').DeformationField} Its deformation.
+ */
+function fieldFor(particles, lattice, bodyIndex) {
+    return latticeField({
+        nodePositions: particles.nodePos,
+        origin: lattice.origin,
+        h: lattice.h,
+        cellDims: lattice.cellDims,
+        nodeDims: lattice.nodeDims,
+        nodeOffset: particles.offsetOf(bodyIndex)
+    });
+}
+
 export class Simulator {
     /**
      * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
@@ -46,46 +136,13 @@ export class Simulator {
         /** @type {SimBody[]} */
         this.simBodies = bodies.map(body => ({ body, lattice: discretizeBody(body) }));
 
-        // The three pieces of the simulation side, assembled here and nowhere
-        // else. They are listed in dependency order and each knows only the one
-        // before it: the nodes exist, constraints move them, a stepper runs the
-        // constraints. The stepper never learns what kind of constraint it is
-        // running, which is what left room for a second kind, and now a third:
-        // nodes that are not solved for, but told.
-        // Spelled out rather than handing the lattice over whole: these three
-        // arrays are the entire set of things the node storage is allowed to
-        // know, and writing them at the seam is what keeps that visible.
-        this.particles = new Particles(device, this.simBodies.map(({ lattice }) => ({
-            restPositions: lattice.restPositions,
-            invMass: lattice.invMass,
-            nodeCount: lattice.nodeCount
-        })));
-        this.drive = new KinematicDrive(device, this.particles);
-        this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
-            ({ body, lattice }) => ({ lattice, material: body.material })
-        ));
-        this.contact = new BodyContact(
-            device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })), tank
-        );
-        // Order is solve order. Driven nodes go first: under the hard law
-        // nothing else can move them anyway, and this is what lets the
-        // compliant law's nudge still be shaped by elasticity and contact
-        // afterwards, in the same substep. Contact goes last of the other two
-        // so it has the final word on where a node may be: elasticity can push
-        // a node back into whatever it was resting on, and only one of the two
-        // is allowed to be wrong about that.
-        this.stepper = new Stepper(device, this.particles, [this.drive, this.elastic, this.contact]);
+        this.install(buildArena(device, this.simBodies, tank));
 
         // Render frames decide when GPU work may be recorded, but not how much
         // physical time one solve represents. The clock turns their irregular
         // dt into a count of fixed stable steps and knows nothing about the
         // dispatches that will execute them; this class is their only seam.
         this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
-
-        for (let b = 0; b < this.simBodies.length; b++) {
-            const { damping, friction } = this.simBodies[b].body.material;
-            this.particles.setParams(b, { damping, friction });
-        }
 
         // Where the handle is, and where it was last frame -- the only two
         // numbers `dispatch` needs to hand `this.drive` a velocity for this
@@ -120,15 +177,7 @@ export class Simulator {
      * @returns {import('../deformation/bind.js').DeformationField} Its deformation.
      */
     deformationOf(bodyIndex) {
-        const { lattice } = this.simBodies[bodyIndex];
-        return latticeField({
-            nodePositions: this.particles.nodePos,
-            origin: lattice.origin,
-            h: lattice.h,
-            cellDims: lattice.cellDims,
-            nodeDims: lattice.nodeDims,
-            nodeOffset: this.particles.offsetOf(bodyIndex)
-        });
+        return fieldFor(this.particles, this.simBodies[bodyIndex].lattice, bodyIndex);
     }
 
     /**
@@ -322,6 +371,127 @@ export class Simulator {
     }
 
     /**
+     * Adopts an arena as the live one.
+     *
+     * The two settings passed in are the ones a user chose and an arena cannot
+     * know: whether bodies collide, and which law drives a held node. Every
+     * other per-body value is re-derived from the materials, because those live
+     * on the bodies and outlast any arena.
+     *
+     * @param {object} arena - What {@link buildArena} returned.
+     * @param {object} [preserved] - Settings to carry over from the arena it replaces.
+     * @param {boolean} [preserved.contact] - Whether bodies collide.
+     * @param {import('./constraints/kinematicDrive.js').DriveLaw} [preserved.law] - Drive law.
+     */
+    install(arena, { contact = true, law = 'hard' } = {}) {
+        this.arena = arena;
+        this.particles = arena.particles;
+        this.drive = arena.drive;
+        this.elastic = arena.elastic;
+        this.contact = arena.contact;
+        this.stepper = arena.stepper;
+
+        this.contact.enabled = contact;
+        this.drive.law = law;
+        for (let b = 0; b < this.simBodies.length; b++) {
+            const { damping, friction } = this.simBodies[b].body.material;
+            this.particles.setParams(b, { damping, friction });
+        }
+    }
+
+    /**
+     * Prepares a simulation holding every current body plus one more, and hands
+     * back the switch rather than throwing it.
+     *
+     * Appending cannot be done in place: the node buffers are one allocation for
+     * the whole scene and every constraint is built against it, so one more body
+     * means a second arena. What makes that safe rather than a rebuild is the
+     * order -- the new arena is filled from a snapshot of the running one, so
+     * the bodies already being simulated arrive at their current positions, with
+     * their current velocities, and only then does anything switch. The rest
+     * geometry they were discretised from is reused untouched; a deformed
+     * position never becomes a new rest position.
+     *
+     * Nothing observable changes until {@link commit}. Until then the old arena
+     * is still the one being stepped and still the one every existing binding
+     * reads, so a caller may compile shaders against the candidate's buffers and
+     * abandon the whole thing on failure. Whoever holds the candidate must end
+     * it exactly once, either way, or its buffers leak.
+     *
+     * The caller is expected to have the simulation paused across this: the wall
+     * time spent preparing is not physical time, and letting it accumulate would
+     * make the scene lurch forward at the moment of the swap.
+     *
+     * Because the new body goes on the end, no existing body is renumbered --
+     * body indices, node offsets and held-node arithmetic all keep meaning what
+     * they meant. What does *not* survive is buffer identity: every field handed
+     * out by {@link deformationOf} before the commit points at buffers that the
+     * commit destroys. Callers must re-read the fields of existing bodies and
+     * re-apply them, synchronously, before the next frame is drawn.
+     *
+     * @param {import('../body/softBody.js').SoftBody} body - The body to add.
+     * @returns {Promise<{ bodyIndex: number,
+     *   deformationOf: (index: number) => import('../deformation/bind.js').DeformationField,
+     *   commit: () => number, cancel: () => void }>} The candidate.
+     */
+    async prepareAppend(body) {
+        // The grab ends here rather than at the commit, and this is the reason
+        // rather than tidiness: a hold is a set of node indices plus a
+        // prescribed-mass override, both of them recorded in the arena that is
+        // about to be replaced. Carrying it across would mean re-deriving the
+        // hold against buffers the user never grabbed.
+        this.releaseGrab();
+
+        // Before the readback, because this is the step that can reject the
+        // body -- voxelising a cloud that cannot be sealed, a material that
+        // makes no sense -- and there is no reason to have copied the scene off
+        // the GPU first.
+        const entry = { body, lattice: discretizeBody(body) };
+        const simBodies = [...this.simBodies, entry];
+        const state = await this.particles.snapshot();
+
+        const arena = buildArena(this.device, simBodies, this.tank);
+        let settled = false;
+        try {
+            arena.particles.adopt(state);
+        } catch (error) {
+            destroyArena(arena);
+            throw error;
+        }
+
+        const bodyIndex = simBodies.length - 1;
+        return {
+            bodyIndex,
+            deformationOf: index =>
+                fieldFor(arena.particles, simBodies[index].lattice, index),
+            commit: () => {
+                if (settled) {
+                    throw new Error('[sim] this append was already committed or cancelled');
+                }
+                settled = true;
+                const retired = this.arena;
+                const preserved = { contact: this.contact.enabled, law: this.drive.law };
+                this.simBodies = simBodies;
+                this.install(arena, preserved);
+                destroyArena(retired);
+                // The new body may be the stiffest thing in the scene. Only
+                // future steps change; the clock keeps its backlog in seconds.
+                this.clock.setStepDuration(stableStepDuration(this.waveRate()));
+                // A step banked against the arena that just went away.
+                this.pendingStep = false;
+                return bodyIndex;
+            },
+            cancel: () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                destroyArena(arena);
+            }
+        };
+    }
+
+    /**
      * Applies a material change. Everything except density is a handful of
      * uniforms; density also has to re-lump the node masses, because those are
      * a property of the discretisation rather than of the material.
@@ -479,10 +649,6 @@ export class Simulator {
     }
 
     destroy() {
-        this.stepper.destroy();
-        this.contact.destroy();
-        this.elastic.destroy();
-        this.drive.destroy();
-        this.particles.destroy();
+        destroyArena(this.arena);
     }
 }

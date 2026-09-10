@@ -223,4 +223,4 @@ state/` 对此仍然只知道一件事，某个逆质量此刻读作零，不知
 
 ### 场景交互原型接入
 
-`ui/bench.prototype.html` 组装独立原型；`scene/bench-simulation.prototype.js` 在静止容器的刚体坐标系内建立单实例模拟，重力由世界向下变换而来。`deformation/bind.js` 的刚体坐标适配将形变位置和梯度表达回世界，渲染复用同一 splat 绑定。两轴显示将形变后的法向零轴置于第三轴。求解边界可选择封闭顶面，既有水缸默认仍敞口；单实例不分配跨物体接触桶。
+`ui/bench.prototype.html` 组装独立原型；`scene/bench-simulation.prototype.js` 在静止容器的刚体坐标系内建立单实例模拟，重力由世界向下变换而来。`deformation/bind.js` 的刚体坐标适配将形变位置和梯度表达回世界，渲染复用同一 splat 绑定。两轴显示将形变后的法向零轴置于第三轴。`sim/debug/latticeView.js` 的刚体坐标系选项让格线视图画在同一容器帧里，供界面按需开关。求解边界可选择封闭顶面，既有水缸默认仍敞口；单实例不分配跨物体接触桶。

@@ -74,12 +74,19 @@ const vertexWgsl = field => /* wgsl */ `
     attribute vertex_nodeData: vec4f;
 
     uniform matrix_viewProjection: mat4x4f;
+    // The rigid frame the solver ran in. Identity unless a caller solved in
+    // some container's rest frame, in which case node positions -- and the
+    // corner offsets, which are expressed along the same axes -- are in that
+    // frame rather than the world.
+    uniform uFrameOrigin: vec3f;
+    uniform uFrameRotation: mat3x3f;
 
     @vertex
     fn vertexMain(input: VertexInput) -> VertexOutput {
         var output: VertexOutput;
         let node = deformedNode(u32(input.vertex_nodeData.w));
-        output.position = uniform.matrix_viewProjection * vec4f(node + input.vertex_nodeData.xyz, 1.0);
+        let corner = uniform.uFrameRotation * (node + input.vertex_nodeData.xyz) + uniform.uFrameOrigin;
+        output.position = uniform.matrix_viewProjection * vec4f(corner, 1.0);
         return output;
     }
 `;
@@ -147,9 +154,15 @@ function buildGroupGeometry(lattice, range, inset) {
  * @param {import('../../deformation/bind.js').DeformationField} field - Deformation to follow.
  * @param {object} [options] - Display options.
  * @param {number} [options.shrink] - Cell size as a fraction of the real cell.
+ * @param {number[]} [options.origin] - Solver frame origin in world space.
+ * @param {number[]} [options.rotation] - Solver frame rotation, column-major 3x3.
  * @returns {Entity} An entity holding one mesh instance per colour group.
  */
-export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
+export function createLatticeView(app, lattice, field, {
+    shrink = 0.78,
+    origin = [0, 0, 0],
+    rotation = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+} = {}) {
     const device = app.graphicsDevice;
     const entity = new Entity('lattice-debug');
     const instances = [];
@@ -174,6 +187,8 @@ export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
         });
         const tint = GROUP_TINTS[group];
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
+        material.setParameter('uFrameOrigin', origin);
+        material.setParameter('uFrameRotation', rotation);
         for (const [name, value] of Object.entries(field.parameters)) {
             material.setParameter(name, value);
         }

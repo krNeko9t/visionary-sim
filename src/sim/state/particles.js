@@ -227,6 +227,59 @@ export class Particles {
         };
     }
 
+    /**
+     * The live state of every node, copied off the GPU.
+     *
+     * Three buffers rather than one because a node's motion is not in its
+     * position: XPBD carries velocity explicitly and reads the previous
+     * position to finish a substep, so a snapshot that took only `nodePos`
+     * would hand back a body that is in the right place and standing still.
+     *
+     * Fresh arrays each call, unlike {@link readPositions}: whatever asks for
+     * this is about to hold it across an await.
+     *
+     * @returns {Promise<{ nodeCount: number, positions: Float32Array,
+     *   previous: Float32Array, velocities: Float32Array }>} That state.
+     */
+    async snapshot() {
+        const positions = new Float32Array(this.nodeCount * 4);
+        const previous = new Float32Array(this.nodeCount * 4);
+        const velocities = new Float32Array(this.nodeCount * 4);
+        await Promise.all([
+            this.nodePos.read(0, positions.byteLength, positions, true),
+            this.nodePrev.read(0, previous.byteLength, previous, true),
+            this.nodeVel.read(0, velocities.byteLength, velocities, true)
+        ]);
+        return { nodeCount: this.nodeCount, positions, previous, velocities };
+    }
+
+    /**
+     * Takes a snapshot of some earlier node set as this one's opening state.
+     *
+     * The snapshot is a *prefix*: nodes 0..n-1 of that set are nodes 0..n-1 of
+     * this one, and everything past it keeps the rest state the constructor
+     * gave it. That is the whole of what makes an appended body cheap -- a body
+     * added at the end never renumbers the ones already being simulated, so
+     * migration is a copy rather than a permutation, and no consumer holding a
+     * `nodeOffset` for an existing body has to be told anything.
+     *
+     * Refuses a longer snapshot rather than truncating: that would silently
+     * drop a body.
+     *
+     * @param {{ nodeCount: number, positions: Float32Array,
+     *   previous: Float32Array, velocities: Float32Array }} state - What to adopt.
+     */
+    adopt(state) {
+        if (state.nodeCount > this.nodeCount) {
+            throw new Error(
+                `[particles] cannot adopt ${state.nodeCount} nodes into ${this.nodeCount}`
+            );
+        }
+        this.nodePos.write(0, state.positions);
+        this.nodePrev.write(0, state.previous);
+        this.nodeVel.write(0, state.velocities);
+    }
+
     /** Restores every node to its rest position, at rest. */
     reset() {
         this.nodePos.write(0, this.restPositions);

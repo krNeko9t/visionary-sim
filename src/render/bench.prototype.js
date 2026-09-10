@@ -25,9 +25,20 @@ export function createBenchViews(app, groups) {
 }
 
 
-export function bindBenchSimulation(session) {
-    const entity = session.view.entity;
-    bindSplatDeformation(entity, rigidFrameField(session.field, session.origin, session.rotation), { surface: true });
+/**
+ * Attaches one session member's cloud to its deformation, in the container's frame.
+ *
+ * Called again for a member that is already bound whenever the node buffers are
+ * replaced -- appending a body does that -- so it must be a replacement rather
+ * than an addition. `setWorkBufferModifier` and `setParameter` both are.
+ *
+ * @param {{ view: { entity: import('playcanvas').Entity }, field: object,
+ *   origin: number[], rotation: number[] }} member - The member to bind.
+ * @returns {() => void} Undoes the binding, leaving the cloud static.
+ */
+export function bindBenchSimulation(member) {
+    const entity = member.view.entity;
+    bindSplatDeformation(entity, rigidFrameField(member.field, member.origin, member.rotation), { surface: true });
     return () => {
         entity.gsplat.setWorkBufferModifier(null);
         entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ONCE;
