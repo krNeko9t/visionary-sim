@@ -52,6 +52,8 @@ export class Particles {
     constructor(device, bodies) {
         this.device = device;
         this.bodies = bodies;
+        this.owned = [];
+        this.destroyed = false;
 
         let total = 0;
         /** Where each body's nodes start in the shared arrays. */
@@ -87,27 +89,37 @@ export class Particles {
         /** GPU-facing copy of `invMass`, with prescribed nodes forced to zero. */
         this.gpuInvMass = new Float32Array(invMass);
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.nodePos = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodePrev = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodeVel = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodeInvMass = new StorageBuffer(device, invMass.byteLength, usage);
-        this.nodeParams = new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage);
+        try {
+            const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
+            this.nodePos = this.own(new StorageBuffer(device, positions.byteLength, usage));
+            this.nodePrev = this.own(new StorageBuffer(device, positions.byteLength, usage));
+            this.nodeVel = this.own(new StorageBuffer(device, positions.byteLength, usage));
+            this.nodeInvMass = this.own(new StorageBuffer(device, invMass.byteLength, usage));
+            this.nodeParams = this.own(new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage));
 
-        this.nodePos.write(0, positions);
-        this.nodePrev.write(0, positions);
-        this.nodeVel.write(0, new Float32Array(total * 4));
-        this.nodeInvMass.write(0, this.gpuInvMass);
+            this.nodePos.write(0, positions);
+            this.nodePrev.write(0, positions);
+            this.nodeVel.write(0, new Float32Array(total * 4));
+            this.nodeInvMass.write(0, this.gpuInvMass);
 
-        // One staging copy reused for every parameter update, so a material
-        // change does not allocate.
-        this.paramWords = new ArrayBuffer(bodies.length * PARAMS_STRIDE);
-        this.paramFloats = new Float32Array(this.paramWords);
-        this.paramUints = new Uint32Array(this.paramWords);
+            // One staging copy reused for every parameter update, so a material
+            // change does not allocate.
+            this.paramWords = new ArrayBuffer(bodies.length * PARAMS_STRIDE);
+            this.paramFloats = new Float32Array(this.paramWords);
+            this.paramUints = new Uint32Array(this.paramWords);
 
-        /** Per-body values the node passes read; set through {@link setParams}. */
-        this.params = bodies.map(() => ({ damping: 0, friction: 0 }));
-        this.uploadParams();
+            /** Per-body values the node passes read; set through {@link setParams}. */
+            this.params = bodies.map(() => ({ damping: 0, friction: 0 }));
+            this.uploadParams();
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
+        }
+    }
+
+    own(resource) {
+        this.owned.push(resource);
+        return resource;
     }
 
     /**
@@ -235,8 +247,13 @@ export class Particles {
     }
 
     destroy() {
-        for (const buffer of Object.values(this.bindings)) {
-            buffer.destroy();
+        if (this.destroyed) return;
+        this.destroyed = true;
+        let failure = null;
+        for (const resource of this.owned.reverse()) {
+            try { resource.destroy(); } catch (error) { failure ??= error; }
         }
+        this.owned.length = 0;
+        if (failure) throw failure;
     }
 }

@@ -119,6 +119,42 @@ describe('the fixed physical timestep', () => {
         expect(report.droppedTime).toBe(0);
     });
 
+    it('clones complete accounting into a candidate without changing the live clock', () => {
+        const live = new FixedTimestep(0.01, { maxStepsPerFrame: 2 });
+        live.consume(0.055);
+        const before = live.snapshot();
+
+        const candidate = live.clone({ stepDuration: 0.002 });
+
+        expect(live.snapshot()).toEqual(before);
+        expect(candidate.snapshot()).toEqual({
+            ...before,
+            stepDuration: 0.002
+        });
+
+        candidate.consume(0);
+        expect(candidate.snapshot().totalSteps).toBeGreaterThan(before.totalSteps);
+        expect(live.snapshot()).toEqual(before);
+    });
+
+    it('restores a clock atomically and retains fractional, dropped and frame accounting', () => {
+        const source = new FixedTimestep(0.01, { maxStepsPerFrame: 2 });
+        const saved = source.consume(0.055);
+        const target = new FixedTimestep(0.2);
+
+        target.restore(saved, { stepDuration: 0.004 });
+
+        expect(target.snapshot()).toEqual({
+            ...saved,
+            stepDuration: 0.004
+        });
+
+        const beforeInvalidRestore = target.snapshot();
+        expect(() => target.restore({ ...saved, backlogTime: Number.NaN }))
+            .toThrow(RangeError);
+        expect(target.snapshot()).toEqual(beforeInvalidRestore);
+    });
+
     it('rejects values that would make time undefined', () => {
         expect(() => stableStepDuration(-1)).toThrow(RangeError);
         expect(() => new FixedTimestep(0)).toThrow(RangeError);

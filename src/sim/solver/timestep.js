@@ -158,6 +158,50 @@ export class FixedTimestep {
     }
 
     /**
+     * Restores a previously reported clock without consuming wall time.
+     *
+     * Every value is validated before this instance changes, so a failed
+     * candidate preparation cannot leave a partially restored clock. The step
+     * duration may be replaced for a candidate scene whose strictest body has
+     * changed; all accounting remains measured in seconds.
+     *
+     * @param {ReturnType<FixedTimestep['snapshot']>} saved - Public clock snapshot.
+     * @param {object} [options] - Candidate clock settings.
+     * @param {number} [options.stepDuration] - Stable duration for future steps.
+     * @returns {ReturnType<FixedTimestep['snapshot']>} Restored report.
+     */
+    restore(saved, { stepDuration = saved?.stepDuration } = {}) {
+        const state = restoredState(saved, stepDuration);
+
+        this.stepDuration = state.stepDuration;
+        this.maxStepsPerFrame = state.maxStepsPerFrame;
+        this.accumulator = state.accumulator;
+        this.simulatedTime = state.simulatedTime;
+        this.totalSteps = state.totalSteps;
+        this.droppedTime = state.droppedTime;
+        this.lastSteps = state.lastSteps;
+        this.lastElapsed = state.lastElapsed;
+        this.lastDroppedTime = state.lastDroppedTime;
+        return this.snapshot();
+    }
+
+    /**
+     * Creates an independent candidate clock with the same complete accounting.
+     * Mutating or discarding it never changes the live simulation clock.
+     *
+     * @param {object} [options] - Candidate clock settings.
+     * @param {number} [options.stepDuration] - Stable duration for future steps.
+     * @returns {FixedTimestep} Independent restored clock.
+     */
+    clone({ stepDuration = this.stepDuration } = {}) {
+        const candidate = new FixedTimestep(stepDuration, {
+            maxStepsPerFrame: this.maxStepsPerFrame
+        });
+        candidate.restore(this.snapshot(), { stepDuration });
+        return candidate;
+    }
+
+    /**
      * @returns {{ stepDuration: number, maxStepsPerFrame: number, steps: number,
      *   elapsed: number, totalSteps: number, simulatedTime: number, backlogTime: number,
      *   frameDroppedTime: number, droppedTime: number, overloaded: boolean }}
@@ -183,5 +227,53 @@ export class FixedTimestep {
 function assertStepDuration(value) {
     if (!Number.isFinite(value) || value <= 0) {
         throw new RangeError(`stepDuration must be a finite positive number, got ${value}`);
+    }
+}
+
+function restoredState(saved, stepDuration) {
+    if (!saved || typeof saved !== 'object') {
+        throw new TypeError('clock snapshot must be an object');
+    }
+    assertStepDuration(stepDuration);
+    assertPositiveInteger(saved.maxStepsPerFrame, 'maxStepsPerFrame');
+    assertNonNegativeInteger(saved.steps, 'steps');
+    assertNonNegativeInteger(saved.totalSteps, 'totalSteps');
+    assertNonNegativeFinite(saved.elapsed, 'elapsed');
+    assertNonNegativeFinite(saved.simulatedTime, 'simulatedTime');
+    assertNonNegativeFinite(saved.backlogTime, 'backlogTime');
+    assertNonNegativeFinite(saved.frameDroppedTime, 'frameDroppedTime');
+    assertNonNegativeFinite(saved.droppedTime, 'droppedTime');
+    if (saved.frameDroppedTime > saved.droppedTime) {
+        throw new RangeError('frameDroppedTime cannot exceed droppedTime');
+    }
+
+    return {
+        stepDuration,
+        maxStepsPerFrame: saved.maxStepsPerFrame,
+        accumulator: saved.backlogTime,
+        simulatedTime: saved.simulatedTime,
+        totalSteps: saved.totalSteps,
+        droppedTime: saved.droppedTime,
+        lastSteps: saved.steps,
+        lastElapsed: saved.elapsed,
+        lastDroppedTime: saved.frameDroppedTime
+    };
+}
+
+function assertNonNegativeFinite(value, name) {
+    if (!Number.isFinite(value) || value < 0) {
+        throw new RangeError(`${name} must be a finite non-negative number, got ${value}`);
+    }
+}
+
+function assertNonNegativeInteger(value, name) {
+    if (!Number.isInteger(value) || value < 0) {
+        throw new RangeError(`${name} must be a non-negative integer, got ${value}`);
+    }
+}
+
+function assertPositiveInteger(value, name) {
+    if (!Number.isInteger(value) || value < 1) {
+        throw new RangeError(`${name} must be a positive integer, got ${value}`);
     }
 }

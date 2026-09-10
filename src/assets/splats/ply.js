@@ -13,6 +13,7 @@
  * @property {number} count - How many records the element holds.
  * @property {Record<string, Float32Array>} properties - One array per property,
  *   in the file's order, converted to float regardless of stored type.
+ * @property {Record<string, string>} propertyTypes - Stored scalar type by name.
  */
 
 /** Bytes per PLY scalar type, by every spelling the format allows. */
@@ -60,9 +61,10 @@ const HEADER_END = 'end_header';
  * @param {string[]} [options.properties] - Names to keep. Everything else is
  *   still stepped over but not stored, which matters: the spherical harmonics
  *   are 45 floats per splat and nothing downstream reads them yet.
+ * @param {boolean} [options.exactLength=false] - Reject bytes after the first element.
  * @returns {PlyElement} The element.
  */
-export function readPly(buffer, { properties: wanted } = {}) {
+export function readPly(buffer, { properties: wanted, exactLength = false } = {}) {
     const { element, headerLength } = parseHeader(buffer);
     const keep = wanted ? new Set(wanted) : null;
 
@@ -78,6 +80,9 @@ export function readPly(buffer, { properties: wanted } = {}) {
             `PLY is truncated: ${element.count} records of ${stride} bytes need ` +
             `${needed} bytes, file has ${buffer.byteLength}`
         );
+    }
+    if (exactLength && buffer.byteLength !== needed) {
+        throw new Error(`PLY has ${buffer.byteLength - needed} unexpected bytes after element "${element.name}"`);
     }
 
     /** @type {Record<string, Float32Array>} */
@@ -100,7 +105,11 @@ export function readPly(buffer, { properties: wanted } = {}) {
         }
     }
 
-    return { count: element.count, properties: out };
+    return {
+        count: element.count,
+        properties: out,
+        propertyTypes: Object.fromEntries(element.properties.map(({ name, type }) => [name, type]))
+    };
 }
 
 /**

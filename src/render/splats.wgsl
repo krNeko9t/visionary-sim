@@ -9,9 +9,11 @@
 // things it does are adapter's work: it knows this host's calling convention, and
 // it knows this host's storage format.
 //
-// The centres arriving here are in world space, because the engine has already
-// applied the entity's transform. `splats.js` keeps that transform at identity so
-// that they are also rest-space positions, which is what the field expects.
+// The centres, rotations and scales arriving here are in world space because
+// the engine has already applied the entity/root transform. This lets imported
+// source-space splats stay under their calibrated root while the simulation
+// field remains a world-space field. PlayCanvas evaluates SH with a model-space
+// view direction before applying this modifier, preserving the source basis.
 
 // The gradient at the splat currently being processed, kept from the centre call
 // for the shape call. `setWorkBufferModifier` splices this chunk into the work
@@ -26,6 +28,9 @@
 // and stays free of state. Asking it twice instead would be honest and cost every
 // splat a second sampling of the field, every frame.
 var<private> splatGradient: mat3x3f;
+uniform inspectionColor: vec3f;
+uniform inspectionMix: f32;
+uniform deformationProbe: f32;
 
 fn modifySplatCenter(center: ptr<function, vec3f>) {
     let deformation = deformationAt(*center);
@@ -46,7 +51,9 @@ fn modifySplatRotationScale(
     *scale = axes.scale;
 }
 
-// Colour rides along unchanged. A capture's colour is a property of the surface,
-// not of where the surface currently is.
 fn modifySplatColor(center: vec3f, color: ptr<function, vec4f>) {
+    *color = vec4f(
+        mix((*color).rgb, uniform.inspectionColor, uniform.inspectionMix),
+        (*color).a * (1.0 - uniform.deformationProbe)
+    );
 }

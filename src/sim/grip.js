@@ -1,4 +1,5 @@
 import { bodyOfNode } from './pick.js';
+import { limitPointToContainer } from './solver/container.js';
 
 /**
  * Turning where the ray landed into what the hand actually holds.
@@ -170,4 +171,9 @@ export const DEFAULT_GRAB_RADIUS = 0.03;
 export function worstCaseHeldNodes(radius, h) {
     const outer = radius / h + Math.sqrt(3) / 2;
     return Math.ceil((4 / 3) * Math.PI * outer ** 3);
+}
+
+/** Keeps a moving handle inside the same rigid container used by contact. */
+export function limitGripTarget(position, containerFrame) {
+    return limitPointToContainer(containerFrame, position);
 }

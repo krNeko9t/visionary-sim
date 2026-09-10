@@ -69,12 +69,11 @@ const COLLAPSE_LIMIT = 0.4;
 const REFRESH = 1 / 6;
 
 /**
- * @param {import('../sim/simulator.js').Simulator} sim - Simulation to drive.
- * @param {object} handlers - Things the panel cannot do itself.
- * @param {(visible: boolean) => void} handlers.onLatticeToggle - Show or hide the solver lattice.
+ * @param {() => object} getState - Reads observable application state.
+ * @param {object} actions - Application operations invoked by controls.
  * @returns {{ element: HTMLElement, update: (dt: number) => void }} The panel.
  */
-export function createPanel(sim, { onLatticeToggle }) {
+export function createPanel(getState, actions) {
     let selected = 0;
     let sinceRefresh = REFRESH;
     let fps = 60;
@@ -82,10 +81,11 @@ export function createPanel(sim, { onLatticeToggle }) {
     // A scene can be all backdrop -- rendered captures that nothing steps. Then
     // there is no material to edit and no body to report on, and the honest
     // panel is the one without those controls rather than one showing zeroes.
-    const hasBodies = sim.simBodies.length > 0;
+    const initial = getState();
+    const hasBodies = initial.bodies.length > 0;
 
-    const selector = chips(sim.simBodies.map(({ body }) => body.name), index => select(index));
-    const material = () => sim.simBodies[selected].body.material;
+    const selector = chips(initial.bodies.map(body => body.name), index => select(index));
+    const material = () => getState().bodies[selected].material;
 
     const controls = !hasBodies ? [] : MATERIAL_CONTROLS.map(control => ({
         ...control,
@@ -93,7 +93,7 @@ export function createPanel(sim, { onLatticeToggle }) {
             ...control,
             value: material()[control.key],
             onInput: (value) => {
-                sim.setMaterial(selected, { [control.key]: value });
+                actions.setMaterial(selected, { [control.key]: value });
                 refresh();
             }
         })
@@ -108,9 +108,9 @@ export function createPanel(sim, { onLatticeToggle }) {
         rate: stat('帧率')
     };
 
-    const pause = button(sim.params.paused ? '继续' : '暂停', () => {
-        sim.params.paused = !sim.params.paused;
-        pause.set(sim.params.paused ? '继续' : '暂停');
+    const pause = button(initial.paused ? '继续' : '暂停', () => {
+        actions.setPaused(!getState().paused);
+        pause.set(getState().paused ? '继续' : '暂停');
     });
 
     const note = element('p', 'ui-note', '左键拖动抓住物体，右键拖动旋转视角，中键平移，滚轮缩放。');
@@ -124,9 +124,9 @@ export function createPanel(sim, { onLatticeToggle }) {
         min: 0,
         max: 0.06,
         step: 0.005,
-        value: sim.grip.radius,
+        value: initial.simulation.grip.radius,
         format: value => `${(value * 100).toFixed(1)} cm`,
-        onInput: value => sim.setGripRadius(value)
+        onInput: value => actions.setGripRadius(value)
     });
 
     const panel = element('div', 'ui-panel');
@@ -138,22 +138,22 @@ export function createPanel(sim, { onLatticeToggle }) {
             ...Object.values(readouts).map(readout => readout.element),
             buttonRow([
                 pause,
-                button('单步', () => sim.requestStep()),
-                button('重置', () => sim.reset())
+                button('单步', actions.requestStep),
+                button('重置', actions.reset)
             ]),
-            toggle({ label: '物体互碰', value: true, onChange: on => sim.setContact(on) }).element,
+            toggle({ label: '物体互碰', value: true, onChange: actions.setContact }).element,
             toggle({
                 label: '刚性抓取',
                 value: true,
-                onChange: on => sim.setDriveLaw(on ? 'hard' : 'compliant')
+                onChange: on => actions.setDriveLaw(on ? 'hard' : 'compliant')
             }).element,
             toggle({
                 label: '范围抓取',
-                value: sim.grip.strategy === 'withinRadius',
-                onChange: on => sim.setGrip(on ? 'withinRadius' : 'singleNode')
+                value: initial.simulation.grip.strategy === 'withinRadius',
+                onChange: on => actions.setGrip(on ? 'withinRadius' : 'singleNode')
             }).element,
             gripRadius.element,
-            toggle({ label: '显示点阵', value: false, onChange: onLatticeToggle }).element,
+            toggle({ label: '显示点阵', value: false, onChange: actions.setLatticeVisible }).element,
             note
         ])
     );
@@ -177,7 +177,9 @@ export function createPanel(sim, { onLatticeToggle }) {
 
     /** Rewrites everything the panel reports. */
     function refresh() {
-        const stats = sim.stats();
+        const state = getState();
+        const stats = state.simulation;
+        pause.set(state.paused ? '继续' : '暂停');
         const body = stats.perBody[selected];
         const timing = timingReadouts(stats);
 

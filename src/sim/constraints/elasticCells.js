@@ -110,6 +110,9 @@ export class ElasticCells {
         this.device = device;
         this.particles = particles;
         this.bodies = bodies;
+        this.owned = [];
+        this.destroyed = false;
+        this.batches = [];
 
         // Cells are grouped by colour across *all* bodies, so one dispatch per
         // colour covers the scene rather than one per colour per body.
@@ -133,32 +136,32 @@ export class ElasticCells {
             this.colorRanges.push({ start, count: cursor - start });
         }
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.cells = new StorageBuffer(device, entries.byteLength, usage);
-        this.cellParams = new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage);
-        this.cells.write(0, entries);
+        try {
+            const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
+            this.cells = this.own(new StorageBuffer(device, entries.byteLength, usage));
+            this.cellParams = this.own(new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage));
+            this.cells.write(0, entries);
 
-        // One staging copy reused for every material update, so dragging a
-        // slider does not allocate.
-        this.paramWords = new ArrayBuffer(bodies.length * PARAMS_STRIDE);
-        this.paramFloats = new Float32Array(this.paramWords);
-        this.paramUints = new Uint32Array(this.paramWords);
-        this.uploadParams();
+            // One staging copy reused for every material update, so dragging a
+            // slider does not allocate.
+            this.paramWords = new ArrayBuffer(bodies.length * PARAMS_STRIDE);
+            this.paramFloats = new Float32Array(this.paramWords);
+            this.paramUints = new Uint32Array(this.paramWords);
+            this.uploadParams();
 
-        this.shader = new Shader(device, {
-            name: 'sim-elastic-cells',
-            shaderLanguage: SHADERLANGUAGE_WGSL,
-            cshader: `${kuhnConstants()}\n${STATE_WGSL}\n${cellsWgsl}\n${projectWgsl}`
-        });
+            this.shader = this.own(new Shader(device, {
+                name: 'sim-elastic-cells',
+                shaderLanguage: SHADERLANGUAGE_WGSL,
+                cshader: `${kuhnConstants()}\n${STATE_WGSL}\n${cellsWgsl}\n${projectWgsl}`
+            }));
 
-        // One instance per colour: same shader, but each carries its own range
-        // in its own uniform buffer, so all eight can be queued at once. Empty
-        // colours are dropped rather than dispatched to do nothing.
-        this.batches = this.colorRanges
-            .map((range, color) => ({ range, color }))
-            .filter(({ range }) => range.count > 0)
-            .map(({ range, color }) => {
-                const compute = new Compute(device, this.shader, `sim-elastic-${color}`);
+            // One instance per colour: same shader, but each carries its own range
+            // in its own uniform buffer, so all eight can be queued at once. Empty
+            // colours are dropped rather than dispatched to do nothing.
+            for (let color = 0; color < this.colorRanges.length; color++) {
+                const range = this.colorRanges[color];
+                if (range.count === 0) continue;
+                const compute = this.own(new Compute(device, this.shader, `sim-elastic-${color}`));
                 compute.setParameter('colorStart', range.start);
                 compute.setParameter('colorCount', range.count);
                 compute.setParameter('cells', this.cells);
@@ -167,8 +170,17 @@ export class ElasticCells {
                     compute.setParameter(name, buffer);
                 }
                 compute.setupDispatch(Math.ceil(range.count / WORKGROUP_SIZE), 1, 1);
-                return compute;
-            });
+                this.batches.push(compute);
+            }
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
+        }
+    }
+
+    own(resource) {
+        this.owned.push(resource);
+        return resource;
     }
 
     /**
@@ -224,11 +236,13 @@ export class ElasticCells {
     }
 
     destroy() {
-        for (const compute of this.batches) {
-            compute.destroy();
+        if (this.destroyed) return;
+        this.destroyed = true;
+        let failure = null;
+        for (const resource of this.owned.reverse()) {
+            try { resource.destroy(); } catch (error) { failure ??= error; }
         }
-        this.shader.destroy();
-        this.cells.destroy();
-        this.cellParams.destroy();
+        this.owned.length = 0;
+        if (failure) throw failure;
     }
 }

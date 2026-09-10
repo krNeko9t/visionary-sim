@@ -1,6 +1,7 @@
 import { Compute, SHADERLANGUAGE_WGSL, Shader } from 'playcanvas';
 
 import { STATE_WGSL } from '../state/particles.js';
+import { solverContainerFrame } from './container.js';
 import finalizeWgsl from './wgsl/finalize.wgsl?raw';
 import predictWgsl from './wgsl/predict.wgsl?raw';
 
@@ -50,41 +51,59 @@ export class Stepper {
         this.device = device;
         this.particles = particles;
         this.constraints = constraints;
+        this.owned = [];
+        this.destroyed = false;
+        this.shaders = {};
 
-        this.shaders = {
-            predict: nodeKernel(device, 'sim-predict', predictWgsl),
-            finalize: nodeKernel(device, 'sim-finalize', finalizeWgsl)
-        };
+        try {
+            this.shaders.predict = this.keep(nodeKernel(device, 'sim-predict', predictWgsl));
+            this.shaders.finalize = this.keep(nodeKernel(device, 'sim-finalize', finalizeWgsl));
 
-        const groups = Math.ceil(particles.nodeCount / WORKGROUP_SIZE);
-        this.predict = new Compute(device, this.shaders.predict, 'sim-predict');
-        this.predict.setupDispatch(groups, 1, 1);
-        this.finalize = new Compute(device, this.shaders.finalize, 'sim-finalize');
-        this.finalize.setupDispatch(groups, 1, 1);
+            const groups = Math.ceil(particles.nodeCount / WORKGROUP_SIZE);
+            this.predict = this.keep(new Compute(device, this.shaders.predict, 'sim-predict'));
+            this.predict.setupDispatch(groups, 1, 1);
+            this.finalize = this.keep(new Compute(device, this.shaders.finalize, 'sim-finalize'));
+            this.finalize.setupDispatch(groups, 1, 1);
 
-        this.own = [this.predict, this.finalize];
-        for (const compute of this.own) {
-            for (const [name, buffer] of Object.entries(particles.bindings)) {
-                compute.setParameter(name, buffer);
+            for (const compute of [this.predict, this.finalize]) {
+                for (const [name, buffer] of Object.entries(particles.bindings)) {
+                    compute.setParameter(name, buffer);
+                }
+                compute.setParameter('nodeCount', particles.nodeCount);
             }
-            compute.setParameter('nodeCount', particles.nodeCount);
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
         }
+    }
+
+    keep(resource) {
+        this.owned.push(resource);
+        return resource;
     }
 
     /**
      * @param {object} params - Per-frame parameters.
      * @param {number} params.substepDt - Substep duration in seconds.
      * @param {number[]} params.gravity - Gravity vector.
-     * @param {number[]} params.tankMin - Tank interior minimum.
-     * @param {number[]} params.tankMax - Tank interior maximum.
+     * @param {number[]} [params.tankMin] - Legacy tank interior minimum.
+     * @param {number[]} [params.tankMax] - Legacy tank interior maximum.
+     * @param {object} [params.container] - Static scene container in world space.
+     * @param {object} [params.containerFrame] - An already-normalised solver frame.
+     * @param {boolean} [params.closedTop] - Opt-in sixth face for a legacy tank.
      */
-    setFrameParameters({ substepDt, gravity, tankMin, tankMax }) {
+    setFrameParameters({
+        substepDt, gravity, tankMin, tankMax, container, containerFrame, closedTop = false
+    }) {
         this.predict.setParameter('dt', substepDt);
         this.predict.setParameter('gravity', gravity);
 
+        const frame = containerFrame ?? solverContainerFrame(container ?? { min: tankMin, max: tankMax, closedTop });
         this.finalize.setParameter('dt', substepDt);
-        this.finalize.setParameter('tankMin', tankMin);
-        this.finalize.setParameter('tankMax', tankMax);
+        this.finalize.setParameter('containerPosition', frame.position);
+        this.finalize.setParameter('containerHalfSize', frame.halfSize);
+        this.finalize.setParameter('containerRotation', frame.rotation);
+        this.finalize.setParameter('closedTop', frame.closedTop ? 1 : 0);
 
         for (const constraint of this.constraints) {
             constraint.setSubstepDt(substepDt);
@@ -111,11 +130,13 @@ export class Stepper {
     }
 
     destroy() {
-        for (const compute of this.own) {
-            compute.destroy();
+        if (this.destroyed) return;
+        this.destroyed = true;
+        let failure = null;
+        for (const resource of this.owned.reverse()) {
+            try { resource.destroy(); } catch (error) { failure ??= error; }
         }
-        for (const shader of Object.values(this.shaders)) {
-            shader.destroy();
-        }
+        this.owned.length = 0;
+        if (failure) throw failure;
     }
 }

@@ -1,11 +1,12 @@
 import { Entity, GSplatData, GSplatResource, WORKBUFFER_UPDATE_ALWAYS } from 'playcanvas';
 
 import { COVARIANCE_WGSL } from '../deformation/bind.js';
+import { registerInstanceColorModifier } from './instanceColors.js';
 import ellipsoidWgsl from './ellipsoid.wgsl?raw';
 import modifierWgsl from './splats.wgsl?raw';
 
 /**
- * A cloud of 3D Gaussians, seen.
+ * A cloud of Gaussian ellipsoids or two-axis surfels, seen.
  *
  * The second representation on this bank of the channel, next to `mesh.js`. It
  * takes the geometry it needs as plain arrays and declares their shape here
@@ -28,15 +29,20 @@ import modifierWgsl from './splats.wgsl?raw';
  *
  * @typedef {object} RestCloud
  * @property {number} count - Number of Gaussians.
- * @property {Float32Array} positions - Centres in world space, 3 per splat.
+ * @property {Float32Array} positions - Centres in entity-local source space, 3 per splat.
  * @property {Float32Array} rotations - Unit quaternions, 4 per splat as xyzw.
  * @property {Float32Array} scales - Standard deviations in metres, 3 per splat.
  * @property {Float32Array} opacity - Coverage in [0, 1], 1 per splat.
- * @property {Float32Array} colors - Linear RGB, 3 per splat.
+ * @property {Float32Array} [colors] - Linear RGB, 3 per splat for legacy clouds.
+ * @property {Float32Array[]} [dc] - Source DC harmonics, one array per channel.
+ * @property {Float32Array[]} [sphericalHarmonics] - Source `f_rest_0..44` arrays.
+ * @property {2|3} [dimensionality] - Two selects PlayCanvas's 2DGS path.
  */
 
 /** Degree-0 spherical harmonic; the engine reads colour as `0.5 + f_dc * SH_C0`. */
 const SH_C0 = 0.28209479177387814;
+const OWNED_RESOURCE = new WeakMap();
+const DESTROYED_VIEWS = new WeakSet();
 
 /**
  * @param {import('playcanvas').AppBase} app - The application.
@@ -46,40 +52,64 @@ const SH_C0 = 0.28209479177387814;
  *   to follow. Omitted for a capture that is only ever scenery.
  * @returns {Entity} An entity drawing the cloud.
  */
-export function createSplatView(app, name, cloud, field = null) {
+export function createSplatView(app, name, cloud, field = null, { twoDimensional = cloud.dimensionality === 2 } = {}) {
+    app.scene.gsplat.twoDimensional = twoDimensional;
     const entity = new Entity(`splat-view-${name}`);
-    entity.addComponent('gsplat', {
-        resource: new GSplatResource(app.graphicsDevice, splatData(cloud)),
-        castShadows: false
-    });
-
-    // The entity transform stays identity, and that is a rule rather than a
-    // default: the modifier below is handed *world*-space centres, so a
-    // translated entity would ask the deformation field about points outside
-    // itself and get extrapolation. Placement is baked into the cloud instead,
-    // which is also how mesh bodies work.
-    if (field) {
-        entity.gsplat.setWorkBufferModifier({
-            wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
+    const resource = new GSplatResource(app.graphicsDevice, createSplatData(cloud));
+    OWNED_RESOURCE.set(entity, resource);
+    try {
+        entity.addComponent('gsplat', {
+            resource,
+            castShadows: false
         });
-        // The nodes move every frame and nothing tells the engine so: from its
-        // side this cloud is a static resource under a static transform, and it
-        // would bake the work buffer once. This is the cost of the whole
-        // approach, and it is a re-bake of every splat in the body per frame.
-        entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
 
-        for (const [parameter, value] of Object.entries(field.parameters)) {
-            entity.gsplat.setParameter(parameter, value);
+        // PlayCanvas applies the entity/root TRS before invoking this modifier,
+        // so a deforming imported view keeps its source cloud under the same
+        // calibrated root. The field receives world centres and world ellipsoid
+        // axes while SH evaluation retains the source-model view direction.
+        if (field) {
+            entity.gsplat.setWorkBufferModifier({
+                wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
+            });
+            registerInstanceColorModifier(entity.gsplat);
+            entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
+
+            for (const [parameter, value] of Object.entries(field.parameters)) {
+                entity.gsplat.setParameter(parameter, value);
+            }
+            entity.gsplat.setParameter('inspectionColor', new Float32Array([1, 1, 1]));
+            entity.gsplat.setParameter('inspectionMix', 0);
+            entity.gsplat.setParameter('deformationProbe', 0);
         }
+        return entity;
+    } catch (error) {
+        try {
+            destroySplatView(entity);
+        } catch (cleanupError) {
+            console.error('[splats] failed to clean a rejected view', cleanupError);
+        }
+        throw error;
     }
-    return entity;
+}
+
+/** Destroy a splat entity and the directly assigned resource the component does not own. */
+export function destroySplatView(entity) {
+    if (!entity || DESTROYED_VIEWS.has(entity)) return;
+    DESTROYED_VIEWS.add(entity);
+    const resource = OWNED_RESOURCE.get(entity);
+    OWNED_RESOURCE.delete(entity);
+    try {
+        entity.destroy();
+    } finally {
+        resource?.destroy();
+    }
 }
 
 /**
  * @param {RestCloud} cloud - The Gaussians.
  * @returns {GSplatData} The same numbers in the layout the engine reads.
  */
-function splatData(cloud) {
+export function createSplatData(cloud) {
     const { count } = cloud;
     const properties = [];
     const add = (name, storage) => properties.push({ type: 'float', name, storage, byteSize: 4 });
@@ -103,9 +133,13 @@ function splatData(cloud) {
     // Colour is the one field `activated` does not cover: the engine always
     // reads it as a degree-0 harmonic, so linear RGB has to go back through the
     // constant it came in on.
-    add('f_dc_0', harmonic(cloud.colors, count, 0));
-    add('f_dc_1', harmonic(cloud.colors, count, 1));
-    add('f_dc_2', harmonic(cloud.colors, count, 2));
+    for (let channel = 0; channel < 3; channel++) {
+        add(`f_dc_${channel}`, cloud.dc?.[channel] ?? harmonic(cloud.colors, count, channel));
+    }
+    if (cloud.sphericalHarmonics) {
+        if (cloud.sphericalHarmonics.length !== 45) throw new Error('sphericalHarmonics must contain 45 coefficient arrays');
+        cloud.sphericalHarmonics.forEach((storage, index) => add(`f_rest_${index}`, storage));
+    }
 
     const data = new GSplatData([{ name: 'vertex', count, properties }]);
     // Scales are already metres and opacity is already coverage. Without this

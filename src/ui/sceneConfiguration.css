@@ -1,0 +1,14 @@
+.scene-configuration {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #ffffff24;
+    font: inherit;
+    overflow-wrap: anywhere;
+}
+.scene-configuration h2 { font-size: 15px; margin: 0 0 8px; }
+.scene-configuration label { display: grid; gap: 5px; margin: 10px 0; }
+.scene-configuration input[type="file"] { width: 100%; min-width: 0; font: inherit; font-size: 11px; }
+.scene-configuration button { font: inherit; font-size: 12px; margin: 4px 4px 4px 0; padding: 6px 8px; cursor: pointer; }
+.scene-configuration button:disabled { cursor: wait; opacity: .6; }
+.scene-configuration p { font-size: 12px; line-height: 1.5; }
+.scene-configuration [hidden] { display: none; }

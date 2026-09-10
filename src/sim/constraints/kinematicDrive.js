@@ -81,31 +81,41 @@ export class KinematicDrive {
         /** Global node indices currently held, so a law switch can re-apply prescription. */
         this.heldNodes = [];
         this.drivenCount = 0;
+        this.owned = [];
+        this.destroyed = false;
+        this.shaders = {};
+        this.computes = {};
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.driven = new StorageBuffer(device, MAX_DRIVEN * DRIVEN_STRIDE, usage);
+        try {
+            const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
+            this.driven = this.own(new StorageBuffer(device, MAX_DRIVEN * DRIVEN_STRIDE, usage));
 
-        // One staging copy sized to capacity, reused for every hold.
-        this.drivenWords = new ArrayBuffer(MAX_DRIVEN * DRIVEN_STRIDE);
-        this.drivenUints = new Uint32Array(this.drivenWords);
-        this.drivenFloats = new Float32Array(this.drivenWords);
+            // One staging copy sized to capacity, reused for every hold.
+            this.drivenWords = new ArrayBuffer(MAX_DRIVEN * DRIVEN_STRIDE);
+            this.drivenUints = new Uint32Array(this.drivenWords);
+            this.drivenFloats = new Float32Array(this.drivenWords);
 
-        this.shaders = {
-            hard: this.kernel('sim-drive-hard', driveHardWgsl),
-            compliant: this.kernel('sim-drive-compliant', driveCompliantWgsl)
-        };
+            this.shaders.hard = this.own(this.kernel('sim-drive-hard', driveHardWgsl));
+            this.shaders.compliant = this.own(this.kernel('sim-drive-compliant', driveCompliantWgsl));
 
-        const groups = Math.ceil(MAX_DRIVEN / WORKGROUP_SIZE);
-        this.computes = {
-            hard: this.pass('hard', groups),
-            compliant: this.pass('compliant', groups)
-        };
-        for (const compute of Object.values(this.computes)) {
-            compute.setParameter('responseTime', RESPONSE_TIME);
-            compute.setParameter('drivenCount', 0);
-            compute.setParameter('handleTarget', [0, 0, 0]);
-            compute.setParameter('handleVelocity', [0, 0, 0]);
+            const groups = Math.ceil(MAX_DRIVEN / WORKGROUP_SIZE);
+            this.computes.hard = this.pass('hard', groups);
+            this.computes.compliant = this.pass('compliant', groups);
+            for (const compute of Object.values(this.computes)) {
+                compute.setParameter('responseTime', RESPONSE_TIME);
+                compute.setParameter('drivenCount', 0);
+                compute.setParameter('handleTarget', [0, 0, 0]);
+                compute.setParameter('handleVelocity', [0, 0, 0]);
+            }
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
         }
+    }
+
+    own(resource) {
+        this.owned.push(resource);
+        return resource;
     }
 
     /**
@@ -127,7 +137,7 @@ export class KinematicDrive {
      * @returns {Compute} The configured dispatch.
      */
     pass(law, groups) {
-        const compute = new Compute(this.device, this.shaders[law], `sim-drive-${law}`);
+        const compute = this.own(new Compute(this.device, this.shaders[law], `sim-drive-${law}`));
         for (const [binding, buffer] of Object.entries(this.particles.bindings)) {
             compute.setParameter(binding, buffer);
         }
@@ -256,12 +266,13 @@ export class KinematicDrive {
     }
 
     destroy() {
-        for (const compute of Object.values(this.computes)) {
-            compute.destroy();
+        if (this.destroyed) return;
+        this.destroyed = true;
+        let failure = null;
+        for (const resource of this.owned.reverse()) {
+            try { resource.destroy(); } catch (error) { failure ??= error; }
         }
-        for (const shader of Object.values(this.shaders)) {
-            shader.destroy();
-        }
-        this.driven.destroy();
+        this.owned.length = 0;
+        if (failure) throw failure;
     }
 }

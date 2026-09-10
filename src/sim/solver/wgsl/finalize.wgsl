@@ -7,15 +7,18 @@
 // at ten-plus substeps a frame that is worth having.
 //
 // The tank is here rather than among the constraints because it is a property
-// of the world, fixed and known, not of any object -- five planes that never
-// move and never have to be discovered. Contact *between bodies* is the
+// of the world, fixed and known, not of any object -- the legacy tank's five
+// planes or the scene container's six, which never move during simulation and
+// never have to be discovered. Contact *between bodies* is the
 // opposite on every count, which is why it arrives as a constraint set of its
 // own rather than as more planes in this file.
 
 uniform nodeCount: u32;
 uniform dt: f32;
-uniform tankMin: vec3f;
-uniform tankMax: vec3f;
+uniform containerPosition: vec3f;
+uniform containerHalfSize: vec3f;
+uniform containerRotation: mat3x3f;
+uniform closedTop: u32;
 
 // Resolves one half-space, normal pointing into the valid region.
 //
@@ -45,8 +48,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
 
     let np = nodeParams[bodyOfNode(n)];
-    let prev = nodePrev[n].xyz;
-    var p = nodePos[n].xyz;
+    let worldPrev = nodePrev[n].xyz;
+    let rotation = uniform.containerRotation;
+    let prev = transpose(rotation) * (worldPrev - uniform.containerPosition);
+    var p = transpose(rotation) * (nodePos[n].xyz - uniform.containerPosition);
 
     // Inert nodes -- lattice corners no cell touches, or nodes some other
     // constraint has prescribed this frame -- were left exactly where that
@@ -55,17 +60,22 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         return;
     }
 
-    // The tank is open at the top, so there is no y = max plane.
+    let lo = -uniform.containerHalfSize;
+    let hi = uniform.containerHalfSize;
     let fr = np.friction;
-    p = resolvePlane(p, prev, vec3f(0.0, 1.0, 0.0), uniform.tankMin.y - p.y, fr);
-    p = resolvePlane(p, prev, vec3f(1.0, 0.0, 0.0), uniform.tankMin.x - p.x, fr);
-    p = resolvePlane(p, prev, vec3f(-1.0, 0.0, 0.0), p.x - uniform.tankMax.x, fr);
-    p = resolvePlane(p, prev, vec3f(0.0, 0.0, 1.0), uniform.tankMin.z - p.z, fr);
-    p = resolvePlane(p, prev, vec3f(0.0, 0.0, -1.0), p.z - uniform.tankMax.z, fr);
+    p = resolvePlane(p, prev, vec3f(0.0, 1.0, 0.0), lo.y - p.y, fr);
+    p = resolvePlane(p, prev, vec3f(1.0, 0.0, 0.0), lo.x - p.x, fr);
+    p = resolvePlane(p, prev, vec3f(-1.0, 0.0, 0.0), p.x - hi.x, fr);
+    p = resolvePlane(p, prev, vec3f(0.0, 0.0, 1.0), lo.z - p.z, fr);
+    p = resolvePlane(p, prev, vec3f(0.0, 0.0, -1.0), p.z - hi.z, fr);
+    if (uniform.closedTop != 0u) {
+        p = resolvePlane(p, prev, vec3f(0.0, -1.0, 0.0), p.y - hi.y, fr);
+    }
 
-    nodePos[n] = vec4f(p, 0.0);
+    let worldPosition = rotation * p + uniform.containerPosition;
+    nodePos[n] = vec4f(worldPosition, 0.0);
 
-    var v = (p - prev) / uniform.dt;
+    var v = (worldPosition - worldPrev) / uniform.dt;
     v *= exp(-np.damping * uniform.dt);
     nodeVel[n] = vec4f(v, 0.0);
 }

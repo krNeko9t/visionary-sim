@@ -52,13 +52,15 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  *   constraint is entitled to know what it is constraining and what the thing
  *   is made of. It may not reach `sim/solver`: constraints are run, they do not
  *   run anything.
- * - `ui` may reach `sim` and `body` and nothing else. It edits materials and
- *   drives the simulation, and it does both through the surfaces those two
- *   already publish. Letting it reach a lattice or a buffer would put a second
- *   opinion about the simulation's state in the interface.
+ * - `app` may assemble scene, render, simulation and UI surfaces. It owns their
+ *   session lifetime and is the only layer allowed to coordinate all four.
+ * - `ui` may reach `sim` and `body` for reusable display facts. Runtime control
+ *   is supplied by application state and callbacks rather than imports.
  */
 const ALLOWED = {
-    'main.js': ['scene', 'sim', 'render', 'ui'],
+    'main.js': ['app'],
+    app: ['scene', 'render', 'sim', 'ui', 'body', 'assets'],
+    'app/import': ['render', 'assets', 'body'],
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
@@ -76,7 +78,7 @@ const ALLOWED = {
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
 const REQUIRED = [
     'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/state',
-    'sim/constraints', 'sim/solver', 'scene', 'ui'
+    'sim/constraints', 'sim/solver', 'scene', 'ui', 'app', 'app/import'
 ];
 
 /**

@@ -1,5 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
-import { DEFAULT_GRAB_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
+import { DEFAULT_GRAB_RADIUS, GRIPS, limitGripTarget, worstCaseHeldNodes } from './grip.js';
 import { latticeField } from '../deformation/bind.js';
 import { discretizeBody, relumpMasses } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
@@ -7,8 +7,15 @@ import { ElasticCells } from './constraints/elasticCells.js';
 import { KinematicDrive } from './constraints/kinematicDrive.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
+import { containerWorldBounds, solverContainerFrame } from './solver/container.js';
 import { FixedTimestep, stableStepDuration } from './solver/timestep.js';
 import { collapseScale, elementCompliance, waveRatio } from './constraints/compliance.js';
+import {
+    freezeForAppend,
+    isolateCandidateBodies,
+    migrateFrozenState,
+    syncCandidateMaterials
+} from './append.js';
 
 /**
  * The simulation's only public surface.
@@ -19,6 +26,7 @@ import { collapseScale, elementCompliance, waveRatio } from './constraints/compl
  * outside decides how a body is cut up, which is this object's first act.
  *
  * @typedef {object} SimBody
+ * @property {string|number} id - Opaque stable identity across shared-state replacement.
  * @property {import('../body/softBody.js').SoftBody} body - What the author described.
  * @property {import('./discretize/lattice.js').Lattice} lattice - How this simulator chose
  *   to discretise it. The seam between the two is exactly this pairing.
@@ -29,22 +37,42 @@ const DEFAULT_PARAMS = {
     paused: false
 };
 
+let nextBodyId = 1;
+const allocateBodyId = () => `simulation-body:${nextBodyId++}`;
+
+function simulationBody(entry) {
+    if (entry?.body && entry?.lattice) {
+        return { ...entry, id: entry.id ?? entry.bodyId ?? allocateBodyId() };
+    }
+    return { id: allocateBodyId(), body: entry, lattice: discretizeBody(entry) };
+}
+
 export class Simulator {
     /**
      * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
-     * @param {import('../body/softBody.js').SoftBody[]} bodies - Bodies to simulate.
-     * @param {{ min: number[], max: number[] }} tank - Tank interior bounds.
+     * @param {(import('../body/softBody.js').SoftBody|SimBody)[]} bodies - Bodies or CPU-prepared bodies.
+     * @param {object} container - Scene container, or legacy tank bounds.
      */
-    constructor(device, bodies, tank) {
+    constructor(device, bodies, container) {
         if (!device.supportsCompute) {
             throw new Error('Simulator requires a device with compute support');
         }
         this.device = device;
-        this.tank = tank;
+        this.tank = container;
+        this.containerFrame = solverContainerFrame(container);
         this.params = { ...DEFAULT_PARAMS };
+        /** Prevents frame and manual-step dispatch while a replacement is prepared. */
+        this.appendFrozen = false;
+        /** Invalidates asynchronous pick readbacks when a grab ends or the simulator dies. */
+        this.grabEpoch = 0;
+        this.alive = true;
 
         /** @type {SimBody[]} */
-        this.simBodies = bodies.map(body => ({ body, lattice: discretizeBody(body) }));
+        this.simBodies = bodies.map(simulationBody);
+        const bodyIds = new Set(this.simBodies.map(({ id }) => id));
+        if (bodyIds.size !== this.simBodies.length) {
+            throw new Error('Simulator body IDs must be unique');
+        }
 
         // The three pieces of the simulation side, assembled here and nowhere
         // else. They are listed in dependency order and each knows only the one
@@ -55,36 +83,42 @@ export class Simulator {
         // Spelled out rather than handing the lattice over whole: these three
         // arrays are the entire set of things the node storage is allowed to
         // know, and writing them at the seam is what keeps that visible.
-        this.particles = new Particles(device, this.simBodies.map(({ lattice }) => ({
-            restPositions: lattice.restPositions,
-            invMass: lattice.invMass,
-            nodeCount: lattice.nodeCount
-        })));
-        this.drive = new KinematicDrive(device, this.particles);
-        this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
-            ({ body, lattice }) => ({ lattice, material: body.material })
-        ));
-        this.contact = new BodyContact(
-            device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })), tank
-        );
-        // Order is solve order. Driven nodes go first: under the hard law
-        // nothing else can move them anyway, and this is what lets the
-        // compliant law's nudge still be shaped by elasticity and contact
-        // afterwards, in the same substep. Contact goes last of the other two
-        // so it has the final word on where a node may be: elasticity can push
-        // a node back into whatever it was resting on, and only one of the two
-        // is allowed to be wrong about that.
-        this.stepper = new Stepper(device, this.particles, [this.drive, this.elastic, this.contact]);
+        try {
+            this.particles = new Particles(device, this.simBodies.map(({ lattice }) => ({
+                restPositions: lattice.restPositions,
+                invMass: lattice.invMass,
+                nodeCount: lattice.nodeCount
+            })));
+            this.drive = new KinematicDrive(device, this.particles);
+            this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
+                ({ body, lattice }) => ({ lattice, material: body.material })
+            ));
+            this.contact = new BodyContact(
+                device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })),
+                containerWorldBounds(this.containerFrame)
+            );
+            // Order is solve order. Driven nodes go first: under the hard law
+            // nothing else can move them anyway, and this is what lets the
+            // compliant law's nudge still be shaped by elasticity and contact
+            // afterwards, in the same substep. Contact goes last of the other two
+            // so it has the final word on where a node may be: elasticity can push
+            // a node back into whatever it was resting on, and only one of the two
+            // is allowed to be wrong about that.
+            this.stepper = new Stepper(device, this.particles, [this.drive, this.elastic, this.contact]);
 
-        // Render frames decide when GPU work may be recorded, but not how much
-        // physical time one solve represents. The clock turns their irregular
-        // dt into a count of fixed stable steps and knows nothing about the
-        // dispatches that will execute them; this class is their only seam.
-        this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
+            // Render frames decide when GPU work may be recorded, but not how much
+            // physical time one solve represents. The clock turns their irregular
+            // dt into a count of fixed stable steps and knows nothing about the
+            // dispatches that will execute them; this class is their only seam.
+            this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
 
-        for (let b = 0; b < this.simBodies.length; b++) {
-            const { damping, friction } = this.simBodies[b].body.material;
-            this.particles.setParams(b, { damping, friction });
+            for (let b = 0; b < this.simBodies.length; b++) {
+                const { damping, friction } = this.simBodies[b].body.material;
+                this.particles.setParams(b, { damping, friction });
+            }
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
         }
 
         // Where the handle is, and where it was last frame -- the only two
@@ -128,6 +162,37 @@ export class Simulator {
             cellDims: lattice.cellDims,
             nodeDims: lattice.nodeDims,
             nodeOffset: this.particles.offsetOf(bodyIndex)
+        });
+    }
+
+    /** Opaque stable identity for one current body. */
+    bodyIdAt(bodyIndex) {
+        return this.simBodies[bodyIndex]?.id ?? null;
+    }
+
+    /** Resolves an opaque body identity only at the simulator boundary. */
+    bodyIndexOf(bodyId) {
+        return this.simBodies.findIndex(entry => entry.id === bodyId);
+    }
+
+    /**
+     * Current discretization metrics, copied without exposing simulation storage.
+     * Query again after material edits or shared-state replacement.
+     *
+     * @param {string|number} bodyId - Opaque stable body identity, not an array index.
+     * @returns {{volume:number,mass:number,nodes:number,occupiedCells:number,resolution:number}|null}
+     *   Current values, or null when the body is not in this simulator.
+     */
+    metricsOf(bodyId) {
+        const entry = this.simBodies[this.bodyIndexOf(bodyId)];
+        if (!entry) return null;
+        const { body, lattice } = entry;
+        return Object.freeze({
+            volume: lattice.volume,
+            mass: lattice.mass,
+            nodes: lattice.nodeCount,
+            occupiedCells: lattice.cells.length,
+            resolution: body.resolution
         });
     }
 
@@ -237,6 +302,13 @@ export class Simulator {
      * @param {number} dt - Elapsed seconds since the last frame.
      */
     step(dt) {
+        // Append freezes at a complete step boundary. Unlike ordinary pause,
+        // frames during preparation must not even rewrite the clock's last
+        // report: the candidate clones the exact frozen accounting later.
+        if (this.appendFrozen) {
+            this.pendingStep = false;
+            return;
+        }
         // A scene can be all backdrop, and a solver with no degrees of freedom
         // has neither work nor physical time to advance. Said here rather than
         // left to the kernels: they would bind zero-length buffers and fail
@@ -286,7 +358,59 @@ export class Simulator {
      * have to know when a dispatch may be recorded.
      */
     requestStep() {
+        if (this.appendFrozen) return;
         this.pendingStep = true;
+    }
+
+    /** Freezes interaction and waits until every previously submitted GPU step is complete. */
+    async freezeForAppend() {
+        await freezeForAppend(this);
+    }
+
+    /**
+     * Builds an unpublished shared Simulator and migrates every existing body.
+     * The returned Simulator owns all candidate resources. On construction or
+     * migration failure those resources are released here; the old Simulator
+     * remains alive and frozen.
+     *
+     * @param {SimBody[]} additions - CPU-prepared bodies not in this Simulator.
+     * @returns {Simulator} Candidate common simulation.
+     */
+    createAppendCandidate(additions) {
+        if (!this.appendFrozen || !this.params.paused) {
+            throw new Error('freeze the simulator before creating an append candidate');
+        }
+        let candidate = null;
+        try {
+            const bodies = isolateCandidateBodies([...this.simBodies, ...additions]);
+            candidate = new this.constructor(this.device, bodies, this.tank);
+            migrateFrozenState(this, candidate);
+            return candidate;
+        } catch (error) {
+            try { candidate?.destroy(); } catch {}
+            throw error;
+        }
+    }
+
+    /** Reestablishes a candidate after its real GPU validation probe. */
+    restoreAppendCandidate(candidate) {
+        if (!this.appendFrozen || !this.params.paused) {
+            throw new Error('previous simulator is no longer frozen for append');
+        }
+        return migrateFrozenState(this, candidate);
+    }
+
+    /** Forces one validated latest-material snapshot into this candidate. */
+    syncCandidateMaterials(updates) {
+        syncCandidateMaterials(this, updates);
+    }
+
+    /** Leaves the append gate and resumes future render-frame accounting. */
+    resumeAfterAppend() {
+        if (!this.alive) throw new Error('cannot resume a disposed simulator');
+        this.pendingStep = false;
+        this.appendFrozen = false;
+        this.params.paused = false;
     }
 
     /**
@@ -300,8 +424,7 @@ export class Simulator {
         this.stepper.setFrameParameters({
             substepDt: this.clock.stepDuration,
             gravity: this.params.gravity,
-            tankMin: this.tank.min,
-            tankMax: this.tank.max
+            containerFrame: this.containerFrame
         });
 
         // The handle's velocity this frame, not read off any input device:
@@ -381,7 +504,19 @@ export class Simulator {
      *   Which body was hit and where, or null if the ray missed everything.
      */
     async grab(origin, direction) {
-        const nodes = await this.particles.readPositions();
+        const epoch = ++this.grabEpoch;
+        let nodes;
+        try {
+            nodes = await this.particles.readPositions();
+        } catch (error) {
+            // Destroying particle buffers may reject a readback that no longer
+            // has a caller. Failures from a live attempt still surface.
+            if (!this.alive || epoch !== this.grabEpoch) return null;
+            throw error;
+        }
+        if (!this.alive || epoch !== this.grabEpoch) {
+            return null;
+        }
         // A little over the coarsest cell, so that anything visibly over a
         // body has a node within reach. This is aim tolerance, not hand size:
         // it stays a lattice property on purpose, see `sim/grip.js`.
@@ -452,12 +587,13 @@ export class Simulator {
      * @param {number[]} position - World position to move the handle to.
      */
     moveGrab(position) {
-        this.handle.target = position;
+        this.handle.target = limitGripTarget(position, this.containerFrame);
     }
 
     /** Releases whatever {@link grab} is currently holding. */
     releaseGrab() {
-        this.drive.release();
+        ++this.grabEpoch;
+        if (this.alive) this.drive?.release();
     }
 
     /**
@@ -478,10 +614,14 @@ export class Simulator {
     }
 
     destroy() {
-        this.stepper.destroy();
-        this.contact.destroy();
-        this.elastic.destroy();
-        this.drive.destroy();
-        this.particles.destroy();
+        if (!this.alive) return;
+        let failure = null;
+        try { this.releaseGrab(); } catch (error) { failure = error; }
+        this.alive = false;
+        for (const resource of [this.stepper, this.contact, this.elastic, this.drive, this.particles]) {
+            if (!resource) continue;
+            try { resource.destroy(); } catch (error) { failure ??= error; }
+        }
+        if (failure) throw failure;
     }
 }

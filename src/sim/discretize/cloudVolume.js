@@ -252,6 +252,36 @@ function materialBounds(cloud, sigma) {
 function cellMeetsEllipsoid(grid, i, j, k, centre, columns, radius) {
     const { origin, h } = grid;
 
+    const degenerate = radius.findIndex(value => value === 0);
+    if (degenerate >= 0) {
+        const tangent = [0, 1, 2].filter(axis => axis !== degenerate && radius[axis] > 0);
+        if (tangent.length !== 2) {
+            return false;
+        }
+
+        const delta = [
+            origin[0] + (i + 0.5) * h - centre[0],
+            origin[1] + (j + 0.5) * h - centre[1],
+            origin[2] + (k + 0.5) * h - centre[2]
+        ];
+        const local = axis => columns[axis * 3] * delta[0] +
+            columns[axis * 3 + 1] * delta[1] + columns[axis * 3 + 2] * delta[2];
+
+        // A cell lies inside its circumsphere. Projecting that sphere into the
+        // surfel frame gives the same conservative radius in the normal and
+        // tangent directions: a crossed cell cannot be missed, although a cell
+        // near the ellipse rim may be included. This is numerical coverage at
+        // the chosen grid spacing, not physical thickness for the surface.
+        const tolerance = Math.sqrt(3) * h * 0.5;
+        if (Math.abs(local(degenerate)) > tolerance) {
+            return false;
+        }
+        return tangent.reduce((sum, axis) => {
+            const nearest = Math.max(0, Math.abs(local(axis)) - tolerance);
+            return sum + (nearest / radius[axis]) ** 2;
+        }, 0) <= 1;
+    }
+
     for (const [ox, oy, oz] of CELL_SAMPLES) {
         const dx = origin[0] + (i + ox) * h - centre[0];
         const dy = origin[1] + (j + oy) * h - centre[1];
@@ -265,9 +295,6 @@ function cellMeetsEllipsoid(grid, i, j, k, centre, columns, radius) {
                 radius[axis];
             sum += t * t;
         }
-        // A degenerate axis makes `t` infinite or NaN and the test simply fails,
-        // which is the right answer: a Gaussian with no thickness encloses
-        // nothing. Its centre cell was marked regardless.
         if (sum <= 1) {
             return true;
         }

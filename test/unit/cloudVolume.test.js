@@ -187,6 +187,43 @@ describe('voxelizeCloud', () => {
         expect(occupancyAt(grid, [0.08, 0, 0])).toBe(0);
     });
 
+    it('covers a tilted two-axis surfel without giving its zero axis a thickness', () => {
+        const cloud = cloudAt([0, 0, 0], 1);
+        cloud.scales.set([0.05, 0.025, 0]);
+        cloud.rotations.set([Math.sin(Math.PI / 8), 0, 0, Math.cos(Math.PI / 8)]);
+
+        for (const resolution of [12, 24, 48]) {
+            const grid = voxelizeCloud(cloud, { resolution, fill: false });
+            const columns = mat3FromQuat(cloud.rotations);
+            for (let sample = 0; sample < 32; sample++) {
+                const angle = sample * Math.PI / 16;
+                const local = [0.098 * Math.cos(angle), 0.048 * Math.sin(angle), 0];
+                const point = [0, 1, 2].map(axis =>
+                    columns[axis] * local[0] + columns[3 + axis] * local[1]);
+                expect(occupancyAt(grid, point), `resolution ${resolution}, sample ${sample}`).toBe(1);
+            }
+        }
+
+        const coarse = voxelizeCloud(cloud, { resolution: 12, fill: false });
+        const fine = voxelizeCloud(cloud, { resolution: 48, fill: false });
+        const occupiedVolume = grid => countOccupied(grid) * grid.h ** 3;
+        expect(occupiedVolume(fine)).toBeLessThan(occupiedVolume(coarse) * 0.4);
+    });
+
+    it('recognises the degenerate axis from the radii instead of assuming local z', () => {
+        for (const zeroAxis of [0, 1, 2]) {
+            const cloud = cloudAt([0, 0, 0], 1);
+            const scales = [0.04, 0.04, 0.04];
+            scales[zeroAxis] = 0;
+            cloud.scales.set(scales);
+            cloud.rotations.set([0.2, -0.3, 0.1, 0.92736185]);
+
+            const grid = voxelizeCloud(cloud, { resolution: 20, fill: false });
+            expect(countOccupied(grid), `zero axis ${zeroAxis}`).toBeGreaterThan(20);
+            expect(occupancyAt(grid, [0, 0, 0])).toBe(1);
+        }
+    });
+
     it('refuses a cloud with nothing in it', () => {
         expect(() => voxelizeCloud(cloudAt([], 0.01))).toThrow(/no Gaussians/);
         expect(() => voxelizeCloud(cloudAt([0, 0, 0], 0))).toThrow(/no extent/);

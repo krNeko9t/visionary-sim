@@ -1,0 +1,47 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>配置 DOM 行为验证</title>
+<style>body{font:16px system-ui;max-width:760px;margin:32px auto;background:#f4f6fa;color:#142235}label{display:block;margin:16px 0}button{padding:10px;margin:8px}section{padding:24px;background:white}#result{white-space:pre-wrap}</style>
+<h1>配置 DOM 行为验证（不包含 GPU）</h1><p id="result">测试中…</p><main></main>
+<script type="module">
+import { createSceneConfiguration } from '/src/app/sceneConfiguration.js';
+import { fingerprintSourceFiles, createPreparationConfig } from '/src/app/preparationConfig.js';
+import { mountSceneConfiguration } from '/src/ui/sceneConfiguration.js';
+const output=document.querySelector('#result');
+const files=()=>({geometry:new File(['abc'],'scene.ply'),labels:new File(['def'],'labels.npz'),physics:new File(['ghi'],'physics.json')});
+const sources=await fingerprintSourceFiles(files());
+const original=createPreparationConfig({sources,calibration:{upAxis:'+Z',manualDegrees:[10,20,30],longestMeters:2,position:[4,5,6]},container:{position:[7,8,9],orientation:[0,0,0,1],dimensions:[2,3,4]},materialOverrides:{7:{density:1200}},participantIds:[7,42],instanceIds:[7,42]});
+let published=original;
+const controller=createSceneConfiguration({readConfiguration:()=>published,prepareImport:async selected=>{
+ const sources=await fingerprintSourceFiles(selected);let staged;
+ return {sources,instanceIds:[7,42],prepareConfiguration(config){staged=config},commit(){published=staged},dispose(){}};
+}});
+const mounted=mountSceneConfiguration({host:document.querySelector('main'),controller});
+function select(input,file){const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));}
+const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
+async function until(predicate){for(let i=0;i<100;i++){if(predicate())return;await pause()}throw Error('state timeout')}
+const results=[];
+try{
+ select(document.querySelector('[name=preparation-configuration]'),new File([JSON.stringify(original)],'config.json'));
+ await until(()=>controller.getState().status==='awaiting-sources');
+ if(published!==original)throw Error('config import changed live scene');
+ results.push('PASS 文件 change：导入 JSON 后待关联，旧配置保留');
+ const renamed=files();renamed.geometry=new File(['abc'],'renamed.ply');
+ for(const [slot,file]of Object.entries(renamed))select(document.querySelector(`[name=${slot}]`),file);
+ document.querySelector('form').requestSubmit();
+ await until(()=>controller.getState().status==='restored');
+ if(JSON.stringify(published)!==JSON.stringify(original))throw Error('restored value mismatch');
+ results.push('PASS form submit：改名同字节恢复校正、容器、物性和多实例名单');
+ select(document.querySelector('[name=preparation-configuration]'),new File(['{broken'],'bad.json'));
+ await until(()=>controller.getState().error);
+ if(JSON.stringify(published)!==JSON.stringify(original))throw Error('bad JSON changed edits');
+ results.push('PASS 损坏 JSON 保留当前编辑');
+ controller.importConfiguration(original);
+ select(document.querySelector('[name=geometry]'),new File(['abd'],'scene.ply'));
+ document.querySelector('form').requestSubmit();
+ await until(()=>controller.getState().status==='new-scene');
+ if(published!==null)throw Error('mismatched scene received old edits');
+ results.push('PASS 同名异内容按新场景处理，不套旧配置');
+ published=original;
+ results.push('可点击“导出 JSON”检查浏览器真实下载请求。此页准备端口为测试替身，不证明 GPU/正式应用恢复。');
+ output.textContent=results.join('\n');
+}catch(error){output.textContent='FAIL '+error.stack}
+</script></html>

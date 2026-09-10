@@ -1,0 +1,36 @@
+.scene-simulation-controls {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.scene-simulation-controls h3,
+.scene-simulation-controls p {
+    margin: 0 0 9px;
+}
+
+.scene-simulation-controls p {
+    color: #aeb8c8;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.scene-simulation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.scene-simulation-actions button {
+    border: 1px solid rgba(125, 211, 252, 0.45);
+    border-radius: 7px;
+    padding: 7px 10px;
+    color: #e8f4ff;
+    background: rgba(14, 116, 144, 0.32);
+    cursor: pointer;
+}
+
+.scene-simulation-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}

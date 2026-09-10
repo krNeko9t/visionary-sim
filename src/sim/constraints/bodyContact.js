@@ -28,7 +28,8 @@ import sortWgsl from './wgsl/sort.wgsl?raw';
  * Jacobi -- bin, canonicalise, gather, apply -- in four dispatches that the stepper
  * dispatches without knowing what any of them do.
  *
- * The tank's walls are deliberately not here. They are five fixed planes known
+ * The container walls are deliberately not here. They are the legacy tank's
+ * five fixed planes or the scene container's six fixed planes, known
  * in advance, they belong to the world rather than to any body, and they are
  * already resolved per node in the stepper's closing pass. Nothing about this
  * file would be shared with them.
@@ -76,6 +77,10 @@ export class BodyContact {
     constructor(device, particles, bodies, bounds) {
         this.device = device;
         this.particles = particles;
+        this.owned = [];
+        this.destroyed = false;
+        this.shaders = {};
+        this.dispatches = [];
 
         /**
          * Whether this constraint contributes anything. A whole scheme is
@@ -91,7 +96,7 @@ export class BodyContact {
         const records = [];
         let widest = 0;
         let finestH = Infinity;
-        for (let b = 0; b < bodies.length; b++) {
+        for (let b = 0; bodies.length > 1 && b < bodies.length; b++) {
             const { lattice } = bodies[b];
             const offset = particles.offsetOf(b);
             const radius = lattice.h * RADIUS_CELLS;
@@ -104,6 +109,12 @@ export class BodyContact {
 
         this.surfaceCount = records.length;
         this.grid = broadphaseGrid(bounds, widest * 2);
+
+        // One body has no cross-body pair. In particular, do not size or
+        // allocate a scene-wide bucket buffer while preparing the first body.
+        if (bodies.length < 2) {
+            return;
+        }
 
         // The bucket is sized from the coarsest body (`widest`), so a much
         // finer body sharing the scene can pack far more than the coarse
@@ -124,47 +135,53 @@ export class BodyContact {
             }
         }
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        const words = new ArrayBuffer(Math.max(1, records.length) * SURFACE_STRIDE);
-        const uints = new Uint32Array(words);
-        const floats = new Float32Array(words);
-        const stride = SURFACE_STRIDE / 4;
-        for (let r = 0; r < records.length; r++) {
-            const base = r * stride;
-            uints[base + SURFACE_FIELDS.node] = records[r].node;
-            uints[base + SURFACE_FIELDS.body] = records[r].body;
-            floats[base + SURFACE_FIELDS.radius] = records[r].radius;
+        try {
+            const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
+            const words = new ArrayBuffer(Math.max(1, records.length) * SURFACE_STRIDE);
+            const uints = new Uint32Array(words);
+            const floats = new Float32Array(words);
+            const stride = SURFACE_STRIDE / 4;
+            for (let r = 0; r < records.length; r++) {
+                const base = r * stride;
+                uints[base + SURFACE_FIELDS.node] = records[r].node;
+                uints[base + SURFACE_FIELDS.body] = records[r].body;
+                floats[base + SURFACE_FIELDS.radius] = records[r].radius;
+            }
+            this.surface = this.own(new StorageBuffer(device, words.byteLength, usage));
+            this.surface.write(0, new Uint8Array(words));
+
+            // Counters first, then slots behind them. Only counters need an empty
+            // value: the bin pass overwrites every slot below the new count, and
+            // the local sort pass orders exactly that live prefix.
+            const gridWords = this.grid.bucketCount * (1 + BUCKET_SLOTS);
+            this.contactGrid = this.own(new StorageBuffer(device, gridWords * 4, usage));
+            this.contactGrid.write(0, new Uint32Array(gridWords));
+
+            this.shaders.bin = this.own(this.kernel('sim-contact-bin', binWgsl));
+            this.shaders.sort = this.own(this.kernel('sim-contact-sort', sortWgsl));
+            this.shaders.collide = this.own(this.kernel('sim-contact-collide', collideWgsl));
+            this.shaders.settle = this.own(this.kernel('sim-contact-settle', settleWgsl));
+
+            if (this.surfaceCount > 0) {
+                const perNode = Math.ceil(this.surfaceCount / WORKGROUP_SIZE);
+                this.dispatches.push(
+                    this.pass('bin', perNode),
+                    // One thread owns one bucket and sorts its short live prefix.
+                    this.pass('sort', Math.ceil(this.grid.bucketCount / WORKGROUP_SIZE)),
+                    this.pass('collide', perNode),
+                    this.pass('settle', Math.ceil(
+                        Math.max(this.surfaceCount, this.grid.bucketCount) / WORKGROUP_SIZE))
+                );
+            }
+        } catch (error) {
+            try { this.destroy(); } catch {}
+            throw error;
         }
-        this.surface = new StorageBuffer(device, words.byteLength, usage);
-        this.surface.write(0, new Uint8Array(words));
+    }
 
-        // Counters first, then slots behind them. Only counters need an empty
-        // value: the bin pass overwrites every slot below the new count, and
-        // the local sort pass orders exactly that live prefix.
-        const gridWords = this.grid.bucketCount * (1 + BUCKET_SLOTS);
-        this.contactGrid = new StorageBuffer(device, gridWords * 4, usage);
-        this.contactGrid.write(0, new Uint32Array(gridWords));
-
-        this.shaders = {
-            bin: this.kernel('sim-contact-bin', binWgsl),
-            sort: this.kernel('sim-contact-sort', sortWgsl),
-            collide: this.kernel('sim-contact-collide', collideWgsl),
-            settle: this.kernel('sim-contact-settle', settleWgsl)
-        };
-
-        const perNode = Math.ceil(this.surfaceCount / WORKGROUP_SIZE);
-        this.dispatches = this.surfaceCount === 0 ? [] : [
-            this.pass('bin', perNode),
-            // One thread owns one bucket and sorts its short live prefix. This
-            // pass is the barrier between nondeterministic atomic arrival and
-            // deterministic collision accumulation.
-            this.pass('sort', Math.ceil(this.grid.bucketCount / WORKGROUP_SIZE)),
-            this.pass('collide', perNode),
-            // The closing pass also empties the grid, so it covers whichever of
-            // the two is longer.
-            this.pass('settle', Math.ceil(
-                Math.max(this.surfaceCount, this.grid.bucketCount) / WORKGROUP_SIZE))
-        ];
+    own(resource) {
+        this.owned.push(resource);
+        return resource;
     }
 
     /**
@@ -186,7 +203,7 @@ export class BodyContact {
      * @returns {Compute} The configured dispatch.
      */
     pass(name, groups) {
-        const compute = new Compute(this.device, this.shaders[name], `sim-contact-${name}`);
+        const compute = this.own(new Compute(this.device, this.shaders[name], `sim-contact-${name}`));
         // Every kernel carries every declaration, so every kernel is bound the
         // same way. Which of them a given kernel reads is the kernel's business.
         for (const [binding, buffer] of Object.entries(this.particles.bindings)) {
@@ -225,13 +242,13 @@ export class BodyContact {
     setSubstepDt() {}
 
     destroy() {
-        for (const compute of this.dispatches) {
-            compute.destroy();
+        if (this.destroyed) return;
+        this.destroyed = true;
+        let failure = null;
+        for (const resource of this.owned.reverse()) {
+            try { resource.destroy(); } catch (error) { failure ??= error; }
         }
-        for (const shader of Object.values(this.shaders)) {
-            shader.destroy();
-        }
-        this.surface.destroy();
-        this.contactGrid.destroy();
+        this.owned.length = 0;
+        if (failure) throw failure;
     }
 }

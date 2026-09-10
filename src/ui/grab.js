@@ -39,10 +39,13 @@ const REACH = 0.02;
 /**
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {import('playcanvas').Entity} camera - Camera the pointer is looking through.
- * @param {import('../sim/simulator.js').Simulator} sim - Simulation to reach into.
+ * @param {{ tank: object, grab: Function, moveGrab: Function, releaseGrab: Function }} target - Application operations.
+ * @param {{ownership?: object,owner?: string}} [options] - Shared pointer ledger.
  * @returns {{ detach: () => void }} Handle that unbinds the listeners.
  */
-export function attachGrabber(app, camera, sim) {
+export function attachGrabber(app, camera, target, {
+    ownership = null, owner = 'grab', onError = error => console.error('[grab] readback failed', error)
+} = {}) {
     const canvas = app.graphicsDevice.canvas;
     const near = new Vec3();
     const far = new Vec3();
@@ -59,8 +62,10 @@ export function attachGrabber(app, camera, sim) {
      * @param {PointerEvent} event - Event to claim.
      */
     const claim = (event) => {
+        if (ownership && !ownership.claim(event.pointerId, owner)) return false;
         event.stopPropagation();
         event.preventDefault();
+        return true;
     };
 
     /**
@@ -101,16 +106,20 @@ export function attachGrabber(app, camera, sim) {
         }
 
         const distance = normal.dot(toPlane) / along;
-        const { min, max } = sim.tank;
-        sim.moveGrab([0, 1, 2].map(axis => Math.min(
-            Math.max(ray.origin[axis] + ray.direction[axis] * distance, min[axis] - REACH),
-            max[axis] + REACH
-        )));
+        const point = [0, 1, 2].map(axis => ray.origin[axis] + ray.direction[axis] * distance);
+        const { min, max } = target.tank;
+        // Legacy demo tanks retain their small outside reach. Scene containers
+        // are rotated boxes and clamp exactly in Simulator.moveGrab, in their
+        // own local coordinates.
+        target.moveGrab(min && max ? point.map((value, axis) => Math.min(
+            Math.max(value, min[axis] - REACH), max[axis] + REACH
+        )) : point);
     };
 
     const release = () => {
+        if (press) ownership?.release(press.pointerId, owner);
         press = null;
-        sim.releaseGrab();
+        target.releaseGrab();
         canvas.style.cursor = '';
     };
 
@@ -121,12 +130,12 @@ export function attachGrabber(app, camera, sim) {
         if (event.button !== 0 || event.target !== canvas) {
             return;
         }
-        claim(event);
+        if (!claim(event)) return;
 
-        const started = { ray: rayThrough(event), plane: null };
+        const started = { pointerId: event.pointerId, ray: rayThrough(event), plane: null };
         press = started;
 
-        sim.grab(started.ray.origin, started.ray.direction).then((hit) => {
+        target.grab(started.ray.origin, started.ray.direction).then((hit) => {
             // The pointer may have been released, or pressed again, while the
             // readback was in flight.
             if (press !== started) {
@@ -139,6 +148,10 @@ export function attachGrabber(app, camera, sim) {
             started.plane = hit.position;
             canvas.style.cursor = 'grabbing';
             dragToPointer();
+        }).catch(error => {
+            if (press !== started) return;
+            release();
+            onError(error);
         });
     };
 
@@ -146,10 +159,12 @@ export function attachGrabber(app, camera, sim) {
      * @param {PointerEvent} event - The move.
      */
     const onPointerMove = (event) => {
-        if (!press) {
+        if (!press || event.pointerId !== press.pointerId ||
+            (ownership && ownership.ownerOf(event.pointerId) !== owner)) {
             return;
         }
-        claim(event);
+        event.stopPropagation();
+        event.preventDefault();
         press.ray = rayThrough(event);
         if (press.plane) {
             dragToPointer();
@@ -160,10 +175,11 @@ export function attachGrabber(app, camera, sim) {
      * @param {PointerEvent} event - The release.
      */
     const onPointerUp = (event) => {
-        if (!press) {
+        if (!press || event.pointerId !== press.pointerId) {
             return;
         }
-        claim(event);
+        event.stopPropagation();
+        event.preventDefault();
         release();
     };
 
@@ -183,6 +199,7 @@ export function attachGrabber(app, camera, sim) {
     return {
         detach() {
             release();
+            ownership?.clear(owner);
             for (const [type, handler] of listeners) {
                 window.removeEventListener(type, handler, true);
             }

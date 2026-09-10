@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const RENDER = join(SRC, 'render');
 const BODY_JS = join(SRC, 'body/softBody.js');
-const MAIN_JS = join(SRC, 'main.js');
+const DEMO_JS = join(SRC, 'app/demo.js');
 const APP_JS = join(SRC, 'scene/app.js');
 
 /** Files that draw the mesh path, versus the files that draw the splat path. */
@@ -55,9 +55,9 @@ describe('the two render paths stand side by side', () => {
         const declaredKinds = [...renderGeometry.matchAll(/kind:\s*'(\w+)'/g)].map(m => m[1]);
         expect(declaredKinds.length).toBeGreaterThan(0);
 
-        const mainText = readFileSync(MAIN_JS, 'utf8');
-        const viewsBlock = mainText.match(/const VIEWS = \{([\s\S]*?)\n\};/);
-        expect(viewsBlock, 'main.js has no `const VIEWS = { ... }` table').not.toBeNull();
+        const assemblyText = readFileSync(DEMO_JS, 'utf8');
+        const viewsBlock = assemblyText.match(/const VIEWS = \{([\s\S]*?)\n\};/);
+        expect(viewsBlock, 'the demo application has no `const VIEWS = { ... }` table').not.toBeNull();
         const viewKinds = [...viewsBlock[1].matchAll(/^\s*(\w+):/gm)].map(m => m[1]);
 
         expect(new Set(viewKinds)).toEqual(new Set(declaredKinds));
