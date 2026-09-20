@@ -25,6 +25,22 @@ Blocked by: 01, 02
 4. `CONTEXT.md` 首批还要收哪些词条：模拟体、代理几何、自由度、约束、驱动、场景/环境……
    收的标准是「领域概念」，不是「代码里出现过的名词」。
 
+## 01 已经带回来的（2026-09-20）
+
+- **族名候选在手**：`prescribed`，下分 `static prescribed`（永久、无持有者，原「锚定」）与
+  `kinematic prescribed`（临时、有持有者，`KinematicDrive`）。采纳成本为零：
+  `setPrescribed`/`clearPrescribed` 已经存在，`ARCHITECTURE.md`§三已经写着「被**规定**而非被
+  **解出**」。行业**没有**单一伞形词，Box2D / PBD / PhysX / Vellum 都是在顶层就分成
+  static 与 kinematic。所以这张票要决定的不再是「叫什么」，而是：接受这个二分，还是自创一个
+  伞形词把两者收进去（后者违背「往共识靠」）。
+- **仓库内部撞名**：`anchor` 已经被占用了，而且恰好是行业含义——`grip.js:38,54`、
+  `simulator.js:389-411`、`drive.wgsl:22` 用它指「射线打中的那个节点」，即约束的附着点。这条
+  撞名本身就该是词汇表第一批条目之一。
+- **`inert` 有共识词**：`inactive node`（MPM 文献）。预判「外部没有对应词」被推翻，但**下游判断
+  不变且被加强**——没有任何来源把它归进边界条件一族，稀疏 MPM 的存在就是为了删掉这种节点。它
+  仍然是 4.2 的后果，不入 `CONTEXT.md`。这张票多一个决定：代码里那个自造的 `inert` 要不要改名
+  成 `inactive`。
+
 ## 交付
 
 - 新建 `CONTEXT.md`（`docs/agents/domain.md` 要求懒创建，这张票就是第一次有东西可写）。格式见

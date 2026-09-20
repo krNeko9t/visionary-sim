@@ -29,4 +29,18 @@ Blocked by: 04, 05
 （注：triage 词表里没有「blocked」这个状态，暂时借用 `needs-triage` 表达「别 AFK 捡起来」。
 如果这个缺口值得补，那是 `docs/agents/triage-labels.md` 的事，不是本图的事。）
 
+## 01 已经坐实的（2026-09-20）
+
+- **改标题的理由成立，而且比预判更硬**：`anchor` 在行业里是一等术语，但**处处指约束的附着点**
+  （Box2D 的 joint anchor；Bullet 的 `btSoftBody::Anchor` 是把节点耦合到刚体，而钉住一个节点是
+  另一个 API `setMass(node,0)`）。更要紧的是**本仓库已经在这个意义上用了这个词**
+  （`grip.js:38,54`、`simulator.js:389-411`、`drive.wgsl:22`）。所以新标题不能只是换个说法，
+  它必须避开 `anchor`。
+- **要带进下一张图的一条**：PhysDreamer 的固定区域**不是在离散化那一刻确定的**——`demo.py:348-365`
+  的 `find_far_points` 按到 `moving_part_points.ply` 的**世界空间距离**去选，形状更接近本仓库
+  `grip.js` 的「世界空间里一团材料」，而不是被冻结的 spec 写的「离散化那一刻就确定」。而那份
+  spec 的判据是「节点周围一个格子 h 内没有任何可动点」——**用格子长度表达的判据**，正是
+  `grip.js` 整份文件在防的东西。重写背景段时要把这条摆出来；**但不要在这张图里改判据**，判据
+  归下一张图。
+
 ## Comments

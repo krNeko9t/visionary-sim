@@ -3,6 +3,10 @@
 Status: needs-triage
 Type: grilling
 
+> **2026-09-20 冻结**。这张票的「三种含义」叙述正在 `.scratch/proxy-geometry/map.md` 里被重新
+> 定框；下面的候选 (a)/(b)/(c) **不要在那张图走完之前选**。框架改好之后由
+> `proxy-geometry/issues/08-reframe-anchor-ticket.md` 重写本票的标题与背景段，候选段原样保留。
+
 ## 背景
 
 `spec.md` 把"**谁**该被锚定"定死了：一个纯函数，节点周围一个格子 h 内没有任何可动点就锚定。

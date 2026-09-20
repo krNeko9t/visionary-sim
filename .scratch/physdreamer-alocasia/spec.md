@@ -1,6 +1,10 @@
 # Spec · PhysDreamer 场景接入（alocasia）
 
-Status: ready-for-agent
+Status: needs-triage
+
+> **2026-09-20 暂停**。使用者决定：等 `.scratch/proxy-geometry/map.md`（代理几何不再默认是
+> 体素点阵）走完再恢复。在那之前不要 AFK 捡起这份 spec——它的核心假设正在被重新审视。
+> （triage 词表里没有 blocked，借 `needs-triage` 表达「别自动捡」。）
 
 ## Problem Statement
 

@@ -39,9 +39,14 @@ Label: wayfinder:map
 ## Decisions so far
 
 <!-- 每张关闭的票一行：结论要旨 + 指针。细节留在票里，本图不复述 -->
+- [01 · 行业里怎么称呼「被规定的自由度」](issues/01-boundary-condition-vocabulary.md)：族名定为 `prescribed`，下分 static（永久，原「锚定」）与 kinematic（临时，KinematicDrive）；`anchor` 全行业指「约束的附着点」且仓库 `grip.js` 已占用，弃用；「惰性节点」共识词是 `inactive node`，但它属 4.2 后果、不入族。
 
 ## Not yet specified
 
+- **「只在某个方向上被规定」的自由度说不出来**。`invMass` 是标量，等于假定一个自由度要么整个
+  被规定、要么整个自由；Baraff-Witkin §5.1 用 3×3 质量矩阵表达「只在法向被约束」。01 带回来
+  的这条不在原图里。等「代理几何的类型边界」画完线、「被规定的自由度这一族的名字」定完族名，
+  它才具备开票的锐度。
 - **自由度必须与被渲染的几何同源吗**。PhysDreamer 自己用的是降采样的无结构驱动子，不是与点云
   同源的网格。这个问题被排除在本轮试金石之外，等 PhysDreamer 场景真的回来再说。
 - **「批次规则属于每一种约束自己」这条承诺要不要重述**。如果审计证明 `sim/constraints/` 整体
