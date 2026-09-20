@@ -36,7 +36,7 @@ const BOUNDS = {
  */
 export const JELLY = { youngsModulus: 1.5e4, poissonRatio: 0.42, density: 1050, friction: 0.35 };
 /** Stiffer and denser: lands with a thud and holds its shape. */
-const RUBBER = { youngsModulus: 4e4, poissonRatio: 0.45, density: 1100, friction: 0.6 };
+export const RUBBER = { youngsModulus: 4e4, poissonRatio: 0.45, density: 1100, friction: 0.6 };
 
 /** @type {import('./scenes.js').Scene} */
 export const tankScene = {

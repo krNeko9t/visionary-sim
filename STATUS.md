@@ -6,6 +6,8 @@
       不再出现抓取词汇，硬运动学 / 柔顺手柄两种驱动律可切换
 - [x] M2 · 抓取语义脱离点阵分辨率：`sim/grip.js` 新增世界空间半径范围抓取
       `withinRadius`，与 `singleNode` 并列可切换，默认 `withinRadius`
+- [x] M3 · 新增场景 `?scene=football`：`scene/football.js` 照 `tank` 摆，
+      把里面的解析球体换成 3DGS 捕获 `football_trellis1_gs.ply`
 
 ## 待评估问题
 
