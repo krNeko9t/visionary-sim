@@ -40,6 +40,7 @@ Label: wayfinder:map
 
 <!-- 每张关闭的票一行：结论要旨 + 指针。细节留在票里，本图不复述 -->
 - [01 · 行业里怎么称呼「被规定的自由度」](issues/01-boundary-condition-vocabulary.md)：族名定为 `prescribed`，下分 static（永久，原「锚定」）与 kinematic（临时，KinematicDrive）；`anchor` 全行业指「约束的附着点」且仓库 `grip.js` 已占用，弃用；「惰性节点」共识词是 `inactive node`，但它属 4.2 后果、不入族。
+- [02 · 四面体反事实审计](issues/02-tetrahedral-counterfactual.md)：代价声明错两次——跟着走的是 `sim/constraints/` 四文件重写 + 四文件改证明、`simulator.js`、`deformation/`（含 channel 里的 `CUBE_CORNERS`）、`sim/debug/` 整份、以及 `body/`/`scene/`/`main.js`/`ui/`（`resolution` 的单位）；守住的只有 `sim/state/` 与 `render/`。漏网的承重假定：稠密索引寻址（惰性节点是它的后果）、静止形状全等、接触桶容量硬界依赖最小节点间距、点定位是一次除法。B/C 两档的分界线就是拆根的位置。
 
 ## Not yet specified
 
@@ -49,11 +50,6 @@ Label: wayfinder:map
   它才具备开票的锐度。
 - **自由度必须与被渲染的几何同源吗**。PhysDreamer 自己用的是降采样的无结构驱动子，不是与点云
   同源的网格。这个问题被排除在本轮试金石之外，等 PhysDreamer 场景真的回来再说。
-- **「批次规则属于每一种约束自己」这条承诺要不要重述**。如果审计证明 `sim/constraints/` 整体
-  随点阵而变（8 色分批、半格球都是 4.2 的后果），那么这条承诺的边界就比文档写的窄。等
-  「四面体反事实审计」出清单。
-- **`deformation/bind.js` 那道缝是不是真的**。`latticeField` 是今天唯一的采样器，缝只被声明过
-  没被验证过；可能需要第二个采样器的签名才能证明。等「代理几何的类型边界」。
 - **`STATUS.md` 与 issue tracker 的重叠**。11a 把它挡在本图之外，但重叠没有消失。
 
 ## Out of scope
