@@ -47,6 +47,7 @@ ADR，细节留在代码旁边）、建立领域词汇表、把离散化护栏�
 - [05 · 4.2 该在 `ARCHITECTURE.md` 里留下什么](issues/05-root-4-2-cost-and-structure.md)：原问（修代价声明、挂九条后果、拆根）被使用者整体推翻——病根是 §四 在复述代码。判据改为「只对打开某个模块的人有用的写在模块旁边，跨模块的才进 ADR」：4.2 删除、转成 ADR-0005，代价声明不再写成文字、由 06 的词表测试兑现；ADR-0004 记下这条规则并推翻本图原先「不把 §四 拆成 ADR」的边界。其余各根 → 13。
 - [06 · 离散化词表的覆盖面](issues/06-discretisation-word-list-coverage.md)：词表扫全仓库，唯一居民 `sim/discretize/lattice/`（尚不存在，规则照样对着它写）；今天仍说点阵的 33 个文件逐个进 `DISCRETISATION_DEBT`，另一条测试让已还清的条目变红，所以债单只减不增——它就是 4.2 那句代价声明的机器版，也是 09 的验收清单。`body/`、`scene/` 实测今天就红（`resolution` 的单位），进债单；`sim/state` 的反向声明改写而不豁免；三处 `inert` 意为「此刻不被解算」，按 ADR-0003 改写而非改名。
 - [07 · 决策记录切到 docs/adr/](issues/07-decision-log-switch.md)：ADR-0001 落盘，`DECISIONS.md` 原地封存为完全只读（错误记录也不再追加，写进推翻它的新 ADR）；`CLAUDE.md` 表与「改依赖表」规则改指 `docs/adr/`，`ARCHITECTURE.md` 只改了开头指针。旧条目实为 14 条。
+- [08 · 把锚定票的框架改对](issues/08-reframe-anchor-ticket.md)：验收样本通过。锚定票改名「静态规定的自由度用什么机制生效」，背景重写成一族（运动学已有、静态待建，分界是归属）+ 一个编码（`gpuInvMass` 的零，ADR-0003）+ 一个不入族的惰性节点；判据只摆出不改（世界空间 vs 用 h 表达，官方阈值其实也挂 `grid_size`）。撞出：三个候选的编码那一步全踩 ADR-0003，真正区分它们的是「哪一层交出结论」那根轴——记在票里「读候选前」一节，原文未动。
 
 ## Not yet specified
 
