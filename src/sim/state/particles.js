@@ -6,12 +6,12 @@ import stateWgsl from './state.wgsl?raw';
  * Every degree of freedom in the scene, and nothing that explains where they
  * came from.
  *
- * A node here is a point with a position, a history and an inverse mass. It is
- * not a lattice corner: this file never learns that cells exist, how they are
- * coloured, or which of them share it. That ignorance is the point. Whatever
- * wants to move these nodes -- the elastic constraint that does know about
- * cells, a contact constraint that will not -- reads and writes them through
- * the same four buffers and the same declarations.
+ * A node here is a point with a position, a history and an inverse mass. This
+ * file never learns how the nodes were laid out, what binds them together, or
+ * in what order anything visits them. That ignorance is the point. Whatever
+ * wants to move these nodes -- an elastic constraint that knows how the body
+ * was cut up, a contact constraint that does not -- reads and writes them
+ * through the same four buffers and the same declarations.
  *
  * Bodies are concatenated into one set of buffers rather than given their own,
  * for two reasons that survive any constraint type: the number of dispatches
@@ -24,8 +24,8 @@ import stateWgsl from './state.wgsl?raw';
  *
  * @typedef {object} BodyNodes
  * @property {Float32Array} restPositions - Rest positions, 3 floats per node.
- * @property {Float32Array} invMass - Inverse mass per node, 0 where inert.
- * @property {number} nodeCount - Nodes in this body, including inert ones.
+ * @property {Float32Array} invMass - Inverse mass per node, 0 where inactive.
+ * @property {number} nodeCount - Nodes in this body, including inactive ones.
  */
 
 /** The particle half of every kernel's declarations. See `state.wgsl`. */
@@ -63,7 +63,7 @@ export class Particles {
         this.nodeCount = total;
 
         const positions = new Float32Array(total * 4);
-        /** Kept on the CPU as well: picking needs to know which nodes are inert. */
+        /** Kept on the CPU as well: picking needs to know which nodes are inactive. */
         const invMass = new Float32Array(total);
         for (let b = 0; b < bodies.length; b++) {
             const { restPositions, nodeCount } = bodies[b];
@@ -78,8 +78,8 @@ export class Particles {
         this.restPositions = positions;
         this.invMass = invMass;
 
-        // Which nodes currently read as inert on the GPU whatever their
-        // material inverse mass says. Kept apart from `invMass` itself so
+        // Which nodes the GPU currently skips whatever their material
+        // inverse mass says. Kept apart from `invMass` itself so
         // that whatever asked for it -- a constraint driving those nodes some
         // other way -- can be undone without forgetting what they actually
         // weigh.

@@ -48,9 +48,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let prev = nodePrev[n].xyz;
     var p = nodePos[n].xyz;
 
-    // Inert nodes -- lattice corners no cell touches, or nodes some other
-    // constraint has prescribed this frame -- were left exactly where that
-    // constraint put them.
+    // Zero inverse mass -- an inactive node with no material, or one some
+    // other constraint has prescribed this frame -- means nothing here moved
+    // it: it stays exactly where that constraint put it.
     if (nodeInvMass[n] == 0.0) {
         return;
     }

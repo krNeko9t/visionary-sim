@@ -4,10 +4,10 @@
 // its own passes, each constraint set for its projection -- so there is exactly
 // one declaration of the particle layout however many readers there are.
 //
-// Nothing about cells, colours or lattices appears in this file, and that is
-// its whole job. A constraint that has never heard of a voxel still moves the
-// same nodes through the same buffers, which is what lets a second kind of
-// constraint exist at all.
+// Nothing about how the nodes were laid out or batched appears in this file,
+// and that is its whole job. A constraint that has never heard of the layout
+// still moves the same nodes through the same buffers, which is what lets a
+// second kind of constraint exist at all.
 
 // vec4f rather than vec3f: a storage buffer a compute shader writes wants
 // 16-byte alignment. The w component is unused. `deformation/sample.wgsl`

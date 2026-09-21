@@ -5,7 +5,7 @@ import { DEFAULT_MATERIAL } from './material.js';
  * of, and what shape it has at rest.
  *
  * Deliberately *not* here: anything about how it gets simulated. A body does
- * not know it will be cut into cells, does not own solver constants, and does
+ * not know how it will be cut up, does not own solver constants, and does
  * not know what a node is. The simulation side reads a body and decides all of
  * that, which is what lets that decision change without touching this file.
  *

@@ -83,7 +83,7 @@ export function singleNode(positions, invMass, anchor, options) {
  * `Array.prototype.sort`'s stability rather than on geometry.
  *
  * @param {Float32Array} positions - Node positions, 4 floats per node.
- * @param {Float32Array} invMass - Per-node inverse mass; zero means inert.
+ * @param {Float32Array} invMass - Per-node inverse mass; zero means inactive.
  * @param {number} anchor - Global index of the node the ray hit.
  * @param {object} params
  * @param {number} params.radius - World-space radius, metres.

@@ -35,3 +35,19 @@ spec 要回答：
   06 的词表测试转绿。
 - 重构把点阵细节搬进 `sim/discretize/lattice/` 时，**注释跟着代码走**：02 那九条假定今天都在
   源码注释里，搬家时不许把它们丢了，也不许把它们抄回任何文档。
+
+### 06 交来的验收清单（2026-09-21）
+
+`test/unit/architecture.test.js` 的 `DISCRETISATION_DEBT` 列出了今天 `sim/discretize/lattice/`
+之外仍在说点阵的 33 个文件，每条带一句「由哪一步还」。**spec 的完成标准可以直接写成「这张表
+为空、常量删掉」**；有一条测试保证表里不会留着已经还清的条目，所以每一步的进度都能机器读出。
+
+比 03 的搬家清单**多出来**、spec 要单独排的：
+
+- **`resolution` 的单位**：`scene/{tank,splats,football}.js` 按「N mm cells」调参，
+  `body/material.js` 的稳定性论证按单元说。
+- **下游的散文**：`assets/{shapes,tessellate}.js`、`assets/splats/{clean,measure}.js`、
+  `deformation/covariance.js` 用点阵解释自己。没有接口条目要它们改，只是说的话会不再成立。
+- **`cell` 的中立用法**：`broadphase.js` 的 hash grid 与 `timestep.js` 的 CFL。还完真债后若只剩
+  这种误伤，在那个文件里改名（grid cell → bucket），不要把它留在债单上。
+- `render/` 那条词表测试的注释里 `sim/debug/` 的豁免理由，随 `sim/debug/` 消失一起删。

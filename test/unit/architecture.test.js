@@ -117,6 +117,92 @@ const DISCRETISATION = [
 ];
 
 /**
+ * The one directory that may speak {@link DISCRETISATION}: it holds the
+ * lattice, so it is the only place that has to know one exists. It does not
+ * exist yet -- the move that fills it is the proxy-geometry refactor -- and the
+ * rule is stated against it anyway, because the rule is what that move is for.
+ */
+const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
+
+/**
+ * Every file outside {@link DISCRETISATION_RESIDENT} that still speaks the
+ * lattice today, and why.
+ *
+ * This table is the cost of replacing the voxel lattice. It used to be a
+ * sentence in `ARCHITECTURE.md` -- "swapping it touches `sim/discretize/` and
+ * little else" -- and that sentence was wrong twice, because nothing checked
+ * it (ADR-0004). Here it cannot drift either way: a file that starts speaking
+ * the lattice and is not listed fails, and a listed file that has stopped
+ * speaking it fails too, so the list only ever shrinks and never overstates.
+ *
+ * Every entry is a real cost, not a false positive. A word that matches here
+ * and means something neutral does not get an entry; it gets renamed, or the
+ * pattern gets narrower with a reason written next to it.
+ *
+ * All of it is paid by the proxy-geometry refactor
+ * (`.scratch/proxy-geometry/issues/09-refactor-spec.md`); the reasons say which
+ * part of that refactor pays each one.
+ */
+const DISCRETISATION_DEBT = {
+    // Moves into the resident as it stands.
+    'sim/discretize/lattice.js': 'moves',
+    'sim/discretize/kuhn.js': 'moves',
+    'sim/discretize/voxelize.js': 'moves',
+    'sim/discretize/cloudVolume.js': 'moves',
+    'sim/constraints/elasticCells.js': 'moves: the lattice hands over its own elastic constraints',
+    'sim/constraints/wgsl/cells.wgsl': 'moves with elasticCells.js',
+    'sim/constraints/wgsl/project.wgsl': 'moves with elasticCells.js',
+    'deformation/sample.js': 'moves: the sampler is the lattice\'s, the channel keeps only the contract',
+    'deformation/sample.wgsl': 'moves with sample.js',
+    'deformation/corners.js': 'moves with sample.js',
+    'sim/debug/latticeView.js': 'becomes `wireframe()` in the resident plus a path in render/',
+
+    // Stays, and stops reaching into the lattice once the neutral interface exists.
+    'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
+    'deformation/bind.js': '`latticeField()` moves out, the typedef and contract stay',
+    'sim/simulator.js': 'reads lattice fields directly; goes through the interface',
+    'sim/grip.js': 'aims with `h`; reads `spacing` instead',
+    'sim/constraints/bodyContact.js': 'derives the seal radius from `h`; reads `contactSurface().radii`',
+    'sim/constraints/broadphase.js': 'bucket bound from `h`; reads the measured `spacing.min`',
+    'sim/constraints/compliance.js': 'rest volume and wave ratio from `h`; one moves in, one reads `cflLength`',
+    'sim/constraints/wgsl/collide.wgsl': 'explains contact by the lattice\'s approximation',
+    'sim/constraints/wgsl/contacts.wgsl': 'bucket capacity and colouring argued from lattice corners',
+    'sim/constraints/wgsl/sort.wgsl': 'bucket occupancy argued from lattice nodes',
+    'sim/solver/timestep.js': 'stability in cell crossings; becomes `cflLength`',
+    'main.js': 'builds the lattice debug view and logs `h`/cells',
+    'ui/panel.js': 'reads `cells` for the scale readout; becomes `scale()`',
+    'body/material.js': 'the stability bound is argued per cell and cites `cells.wgsl`',
+
+    // `resolution` is counted in cells along the longest axis; its unit changes.
+    'scene/tank.js': 'resolution unit',
+    'scene/splats.js': 'resolution unit',
+    'scene/football.js': 'resolution unit',
+
+    // Prose that explains itself through the lattice downstream of it.
+    'assets/shapes.js': 'SDFs are preferred because they voxelise exactly',
+    'assets/tessellate.js': 'says the simulator voxelises',
+    'assets/splats/clean.js': 'cleaning exists because an empty cell cannot move',
+    'assets/splats/measure.js': 'sizes compared against cells',
+    'deformation/covariance.js': 'the gradient\'s error measured in cells'
+};
+
+/**
+ * @param {string} file - Path relative to `src`.
+ * @returns {RegExp[]} The {@link DISCRETISATION} patterns `file` matches.
+ */
+function discretisationIn(file) {
+    const text = readFileSync(join(SRC, file), 'utf8');
+    return DISCRETISATION
+        // `deform` then a capital is the channel's own namespace: everything it
+        // pastes into someone else's shader starts that way, so inside
+        // `deformation/` the pattern would catch the channel for existing.
+        // Outside it, the same name means someone is reading the channel's
+        // internals, which is the leak it was written for.
+        .filter(pattern => !(areaOf(file) === 'deformation' && pattern.source === '\\bdeform[A-Z]'))
+        .filter(pattern => pattern.test(text));
+}
+
+/**
  * Words that belong to whoever is reaching into the scene from outside it.
  *
  * `sim/state` holds the degrees of freedom and must not know what any of them
@@ -260,6 +346,34 @@ describe('the layering the file tree claims', () => {
             });
 
         expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('lets only the lattice\'s own directory know it is a lattice', () => {
+        // The render rule above, extended to everything. What it buys is
+        // locality, not a second backend: "replacing the lattice touches one
+        // directory" becomes a sentence the suite can check rather than one
+        // somebody has to remember to correct.
+        //
+        // `sim/state/` gets no exemption even though it used to announce, in
+        // so many words, that it had never heard of a lattice. A file that
+        // does not know something can say so without naming it.
+        const leaks = sourceFiles()
+            .filter(file => !file.startsWith(`${DISCRETISATION_RESIDENT}/`))
+            .filter(file => !(file in DISCRETISATION_DEBT))
+            .flatMap(file => discretisationIn(file).map(pattern => `src/${file} matches ${pattern}`));
+
+        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('lists no discretisation debt that has already been paid', () => {
+        // The other half of the rule above. Without it the table can only
+        // grow, and a list of what replacing the lattice costs that includes
+        // files it no longer costs is the same wrong sentence it replaced.
+        const paid = Object.keys(DISCRETISATION_DEBT)
+            .filter(file => !sourceFiles().includes(file) || discretisationIn(file).length === 0)
+            .map(file => `src/${file} is listed as debt but no longer speaks the lattice`);
+
+        expect(paid, `\n${paid.join('\n')}\n`).toEqual([]);
     });
 
     it('keeps the degrees of freedom and the stepper free of interaction', () => {

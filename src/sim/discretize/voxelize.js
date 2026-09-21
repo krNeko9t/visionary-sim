@@ -187,7 +187,7 @@ export function voxelizeMesh(mesh, bounds, options = {}) {
  *
  * The column rays above sample at cell centres, so a triangle that only clips
  * the corner of a cell leaves it unmarked -- and any render vertex there would
- * end up embedded in inert nodes and tear off the body. Walking the edges fixes
+ * end up embedded in inactive nodes and tear off the body. Walking the edges fixes
  * that at the vertices exactly (they are edge endpoints) and covers the rest of
  * the silhouette on the way.
  *

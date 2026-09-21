@@ -50,7 +50,7 @@ async function boot() {
     });
 
     const panel = createPanel(sim, {
-        onLatticeToggle: (visible) => {
+        onProxyToggle: (visible) => {
             for (const view of latticeViews) {
                 view.enabled = visible;
             }

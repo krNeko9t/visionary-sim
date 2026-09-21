@@ -45,6 +45,7 @@ ADR，细节留在代码旁边）、建立领域词汇表、把离散化护栏�
 - [03 · 代理几何的类型边界](issues/03-proxy-geometry-type-boundary.md)：`Lattice` 拆成中立 `ProxyGeometry` 与住在 `sim/discretize/lattice/` 的 `VoxelLattice`，11 个公开字段换成 9 条接口条目（含 6 条不变量）。中立的 `ElasticCells` 不再存在，离散化直接交出自己的弹性约束；接触收「边界节点 + 每节点密封半径」而非约束，判据是「约束是否跨物体耦合」；采样器三件搬出 `deformation/`，`deformedNode` 不进中立契约；线框调试视图升为一条渲染路径（`wireframe()`），`sim/debug/` 目录消失。`spacing` 与 `cflLength` 必须是两条——它们在点阵上都读作 `h` 纯属均匀网格的巧合。
 - [04 · 「被规定的自由度」这一族的名字](issues/04-prescribed-dof-family.md)：族名收伞为 `prescribed`，下分 static（属于物体）与 kinematic（属于一次交互）——分界轴是**归属**，「永久/临时」是它推出来的后果、不写进词汇表；族定义对方向性保持中立。规则：**材料数组里的零只表示惰性，被规定从不写进材料数组**，于是「共用一个编码」不是纠缠的根因、把不同归属的东西写进同一个数组才是。产出根目录 `CONTEXT.md`（9 条）与 ADR-0002/0003；连带收窄 03 的 I1，`inert`→`inactive` 交给 06。
 - [05 · 4.2 该在 `ARCHITECTURE.md` 里留下什么](issues/05-root-4-2-cost-and-structure.md)：原问（修代价声明、挂九条后果、拆根）被使用者整体推翻——病根是 §四 在复述代码。判据改为「只对打开某个模块的人有用的写在模块旁边，跨模块的才进 ADR」：4.2 删除、转成 ADR-0005，代价声明不再写成文字、由 06 的词表测试兑现；ADR-0004 记下这条规则并推翻本图原先「不把 §四 拆成 ADR」的边界。其余各根 → 13。
+- [06 · 离散化词表的覆盖面](issues/06-discretisation-word-list-coverage.md)：词表扫全仓库，唯一居民 `sim/discretize/lattice/`（尚不存在，规则照样对着它写）；今天仍说点阵的 33 个文件逐个进 `DISCRETISATION_DEBT`，另一条测试让已还清的条目变红，所以债单只减不增——它就是 4.2 那句代价声明的机器版，也是 09 的验收清单。`body/`、`scene/` 实测今天就红（`resolution` 的单位），进债单；`sim/state` 的反向声明改写而不豁免；三处 `inert` 意为「此刻不被解算」，按 ADR-0003 改写而非改名。
 
 ## Not yet specified
 

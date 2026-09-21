@@ -1,6 +1,6 @@
 # 06 · 离散化词表的覆盖面
 
-Status: open
+Status: resolved
 Type: task
 Blocked by: 03
 
@@ -96,3 +96,57 @@ Blocked by: 03
 它的真相现在**就是本票的词表测试**：「换掉点阵只动 `sim/discretize/lattice/`」要靠「只有那个目录
 可以说 lattice」来兑现。所以决定临时豁免哪个区域时，豁免注释要说清它是在掩盖一处**真实的**
 代价，而不是误伤。
+
+## Answer
+
+**词表扫全仓库，只有一个居民 `sim/discretize/lattice/`；今天仍在说点阵的 33 个文件逐个列进
+`DISCRETISATION_DEBT`，外加一条「债单里的文件已经干净就红」，所以债单只减不增。** 使用者
+2026-09-21 在三个选项上都选了推荐项。
+
+### 定下来的
+
+| # | 问题 | 结论 |
+|---|---|---|
+| 1 | 覆盖哪些区域 | **全部 `src/`**，不枚举。枚举消费方会让 `sim/` 整片无人看守，「只有一个目录说 lattice」今天就无法被检查 |
+| 2 | 词表含哪些词 | **原样不动**（`render/` 那条规则也原样保留）。换掉的是豁免区的位置，不是词 |
+| 3 | `deformation/` 的时序 | 不需要单独的临时豁免：它的 5 个文件和别的欠账一样进债单，每条写明由 09 的哪一步还 |
+| 4 | 豁免写在哪 | 居民是一个常量 `DISCRETISATION_RESIDENT`，它**还不存在**，规则照样对着它写；债单每条带一句理由；注释说明「每一条都是真实代价，不收误伤」 |
+| 5 | `sim/state/` 的反向声明 | **改写成不点名的说法**，不给永久豁免。意思不变，`sim/state/` 从此被词表看着 |
+| 6 | `/\bcell/` 的中立用法（broadphase 的 hash grid、CFL） | **词表不变，靠债单吸收**：这两个文件本来就因别的点阵依赖在债单上（`h` 推出的桶上界、`cflLength`）。09 搬完若只剩误伤，在那个文件里把 grid cell 改叫 bucket |
+
+### 实测与票面不符的两处
+
+- **`body/` 与 `scene/` 今天就是红的**，不是绿的。`scene/` 三个文件按「N mm cells」调参，
+  `body/material.js` 的稳定性论证按单元说、还引用 `cells.wgsl` 的路径——都是真实代价
+  （`resolution` 的单位），不是最小改动能修的，进债单。`softBody.js` 只剩一句反向声明，已改写。
+- **`/\bdeform[A-Z]/` 在 `deformation/` 里面是误伤**：`covariance.wgsl` 头注释说「every name
+  introduced here begins `deform`」，那是通道自己的命名空间。所以这一条模式在 `deformation/`
+  内不生效，理由写在 `discretisationIn()` 旁边；在 `deformation/` 外它照旧抓「有人在读通道的
+  内部名字」。
+
+### 落盘
+
+- `test/unit/architecture.test.js`：`DISCRETISATION_RESIDENT`、`DISCRETISATION_DEBT`（33 条，
+  分四组：整份搬进居民 / 留下但改走中立接口 / `resolution` 的单位 / 下游的散文）、
+  `discretisationIn()`、两条新测试。`ALLOWED` 未动，所以不需要 ADR。
+- `src/`（全是注释与一个回调名）：
+  - `inert` → `inactive`：`lattice.js`×4、`voxelize.js`、`particles.js`×3、`grip.js`。
+  - **三处 `inert` 没有照改**：`particles.js:81`、`predict.wgsl:21`、`finalize.wgsl:51` 的 `inert`
+    指的是「此刻不被解算」（惰性**或**被规定），照改成 `inactive` 就违反 ADR-0003。改写成两者
+    并列的说法，顺带去掉了 `sim/solver/wgsl/` 里的 `lattice`/`cell`——那两个 shader 不进债单。
+  - `sim/state/particles.js`、`state.wgsl`、`body/softBody.js` 的反向声明改写。
+  - `ui/panel.js` + `main.js`：`onLatticeToggle` → `onProxyToggle`，「显示点阵」→「显示代理
+    几何」，一处注释。**`panel.js` 仍在债单上**：规模读数读 `cells`，要等 `scale()`。
+- `ARCHITECTURE.md` §五：加一行护栏。
+
+### 验证
+
+- 撤掉 `src/` 改动跑：新测试红，10 处（`sim/state` ×2 文件、`sim/solver/wgsl` ×2、`softBody.js`）。
+- 往债单塞一个干净文件（`sim/pick.js`）：「已还清的债」那条红。
+- 全部 `src/` 改动就位：26 个文件 232 条全绿。
+
+### 交给别人的
+
+- **09**：债单就是那份 spec 的验收清单——spec 走完，`DISCRETISATION_DEBT` 应当为空、可以删掉
+  那条常量。另外 `render/` 那条测试的注释还写着 `sim/debug/` 的豁免理由，随 `sim/debug/` 消失
+  一起改。见 09 的评论。

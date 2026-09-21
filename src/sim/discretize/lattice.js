@@ -6,16 +6,16 @@ import { CUBE_CORNERS } from '../../deformation/corners.js';
  * Nodes are the corners of every cell, kept as a full dense grid even where no
  * material touches them: dense indexing (`i + nnx * (j + nny * k)`) is what lets
  * the GPU derive the eight corner indices of a cell from arithmetic alone, with
- * no connectivity buffer. Unused nodes get zero inverse mass and are inert.
+ * no connectivity buffer. Unused nodes get zero inverse mass and are inactive.
  *
  * @typedef {object} Lattice
  * @property {number[]} origin - World position of the min corner of cell (0,0,0).
  * @property {number} h - Cell edge length.
  * @property {number[]} cellDims - Cell counts along each axis.
  * @property {number[]} nodeDims - Node counts along each axis, `cellDims + 1`.
- * @property {number} nodeCount - Total nodes, including inert ones.
+ * @property {number} nodeCount - Total nodes, including inactive ones.
  * @property {Float32Array} restPositions - Node rest positions, 3 floats per node.
- * @property {Float32Array} invMass - Per-node inverse mass, 0 where inert.
+ * @property {Float32Array} invMass - Per-node inverse mass, 0 where inactive.
  * @property {Uint32Array} cells - Linear indices of occupied cells, grouped by colour.
  * @property {{ start: number, count: number }[]} colorRanges - Range of `cells` per colour.
  * @property {number} mass - Total mass in kilograms.
@@ -111,7 +111,7 @@ export function cellNodeIndices(nodeDims, i, j, k, out = new Uint32Array(8)) {
  * A node is on the boundary when some of the eight cells around it hold
  * material and some do not; outside the grid counts as not. Nodes with all
  * eight occupied are buried and can only be reached through the material, and
- * nodes with none are inert.
+ * nodes with none are inactive.
  *
  * This is a fact about the discretisation, not about anything that uses it,
  * which is why it lives here. What it is for is contact: the boundary is where

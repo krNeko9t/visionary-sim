@@ -71,10 +71,10 @@ const REFRESH = 1 / 6;
 /**
  * @param {import('../sim/simulator.js').Simulator} sim - Simulation to drive.
  * @param {object} handlers - Things the panel cannot do itself.
- * @param {(visible: boolean) => void} handlers.onLatticeToggle - Show or hide the solver lattice.
+ * @param {(visible: boolean) => void} handlers.onProxyToggle - Show or hide the proxy geometry.
  * @returns {{ element: HTMLElement, update: (dt: number) => void }} The panel.
  */
-export function createPanel(sim, { onLatticeToggle }) {
+export function createPanel(sim, { onProxyToggle }) {
     let selected = 0;
     let sinceRefresh = REFRESH;
     let fps = 60;
@@ -117,7 +117,7 @@ export function createPanel(sim, { onLatticeToggle }) {
 
     // Two of `sim.grip`'s two fields, worth having a switch for rather than
     // only a constant -- same reasoning `setContact` earned: pull the toggle
-    // off and dragging goes back to feeling heavier the denser the lattice,
+    // off and dragging goes back to feeling heavier the denser the proxy geometry,
     // which is the only way to see the fix by feel rather than by reading code.
     const gripRadius = slider({
         label: '抓取半径',
@@ -153,7 +153,7 @@ export function createPanel(sim, { onLatticeToggle }) {
                 onChange: on => sim.setGrip(on ? 'withinRadius' : 'singleNode')
             }).element,
             gripRadius.element,
-            toggle({ label: '显示点阵', value: false, onChange: onLatticeToggle }).element,
+            toggle({ label: '显示代理几何', value: false, onChange: onProxyToggle }).element,
             note
         ])
     );
