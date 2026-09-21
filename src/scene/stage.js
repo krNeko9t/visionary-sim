@@ -16,13 +16,16 @@ const VIEW_DISTANCE = 1.25;
  *
  * @param {import('playcanvas').AppBase} app - The application.
  * @param {{ min: number[], max: number[] }} bounds - What to look at.
+ * @param {{ focusBounds?: {min: number[], max: number[]} }} [options] - Initial focus,
+ *   allowing nearby body inspection within a much larger backdrop.
  * @returns {{ camera: Entity, controls: CameraControls }} Camera entity and its controls.
  */
-export function createStage(app, { min, max }) {
+export function createStage(app, { min, max }, { focusBounds = { min, max } } = {}) {
+    const { min: focusMin, max: focusMax } = focusBounds;
     const focus = new Vec3(
-        (min[0] + max[0]) * 0.5,
-        (min[1] + max[1]) * 0.5,
-        (min[2] + max[2]) * 0.5
+        (focusMin[0] + focusMax[0]) * 0.5,
+        (focusMin[1] + focusMax[1]) * 0.5,
+        (focusMin[2] + focusMax[2]) * 0.5
     );
 
     // Every distance below is a multiple of the scene's diagonal, so a scene of
@@ -31,20 +34,22 @@ export function createStage(app, { min, max }) {
     // now so does anything else.
     const span = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
 
+    const focusSpan = Math.hypot(...focusMax.map((v, axis) => v - focusMin[axis]));
+
     app.scene.ambientLight = new Color(0.14, 0.16, 0.20);
 
     const camera = new Entity('camera');
     camera.addComponent('camera', {
         clearColor: new Color(0.078, 0.09, 0.11),
         nearClip: 0.01,
-        farClip: 50,
+        farClip: Math.max(50, span * 9),
         fov: 45
     });
     camera.camera.toneMapping = TONEMAP_ACES2;
     camera.setPosition(
-        focus.x + VIEW_DIR.x * span * VIEW_DISTANCE,
-        focus.y + VIEW_DIR.y * span * VIEW_DISTANCE,
-        focus.z + VIEW_DIR.z * span * VIEW_DISTANCE
+        focus.x + VIEW_DIR.x * focusSpan * VIEW_DISTANCE,
+        focus.y + VIEW_DIR.y * focusSpan * VIEW_DISTANCE,
+        focus.z + VIEW_DIR.z * focusSpan * VIEW_DISTANCE
     );
     camera.lookAt(focus);
     app.root.addChild(camera);
@@ -55,7 +60,7 @@ export function createStage(app, { min, max }) {
             focusPoint: focus,
             enableFly: false,
             pitchRange: new Vec2(-80, 80),
-            zoomRange: new Vec2(span * 0.3, span * 7)
+            zoomRange: new Vec2(focusSpan * 0.3, span * 7)
         }
     });
 

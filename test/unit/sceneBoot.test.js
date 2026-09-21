@@ -34,7 +34,7 @@ beforeEach(() => {
     state.app = { graphicsDevice: {}, root: { addChild: vi.fn() },
         on: (event, cb) => listeners[event] = cb,
         start: () => { state.events.push(['start']); listeners.update(1 / 60); },
-        destroy: vi.fn()
+        destroy: vi.fn(() => listeners.destroy?.())
     };
     const canvas = { style: {} };
     vi.stubGlobal('window', { location: { search: '' } });
@@ -84,4 +84,45 @@ it.each([null, { kind: 'gaussians', cloud: { count: 0 } }])('skips empty body dr
     expect(createSplatView).not.toHaveBeenCalled();
     expect(draw).toHaveBeenCalledExactlyOnceWith(state.app, { kind: 'lines' }, {}, { name: 'empty drawing' });
     expect(window.wireframeViews[0].enabled).toBe(false);
+});
+
+it('uses observation bounds without enlarging the solver', async () => {
+    state.scene.viewBounds = { min: [-10, -2, -10], max: [10, 4, 10] };
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(state.events).toContainEqual(['sim', state.scene.bounds]);
+    expect(state.events).toContainEqual(['stage', state.scene.viewBounds]);
+});
+
+it('cleans the app and simulator once when a later scenery layer fails to draw', async () => {
+    state.scene.scenery = async () => [
+        { name: 'fixed', cloud: { count: 1 } }, { name: 'background', cloud: { count: 1 } }
+    ];
+    createSplatView.mockImplementationOnce(() => ({})).mockImplementationOnce(() => { throw new Error('background GPU failure'); });
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(state.app.destroy).toHaveBeenCalledOnce();
+    expect(state.events.filter(([event]) => event === 'destroy')).toHaveLength(1);
+    expect(state.events).not.toContainEqual(['start']);
+    expect(document.body.append).toHaveBeenCalledWith(expect.objectContaining({ textContent: expect.stringContaining('background GPU failure') }));
+});
+
+
+it('destroys the simulator once with the scene application', async () => {
+    const { startup } = await import('../../src/main.js');
+    const app = await startup;
+    app.destroy();
+    app.destroy();
+    expect(state.events.filter(([event]) => event === 'destroy')).toHaveLength(1);
+});
+
+it('cleans previously attached scenery when movable drawing fails', async () => {
+    state.scene.createBodies = async () => [{ name: 'moving', source: {}, render: { kind: 'gaussians', cloud: { count: 1 } } }];
+    draw.mockImplementationOnce(() => { throw new Error('moving GPU failure'); });
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(createSplatView).toHaveBeenCalledOnce();
+    expect(state.app.destroy).toHaveBeenCalledOnce();
+    expect(state.events.filter(([event]) => event === 'destroy')).toHaveLength(1);
+    expect(state.events).not.toContainEqual(['start']);
 });

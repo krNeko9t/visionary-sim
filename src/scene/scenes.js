@@ -21,9 +21,10 @@ import { splatContactScene, splatScene } from './splats.js';
  *
  * @typedef {object} Scene
  * @property {string} name - How it is asked for.
- * @property {{ min: number[], max: number[] }} bounds - The solver's walls, and
- *   what the camera frames. Plain numbers: the simulation must not depend on
+ * @property {{ min: number[], max: number[] }} bounds - The solver's walls and default camera focus. Plain numbers: the simulation must not depend on
  *   PlayCanvas, and the camera must not depend on the simulation.
+ * @property {{ min: number[], max: number[] }} [viewBounds] - Full observation extent,
+ *   independent of solver walls. Camera zoom and clipping include this extent.
  * @property {() => Promise<unknown>} [prepare] - Finish asynchronous declarations,
  *   including bounds, before the camera or simulation is constructed.
  * @property {number[]} [gravity] - World acceleration; omitted keeps simulator defaults.

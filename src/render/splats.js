@@ -48,31 +48,40 @@ const SH_C0 = 0.28209479177387814;
  */
 export function createSplatView(app, name, cloud, field = null) {
     const entity = new Entity(`splat-view-${name}`);
-    entity.addComponent('gsplat', {
-        resource: new GSplatResource(app.graphicsDevice, splatData(cloud)),
-        castShadows: false
-    });
-
-    // The entity transform stays identity, and that is a rule rather than a
-    // default: the modifier below is handed *world*-space centres, so a
-    // translated entity would ask the deformation field about points outside
-    // itself and get extrapolation. Placement is baked into the cloud instead,
-    // which is also how mesh bodies work.
-    if (field) {
-        entity.gsplat.setWorkBufferModifier({
-            wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
+    const resource = new GSplatResource(app.graphicsDevice, splatData(cloud));
+    // Direct resources have no Asset owner. Entity destruction removes the
+    // component first; only then release the resource backing its placement.
+    entity.once('destroy', () => resource.destroy());
+    try {
+        entity.addComponent('gsplat', {
+            resource,
+            castShadows: false
         });
-        // The nodes move every frame and nothing tells the engine so: from its
-        // side this cloud is a static resource under a static transform, and it
-        // would bake the work buffer once. This is the cost of the whole
-        // approach, and it is a re-bake of every splat in the body per frame.
-        entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
 
-        for (const [parameter, value] of Object.entries(field.parameters)) {
-            entity.gsplat.setParameter(parameter, value);
+        // The entity transform stays identity, and that is a rule rather than a
+        // default: the modifier below is handed *world*-space centres, so a
+        // translated entity would ask the deformation field about points outside
+        // itself and get extrapolation. Placement is baked into the cloud instead,
+        // which is also how mesh bodies work.
+        if (field) {
+            entity.gsplat.setWorkBufferModifier({
+                wgsl: `${field.shader}\n${COVARIANCE_WGSL}\n${ellipsoidWgsl}\n${modifierWgsl}`
+            });
+            // The nodes move every frame and nothing tells the engine so: from its
+            // side this cloud is a static resource under a static transform, and it
+            // would bake the work buffer once. This is the cost of the whole
+            // approach, and it is a re-bake of every splat in the body per frame.
+            entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
+
+            for (const [parameter, value] of Object.entries(field.parameters)) {
+                entity.gsplat.setParameter(parameter, value);
+            }
         }
+        return entity;
+    } catch (error) {
+        entity.destroy();
+        throw error;
     }
-    return entity;
 }
 
 /**

@@ -2,8 +2,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { readPly } from '../../src/assets/splats/ply.js';
+import { createAlocasiaScene } from '../../src/scene/alocasia.js';
 import { cloudFromPly } from '../../src/assets/splats/cloud.js';
 
 const temporary = [];
@@ -109,4 +110,40 @@ it('invalidates the success report and continues cleanup when an old asset becom
     expect(result.stderr).toMatch(/alocasia preparation failed:.*EISDIR/);
     expect(result.stderr).toContain('foreground.ply');
     expect(readdirSync(join(dir, 'out'))).toEqual(['foreground.ply']);
+});
+
+
+it('loads all prepared partitions through the real runtime loader without a second transform', async () => {
+    const dir = fixture();
+    expect(run(dir).status).toBe(0);
+    const fetchAsset = vi.fn(async url => {
+        const bytes = readFileSync(join(dir, 'out', url.split('/').at(-1)));
+        return { ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+    });
+    vi.stubGlobal('fetch', fetchAsset);
+    try {
+        const scene = createAlocasiaScene({ r: 0.002 }); // Synthetic coordinates only.
+        const [[body], [fixed, background]] = await Promise.all([scene.createBodies(), scene.scenery()]);
+        expect(fetchAsset).toHaveBeenCalledTimes(3);
+        expect(scene.counts).toMatchObject({ inputForeground: 2, inputBackground: 2, foregroundDiscarded: 0,
+            backgroundDiscarded: 0, movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
+        const foregroundAsset = cloudFromPly(read(join(dir, 'out/foreground.ply')));
+        const backgroundAsset = cloudFromPly(read(join(dir, 'out/background.ply')));
+        expect(body.source.cloud).toEqual(foregroundAsset);
+        expect(background.cloud).toEqual(backgroundAsset);
+        for (const [key, stride] of Object.entries({ positions: 3, rotations: 4, scales: 3, colors: 3, opacity: 1 })) {
+            expect(body.render.cloud[key]).toEqual(foregroundAsset[key].slice(0, stride));
+            expect(fixed.cloud[key]).toEqual(foregroundAsset[key].slice(stride));
+        }
+        expect([...background.cloud.positions]).toEqual([
+            expect.closeTo(-0.29835), 0, expect.closeTo(0.15),
+            expect.closeTo(13.2), expect.closeTo(10.5), expect.closeTo(-11.85)
+        ]);
+        expect([...background.cloud.rotations.slice(0, 4)]).toEqual([
+            expect.closeTo(-Math.SQRT1_2), 0, 0, expect.closeTo(Math.SQRT1_2)
+        ]);
+        expect([...background.cloud.scales.slice(0, 3)]).toEqual([expect.closeTo(0.3), expect.closeTo(0.45), expect.closeTo(0.6)]);
+        expect(scene.bounds.max[0]).toBeLessThan(1);
+        expect(scene.viewBounds.max[0]).toBeCloseTo(13.2);
+    } finally { vi.unstubAllGlobals(); }
 });

@@ -1,6 +1,6 @@
 import { loadCloud } from '../assets/splats/cloud.js';
 import { readPly } from '../assets/splats/ply.js';
-import { prepareAlocasiaData } from './alocasiaData.js';
+import { prepareAlocasiaData, cleanAlocasiaCloud } from './alocasiaData.js';
 import { rawBounds } from '../assets/splats/measure.js';
 import { SoftBody } from '../body/softBody.js';
 import { createMetricRegion } from './metricRegion.js';
@@ -23,27 +23,41 @@ export function createAlocasiaScene({ r } = {}) {
         if (r === undefined) throw failure('r is not calibrated; complete real-asset calibration before loading');
         // Validate even before I/O; no guessed tolerance is ever substituted.
         createMetricRegion([], r);
-        const [raw, samples] = await Promise.all([
+        const [raw, samples, rawBackground] = await Promise.all([
             loadCloud('/splats/alocasia/foreground.ply'),
-            loadMovingPoints('/splats/alocasia/moving_part_points.ply')
+            loadMovingPoints('/splats/alocasia/moving_part_points.ply'),
+            loadCloud('/splats/alocasia/background.ply')
         ]);
         const { cloud, region, movable, fixed } = prepareAlocasiaData(raw, samples, r);
-        counts = { movingSamples: samples.length / 3, foreground: cloud.count,
+        const background = cleanAlocasiaCloud(rawBackground, 'background');
+        counts = { inputForeground: raw.count, inputBackground: rawBackground.count,
+            foregroundDiscarded: raw.count - cloud.count, backgroundDiscarded: rawBackground.count - background.count,
+            backgroundGaussians: background.count, movingSamples: samples.length / 3, foreground: cloud.count,
             movableGaussians: movable.count, fixedGaussians: fixed.count };
         if (!samples.length) throw failure('no moving samples');
         if (!cloud.count) throw failure('no foreground after cleaning');
         const bounds = rawBounds(cloud);
         // Ten centimetres of interaction room on each side; the floor remains
-        // the offline declaration y=0. Camera and solver consume this same box.
+        // the offline declaration y=0. Background never expands the solver box.
         scene.bounds = {
             min: [bounds.min[0] - 0.1, 0, bounds.min[2] - 0.1],
             max: [bounds.max[0] + 0.1, Math.max(0, bounds.max[1]) + 0.1, bounds.max[2] + 0.1]
         };
+        scene.counts = counts;
+        const backgroundBounds = rawBounds(background);
+        scene.viewBounds = {
+            min: bounds.min.map((v, axis) => Math.min(v, backgroundBounds.min[axis])),
+            max: bounds.max.map((v, axis) => Math.max(v, backgroundBounds.max[axis]))
+        };
+        const report = `alocasia r=${r} m; ${JSON.stringify(counts)}`;
         return {
-            bodies: [new SoftBody({ name: 'alocasia', source: { kind: 'cloud', cloud },
+            bodies: [new SoftBody({ name: 'alocasia', source: { kind: 'cloud', cloud, report },
                 render: movable.count ? { kind: 'gaussians', cloud: movable } : null,
                 staticRegion: region.staticRegion, elementSize: 0.016 })],
-            scenery: fixed.count ? [{ name: 'alocasia-fixed', cloud: fixed }] : []
+            scenery: [
+                ...(fixed.count ? [{ name: 'alocasia-fixed', cloud: fixed }] : []),
+                ...(background.count ? [{ name: 'alocasia-background', cloud: background }] : [])
+            ]
         };
     })();
     const scene = {

@@ -1,3 +1,4 @@
+import { Entity } from 'playcanvas';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCloud } from '../../src/assets/splats/cloud.js';
 import { sceneNamed } from '../../src/scene/scenes.js';
@@ -8,6 +9,7 @@ import { createAlocasiaScene, alocasiaScene } from '../../src/scene/alocasia.js'
 
 // Only the engine/GPU boundary is replaced; scene, draw dispatch, splat data
 // encoding and modifier installation all run their production implementations.
+const gpu = vi.hoisted(() => ({ resources: [] }));
 vi.mock('playcanvas', async importOriginal => ({
     ...await importOriginal(),
     StorageBuffer: class {
@@ -18,13 +20,15 @@ vi.mock('playcanvas', async importOriginal => ({
     Shader: class { destroy() {} },
     Compute: class { setParameter() {} setupDispatch() {} destroy() {} },
     Entity: class {
-        constructor(name) { this.name = name; }
+        constructor(name) { this.name = name; this.listeners = {}; }
+        once(event, fn) { this.listeners[event] = fn; }
+        destroy() { const fn = this.listeners.destroy; delete this.listeners.destroy; fn?.(); }
         addComponent(_kind, options) {
             this.gsplat = { ...options, setWorkBufferModifier: vi.fn(), setParameter: vi.fn() };
         }
     },
     GSplatResource: class {
-        constructor(_device, data) { this.data = data; }
+        constructor(_device, data) { this.data = data; this.destroy = vi.fn(); gpu.resources.push(this); }
     }
 }));
 
@@ -40,6 +44,11 @@ function cloud() {
         opacity: new Float32Array([1, 1, 0.01])
     };
 }
+function background() {
+    const result = cloud();
+    result.positions.set([2, -1, 3, -2, 2, -3, 99, 99, 99]);
+    return result;
+}
 function points(xyz) {
     const header = new TextEncoder().encode(`ply\nformat binary_little_endian 1.0\nelement vertex ${xyz.length / 3}\nproperty float x\nproperty float y\nproperty float z\nend_header\n`);
     const bytes = new Uint8Array(header.length + xyz.length * 4);
@@ -50,15 +59,22 @@ function points(xyz) {
 }
 beforeEach(() => {
     vi.clearAllMocks();
-    loadCloud.mockResolvedValue(cloud());
+    gpu.resources = [];
+    loadCloud.mockImplementation(async url => url.endsWith('background.ply') ? background() : cloud());
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => points([0, 0.25, 0]) }));
 });
 
 describe('alocasia scene assembly with an explicitly declared synthetic tolerance', () => {
     it('shares one cleaned foreground between the complete source and disjoint drawing subsets', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
-        const [[body], [fixed]] = await Promise.all([scene.createBodies(), scene.scenery()]);
-        expect(loadCloud).toHaveBeenCalledExactlyOnceWith('/splats/alocasia/foreground.ply');
+        const [[body], [fixed, backdrop]] = await Promise.all([scene.createBodies(), scene.scenery()]);
+        expect(loadCloud).toHaveBeenCalledTimes(2);
+        expect(loadCloud).toHaveBeenCalledWith('/splats/alocasia/foreground.ply');
+        expect(loadCloud).toHaveBeenCalledWith('/splats/alocasia/background.ply');
+        expect(backdrop.cloud.positions).toEqual(new Float32Array([2, -1, 3, -2, 2, -3]));
+        expect(scene.viewBounds.min).toEqual([-2, -1, -3]);
+        expect(scene.viewBounds.max).toEqual([2, 2, 3]);
+        expect(scene.counts).toMatchObject({ inputForeground: 3, inputBackground: 3, foregroundDiscarded: 1, backgroundDiscarded: 1, movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
         expect(fetch).toHaveBeenCalledExactlyOnceWith('/splats/alocasia/moving_part_points.ply');
         expect(body.source.cloud.count).toBe(2);
         expect(body.render.cloud.positions).toEqual(new Float32Array([0, 0.25, 0]));
@@ -90,7 +106,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     it('binds only movable Gaussians and keeps fixed centre, rotation and scale at asset values', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
         const [body] = await scene.createBodies();
-        const [fixed] = await scene.scenery();
+        const [fixed, backdrop] = await scene.scenery();
         const app = { graphicsDevice: {} };
         const positions = new Float32Array([0, 0.25, 0]);
         const field = { shader: '// synthetic field', parameters: { positions } };
@@ -109,6 +125,18 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         expect(['x', 'y', 'z', 'rot_0', 'rot_1', 'rot_2', 'rot_3', 'scale_0', 'scale_1', 'scale_2']
             .map(name => Array.from(data.getProp(name)))).toEqual(rest);
         expect(fixed.cloud.positions).toEqual(new Float32Array([0, 0, 0]));
+        const backdropView = createSplatView(app, backdrop.name, backdrop.cloud);
+        expect(backdropView.gsplat.setWorkBufferModifier).not.toHaveBeenCalled();
+        expect(backdropView.gsplat.setParameter).not.toHaveBeenCalled();
+        const backgroundData = backdropView.gsplat.resource.data;
+        const props = ['x', 'y', 'z', 'rot_0', 'rot_1', 'rot_2', 'rot_3', 'scale_0', 'scale_1', 'scale_2'];
+        const before = props.map(name => Array.from(backgroundData.getProp(name)));
+        positions.set([100, 100, 100]);
+        expect(props.map(name => Array.from(backgroundData.getProp(name)))).toEqual(before);
+        expect(backdrop.cloud).toEqual(expect.objectContaining({
+            positions: new Float32Array([2, -1, 3, -2, 2, -3]),
+            rotations: background().rotations.slice(0, 8), scales: background().scales.slice(0, 6)
+        }));
     });
     it.each([
         [0, 0, 0, 'no material nodes'],
@@ -127,7 +155,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         const fixedOnly = createAlocasiaScene({ r: 0 });
         fetch.mockResolvedValueOnce({ ok: true, arrayBuffer: async () => points([10, 10, 10]) });
         expect((await fixedOnly.createBodies())[0].render).toBeNull();
-        expect(await createAlocasiaScene({ r: 1 }).scenery()).toEqual([]);
+        expect((await createAlocasiaScene({ r: 1 }).scenery()).map(item => item.name)).toEqual(['alocasia-background']);
     });
     it('refuses invalid input and missing assets', async () => {
         await expect(createAlocasiaScene({ r: NaN }).prepare()).rejects.toThrow(/tolerance/);
@@ -141,4 +169,68 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         await expect(alocasiaScene.createBodies()).rejects.toThrow(/r.*not calibrated/);
         expect(loadCloud).not.toHaveBeenCalled();
     });
+});
+
+
+it('releases each direct Gaussian resource once when its view is destroyed', async () => {
+    const scene = createAlocasiaScene({ r: 0.05 });
+    const views = (await scene.scenery()).map(item => createSplatView({ graphicsDevice: {} }, item.name, item.cloud));
+    for (const view of views) {
+        const resource = view.gsplat.resource;
+        view.destroy();
+        view.destroy();
+        expect(resource.destroy).toHaveBeenCalledOnce();
+    }
+});
+
+
+it('background changes neither solver bounds nor material, contact or grab candidates', async () => {
+    const full = createAlocasiaScene({ r: 0.05 });
+    const fullBodies = await full.createBodies();
+    // The alternate backdrop is entirely removed by the same opacity rule.
+    loadCloud.mockImplementation(async url => {
+        const result = cloud();
+        if (url.endsWith('background.ply')) result.opacity.fill(0);
+        return result;
+    });
+    const empty = createAlocasiaScene({ r: 0.05 });
+    const emptyBodies = await empty.createBodies();
+    expect((await empty.scenery()).map(item => item.name)).toEqual(['alocasia-fixed']);
+    expect(empty.counts.backgroundGaussians).toBe(0);
+    expect(empty.viewBounds).toEqual({ min: [0, 0, 0], max: [0, 0.25, 0] });
+    expect(empty.bounds).toEqual(full.bounds);
+    expect(emptyBodies[0].source.cloud).toEqual(fullBodies[0].source.cloud);
+    const sims = [fullBodies, emptyBodies].map(bodies => new Simulator({ supportsCompute: true, deviceType: 'test' }, bodies, full.bounds));
+    try {
+        expect(sims[0].stats().perBody).toEqual(sims[1].stats().perBody);
+        expect(sims[0].stats().bodyCount).toBe(1);
+    } finally { sims.forEach(sim => sim.destroy()); }
+});
+
+it.each(['missing', 'nonfinite', 'incomplete'])('rejects %s background consistently at every shared entry', async failure => {
+    loadCloud.mockImplementation(async url => {
+        if (!url.endsWith('background.ply')) return cloud();
+        if (failure === 'missing') throw new Error('background.ply: 404');
+        const result = background();
+        if (failure === 'nonfinite') result.positions[0] = NaN;
+        else result.scales = new Float32Array(1);
+        return result;
+    });
+    const scene = createAlocasiaScene({ r: 0.05 });
+    const results = await Promise.allSettled([scene.prepare(), scene.createBodies(), scene.scenery()]);
+    expect(results.every(result => result.status === 'rejected')).toBe(true);
+    expect(results[0].reason.message).toMatch(/background/);
+    expect(results[1].reason).toBe(results[0].reason);
+    expect(results[2].reason).toBe(results[0].reason);
+    expect(loadCloud).toHaveBeenCalledTimes(2);
+    expect(scene.bounds).toBeNull();
+});
+
+
+it('releases a resource when attaching its drawing component fails', () => {
+    vi.spyOn(Entity.prototype, 'addComponent').mockImplementationOnce(() => { throw new Error('component failed'); });
+    expect(() => createSplatView({ graphicsDevice: {} }, 'background', background())).toThrow('component failed');
+    expect(gpu.resources).toHaveLength(1);
+    expect(gpu.resources[0].destroy).toHaveBeenCalledOnce();
+    vi.restoreAllMocks();
 });
