@@ -9,18 +9,30 @@ import {
 } from 'playcanvas';
 
 /**
- * A picture of the solver's own insides: the proxy geometry's wireframe, each
- * group in its own tint, carried live by the body's deformation.
+ * Line segments carried by a field, each group in its own tint.
  *
- * What the lines are and what the groups mean is the proxy's business; this
- * view only draws segments between rest points and moves them through the
- * same deformation channel as the render paths. That is not tidiness: this
- * view is the picture people trust when the render looks wrong, and it is only
- * worth trusting if it is looking at the same data through the same binding.
+ * What the segments outline and what the groups mean is whoever handed them
+ * over's business; this only draws segments between rest points and moves
+ * them through the same deformation channel as every other geometry. The
+ * proxy's wireframe comes through here, and that is not tidiness: it is the
+ * picture people trust when the render looks wrong, and it is only worth
+ * trusting if it is looking at the same data through the same binding.
  *
  * Each vertex is pulled a fraction of the way along its offset before it is
- * handed to the field, so it is sampled strictly inside the body rather than
- * on a node, and neighbouring groups' lines do not draw over each other.
+ * handed to the field. Offsets point inwards, so the pulled point is asked of
+ * the field strictly inside what it covers rather than on its edge, and
+ * neighbouring groups' lines do not draw over each other.
+ *
+ * Declared here rather than imported, like the other geometries `render/`
+ * takes, so that this directory depends on nothing but the deformation channel.
+ *
+ * @typedef {object} RestLines
+ * @property {Float32Array} positions - Vertex rest positions, 3 floats each.
+ * @property {Float32Array} offsets - Per vertex, a rest-space vector to pull it
+ *   along, 3 floats each.
+ * @property {Uint32Array} indices - Segments, two vertex indices each.
+ * @property {{ start: number, count: number }[]} groups - Ranges of `indices`
+ *   to tint apart.
  */
 
 /**
@@ -46,7 +58,7 @@ function groupTint(index, count) {
  * Built per field rather than once, because the field brings its own sampler
  * text.
  *
- * @param {import('../../deformation/bind.js').DeformationField} field - Field to read.
+ * @param {import('../deformation/bind.js').DeformationField} field - Field to read.
  * @returns {string} The vertex shader.
  */
 const vertexWgsl = field => /* wgsl */ `
@@ -81,8 +93,8 @@ const FRAGMENT_WGSL = /* wgsl */ `
  * One group's segments as a mesh of their own, holding only the vertices they
  * use, each pulled along its offset.
  *
- * @param {import('../discretize/proxyGeometry.js').Wireframe} wireframe - The whole wireframe.
- * @param {{ start: number, count: number }} group - Which of its segments.
+ * @param {RestLines} lines - All the segments.
+ * @param {{ start: number, count: number }} group - Which of them.
  * @param {number} pull - Fraction of each offset to move the vertex by.
  * @returns {{ positions: Float32Array, indices: Uint32Array }} Mesh streams.
  */
@@ -110,28 +122,29 @@ function buildGroupGeometry({ positions, offsets, indices }, { start, count }, p
 
 /**
  * @param {import('playcanvas').AppBase} app - The application.
- * @param {import('../discretize/proxyGeometry.js').Wireframe} wireframe - What to draw.
- * @param {import('../../deformation/bind.js').DeformationField} field - Deformation to follow.
+ * @param {RestLines} lines - What to draw.
+ * @param {import('../deformation/bind.js').DeformationField} field - Deformation to follow.
  * @param {object} [options] - Display options.
+ * @param {string} [options.name] - What to call the entity.
  * @param {number} [options.shrink] - How much of each offset to leave undone: 1
- *   draws the wireframe as it is, smaller pulls every vertex further in.
+ *   draws the segments where they are, smaller pulls every vertex further along.
  * @returns {Entity} An entity holding one mesh instance per group.
  */
-export function createLatticeView(app, wireframe, field, { shrink = 0.78 } = {}) {
+export function createLineView(app, lines, field, { name = 'lines', shrink = 0.78 } = {}) {
     const device = app.graphicsDevice;
-    const entity = new Entity('proxy-wireframe');
+    const entity = new Entity(`line-view-${name}`);
     const instances = [];
-    const { groups } = wireframe;
+    const { groups } = lines;
 
     for (let group = 0; group < groups.length; group++) {
         if (groups[group].count === 0) {
             continue;
         }
 
-        const { positions, indices } = buildGroupGeometry(wireframe, groups[group], 1 - shrink);
+        const { positions, indices } = buildGroupGeometry(lines, groups[group], 1 - shrink);
 
         const material = new ShaderMaterial({
-            uniqueName: 'proxy-wireframe',
+            uniqueName: 'line-view',
             vertexWGSL: vertexWgsl(field),
             fragmentWGSL: FRAGMENT_WGSL,
             attributes: {
@@ -140,8 +153,8 @@ export function createLatticeView(app, wireframe, field, { shrink = 0.78 } = {})
         });
         const tint = groupTint(group, groups.length);
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
-        for (const [name, value] of Object.entries(field.parameters)) {
-            material.setParameter(name, value);
+        for (const [parameter, value] of Object.entries(field.parameters)) {
+            material.setParameter(parameter, value);
         }
         material.update();
 

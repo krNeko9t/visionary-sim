@@ -1,6 +1,6 @@
 # 05 · 线框成为一条渲染路径
 
-Status: ready-for-agent
+Status: done
 Type: task
 Blocked by: 01, 04
 
@@ -14,11 +14,11 @@ Blocked by: 01, 04
 
 ## Acceptance criteria
 
-- [ ] 线框画法住在 `render/`，只认 `DeformationField` 与 `wireframe()`；线框视图在应用里照常显示
-- [ ] `sim/debug/` 删除；`ALLOWED` 与 §二 删掉对应行
-- [ ] `architecture.test.js` 里 `render/` 词表测试的注释删掉为 `sim/debug/` 写的豁免理由
-- [ ] `renderPaths.test.js`：「每种声明的 kind 都有 `VIEWS` 项」改成「凡是会被交出来的几何的图元种类
+- [x] 线框画法住在 `render/`，只认 `DeformationField` 与 `wireframe()`；线框视图在应用里照常显示
+- [x] `sim/debug/` 删除；`ALLOWED` 与 §二 删掉对应行
+- [x] `architecture.test.js` 里 `render/` 词表测试的注释删掉为 `sim/debug/` 写的豁免理由
+- [x] `renderPaths.test.js`：「每种声明的 kind 都有 `VIEWS` 项」改成「凡是会被交出来的几何的图元种类
       都有画法」（`RenderGeometry` 与 `wireframe()` 一起算）；删网格组与高斯组互不 import 那条；
       GPU sorter 那条不动；文件头去掉「两种表示法」
-- [ ] 债单删 `sim/debug/latticeView.js`
-- [ ] `npm test` 全绿
+- [x] 债单删 `sim/debug/latticeView.js`
+- [x] `npm test` 全绿

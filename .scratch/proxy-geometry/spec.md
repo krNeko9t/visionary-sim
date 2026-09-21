@@ -32,7 +32,7 @@ Status: ready-for-agent
 | 1 | `dof` = `{restPositions, invMass, nodeCount}` | `Particles` | `buildLattice()` 原样 |
 | 2 | `contactSurface()` = `{nodes, radii}` | `BodyContact` | `surfaceNodes()`；`radii` 全填 `h / 2` |
 | 3 | `field(nodePositions, nodeOffset)` → `DeformationField` | `render/` | 今天的 `latticeField()` |
-| 4 | `wireframe()` = `{positions, offsets, indices, groups}` | 线框视图 | 今天 `latticeView.js` 的 `buildGroupGeometry()`，见 I4 |
+| 4 | `wireframe()` = `{kind: 'lines', positions, offsets, indices, groups}` | 线框视图 | 今天 `latticeView.js` 的 `buildGroupGeometry()`，见 I4 |
 | 5 | `scale()` = `{label, value}` | `ui/panel.js`、`main.js` 日志 | `{label: '格', value: cells.length}` |
 | 6 | `spacing` = `{min, max}` | `grip.js`（瞄准容差、抓取上限）、`broadphase.js`（桶容量 warning） | `{min: h, max: h}` |
 | 7 | `cflLength` | `timestep.js` / `compliance.js` 的波速比 | `h` |

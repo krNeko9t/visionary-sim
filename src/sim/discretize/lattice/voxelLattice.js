@@ -162,7 +162,7 @@ export class VoxelLattice {
             count: inGroup * segmentsPerCell
         }));
 
-        return { positions, offsets, indices, groups };
+        return { kind: 'lines', positions, offsets, indices, groups };
     }
 
     /** @returns {import('../proxyGeometry.js').Scale} How many cells the body was cut into. */

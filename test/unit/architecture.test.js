@@ -78,7 +78,6 @@ const ALLOWED = {
     'sim/state': [],
     'sim/constraints': ['sim/state', 'body'],
     'sim/solver': ['sim/state'],
-    'sim/debug': ['sim/discretize', 'deformation'],
     render: ['deformation'],
     body: ['assets'],
     assets: [],
@@ -161,7 +160,6 @@ const DISCRETISATION_DEBT = {
     'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
     'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
     'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
-    'main.js': 'imports the wireframe view from `sim/debug/latticeView.js` until it is a render path',
     'body/material.js': 'the stability bound is argued per cell',
 
     // `resolution` is counted in cells along the longest axis; its unit changes.
@@ -326,9 +324,6 @@ describe('the layering the file tree claims', () => {
         // proxy geometry can actually be replaced. A field is handed over as
         // shader text plus a bag of parameters precisely so that nothing here
         // can read a cell size out of it; this checks that nothing tried.
-        //
-        // `sim/debug/` is deliberately outside the scope: it draws cells, and
-        // that is the whole reason it lives under `sim/` rather than in `render/`.
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'render')
             .flatMap((file) => {

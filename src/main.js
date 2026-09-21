@@ -1,11 +1,10 @@
 import { attachGrabber } from './ui/grab.js';
-import { createMeshView } from './render/mesh.js';
 import { createPanel } from './ui/panel.js';
 import { createSplatView } from './render/splats.js';
+import { draw } from './render/draw.js';
 import { createStage } from './scene/stage.js';
 import { sceneNamed } from './scene/scenes.js';
 import { WebGpuUnavailableError, createApp } from './scene/app.js';
-import { createLatticeView } from './sim/debug/latticeView.js';
 import { Simulator } from './sim/simulator.js';
 
 const canvas = document.getElementById('app');
@@ -36,14 +35,14 @@ async function boot() {
 
     const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
 
-    // Two ways of looking at the same deformation: the surface, and the solver's
-    // own insides. The second starts hidden -- it is what you turn on when the
-    // first looks wrong.
+    // Two pieces of geometry carried by the same deformation: what the body
+    // looks like, and the proxy's own wireframe. The second starts hidden -- it
+    // is what you turn on when the first looks wrong.
     const wireframeViews = sim.simBodies.map(({ body, proxy }, index) => {
         const field = sim.deformationOf(index);
-        drawBody(app, body, field);
+        app.root.addChild(draw(app, body.render, field, { name: body.name, tint: body.tint }));
 
-        const view = createLatticeView(app, proxy.wireframe(), field);
+        const view = draw(app, proxy.wireframe(), field, { name: body.name });
         view.enabled = false;
         app.root.addChild(view);
         return view;
@@ -73,41 +72,6 @@ async function boot() {
     // Handy from the console; the panel covers everything routine.
     Object.assign(window, { app, sim, scene, bodies, wireframeViews });
     return app;
-}
-
-/**
- * How each kind of render geometry becomes an entity.
- *
- * A table rather than a chain of conditionals, for the same reason
- * `sim/discretize/discretize.js`'s `VOXELIZERS` is one: the number of entries is
- * what grows, so a new representation should mean adding a line here rather than
- * editing a branch. This is still the one place the two render paths are told
- * apart -- it is assembly rather than a decision, since both take the same
- * deformation field and neither knows the other exists.
- *
- * @type {Record<string, (app: import('playcanvas').AppBase,
- *   body: import('./body/softBody.js').SoftBody,
- *   field: import('./deformation/bind.js').DeformationField) => import('playcanvas').Entity>}
- */
-const VIEWS = {
-    mesh: (app, body, field) => createMeshView(app, body.render.mesh, field, { tint: body.tint }),
-    splats: (app, body, field) => createSplatView(app, body.name, body.render.cloud, field)
-};
-
-/**
- * Puts a body on screen with whichever representation it brought.
- *
- * @param {import('playcanvas').AppBase} app - The application.
- * @param {import('./body/softBody.js').SoftBody} body - The body to draw.
- * @param {import('./deformation/bind.js').DeformationField} field - Its deformation.
- */
-function drawBody(app, body, field) {
-    const kind = body.render?.kind;
-    const createView = VIEWS[kind];
-    if (!createView) {
-        throw new Error(`no render path for a body of render kind "${kind}"`);
-    }
-    app.root.addChild(createView(app, body, field));
 }
 
 /**

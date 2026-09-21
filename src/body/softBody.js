@@ -24,8 +24,11 @@ import { DEFAULT_MATERIAL } from './material.js';
  * a PLY states neither its up axis nor its units, so both were declared by hand
  * upstream, and a declaration nobody checks is a guess.
  *
- * @typedef {{ kind: 'mesh', mesh: import('../assets/objLoader.js').TriangleMesh }
- *         | { kind: 'splats', cloud: import('../assets/splats/cloud.js').SplatCloud }}
+ * The render payload is tagged by what it is made of rather than by where it
+ * came from, because that is all whoever draws it gets to know.
+ *
+ * @typedef {{ kind: 'triangles', mesh: import('../assets/objLoader.js').TriangleMesh }
+ *         | { kind: 'gaussians', cloud: import('../assets/splats/cloud.js').SplatCloud }}
  *   RenderGeometry
  */
 export class SoftBody {

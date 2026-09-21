@@ -31,7 +31,7 @@ export async function meshBody(url, { name, size, position, resolution, material
     return new SoftBody({
         name,
         source: { kind: 'mesh', mesh },
-        render: { kind: 'mesh', mesh },
+        render: { kind: 'triangles', mesh },
         material,
         resolution,
         tint
@@ -56,7 +56,7 @@ export function shapeBody(shape, { name, position, resolution, material, tint })
         source: { kind: 'shape', shape: placed },
         // The shape's own triangles, taken after placement so the render
         // geometry and the distance function describe the same rest pose.
-        render: { kind: 'mesh', mesh: placed.surface },
+        render: { kind: 'triangles', mesh: placed.surface },
         material,
         resolution,
         tint
@@ -95,7 +95,7 @@ export async function splatBody(url, { name, convention, size, position, minOpac
     return new SoftBody({
         name,
         source: { kind: 'cloud', cloud, report },
-        render: { kind: 'splats', cloud },
+        render: { kind: 'gaussians', cloud },
         material,
         resolution
     });

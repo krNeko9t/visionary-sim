@@ -1,95 +1,66 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 /**
- * The claim M9 makes: mesh and splats are two representations standing side
- * by side, neither a stepping stone to the other. `architecture.test.js`
- * already checks this at the area level (`render` may reach only
- * `deformation`); this file checks it at the file level, because the area
- * rule would stay green even if `mesh.js` and `splats.js` quietly started
- * importing each other -- both are inside `render`, so that edge is legal by
- * area and would say nothing about whether the two paths still know nothing
- * of each other.
+ * What `render/` promises the rest of the program: hand it a piece of rest-space
+ * geometry and a deformation field, and it draws the one carried by the other.
+ * It dispatches on what the geometry is made of -- triangles, Gaussians, line
+ * segments -- and never on where it came from, so a body's surface and the
+ * proxy's own wireframe are drawn the same way.
  *
- * @see architecture.test.js for the rest of the layering.
+ * `architecture.test.js` checks who may import whom, including that `render/`
+ * reaches nothing but the deformation channel; this file checks that
+ * everything handed over actually has somewhere to go.
  */
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
-const RENDER = join(SRC, 'render');
-const BODY_JS = join(SRC, 'body/softBody.js');
-const MAIN_JS = join(SRC, 'main.js');
+const DRAW_JS = join(SRC, 'render/draw.js');
 const APP_JS = join(SRC, 'scene/app.js');
 
-/** Files that draw the mesh path, versus the files that draw the splat path. */
-const MESH_PATH = ['mesh.js', 'normals.js'];
-const SPLAT_PATH = ['splats.js', 'ellipsoid.js'];
+/**
+ * Where each piece of geometry that gets handed to `render/` has its kinds
+ * declared, and the typedef that declares them.
+ */
+const HANDED_OVER = [
+    { file: 'body/softBody.js', typedef: 'RenderGeometry' },
+    { file: 'sim/discretize/proxyGeometry.js', typedef: 'Wireframe' }
+];
 
 /**
- * @param {string} file - Absolute path to a source file.
- * @returns {string[]} Local (`./` or `../`) import targets, resolved to
- *   absolute paths, with any `?raw` query stripped.
+ * @param {string} file - Path relative to `src`.
+ * @param {string} name - Typedef to read.
+ * @returns {string[]} The `kind`s it declares, whether written as an object
+ *   literal (`kind: 'x'`) or as a property (`@property {'x'} kind`).
  */
-function localImports(file) {
-    const text = readFileSync(file, 'utf8');
-    return [...text.matchAll(/from\s+'(\.[^']+)'/g)].map((match) => {
-        const target = resolve(dirname(file), match[1].split('?')[0]);
-        return target.endsWith('.js') || target.endsWith('.wgsl') ? target : `${target}.js`;
-    });
+function declaredKinds(file, name) {
+    const text = readFileSync(join(SRC, file), 'utf8');
+    // A typedef's text is the chunk after `@typedef` that names it: the literal
+    // form puts the name after the type, at the end of the comment; the
+    // property form puts it first and lists the properties after.
+    const names = part => new RegExp(`^\\s*\\{object\\}\\s+${name}\\b|\\b${name}\\s*$`)
+        .test(part.split('*/')[0].replace(/[\s*]+$/, ''));
+    const chunk = text.split('@typedef').find(names);
+    expect(chunk, `${file} has no ${name} typedef to read kinds from`).toBeDefined();
+    return [...chunk.matchAll(/kind:\s*'(\w+)'|\{'(\w+)'\}\s+kind\b/g)].map(m => m[1] ?? m[2]);
 }
 
-describe('the two render paths stand side by side', () => {
-    it('has a view for every render geometry kind the body layer declares, and no more', () => {
-        // `RenderGeometry` is the second of the two typedefs in softBody.js; the
-        // first, `RestGeometry`, has its own `kind`s that are none of this
-        // file's business. Splitting on the typedef keyword and taking the last
-        // chunk is what isolates the one this test cares about.
-        const text = readFileSync(BODY_JS, 'utf8');
-        const chunks = text.split('@typedef');
-        const renderGeometry = chunks[chunks.length - 1];
-        expect(renderGeometry, 'softBody.js has no RenderGeometry typedef to read kinds from')
-            .toMatch('RenderGeometry');
-
-        const declaredKinds = [...renderGeometry.matchAll(/kind:\s*'(\w+)'/g)].map(m => m[1]);
-        expect(declaredKinds.length).toBeGreaterThan(0);
-
-        const mainText = readFileSync(MAIN_JS, 'utf8');
-        const viewsBlock = mainText.match(/const VIEWS = \{([\s\S]*?)\n\};/);
-        expect(viewsBlock, 'main.js has no `const VIEWS = { ... }` table').not.toBeNull();
-        const viewKinds = [...viewsBlock[1].matchAll(/^\s*(\w+):/gm)].map(m => m[1]);
-
-        expect(new Set(viewKinds)).toEqual(new Set(declaredKinds));
-    });
-
-    it('keeps the mesh path and the splat path from importing each other', () => {
-        const crossings = [];
-        for (const file of MESH_PATH) {
-            for (const target of localImports(join(RENDER, file))) {
-                if (SPLAT_PATH.some(other => target === join(RENDER, other))) {
-                    crossings.push(`${file} -> ${relative(RENDER, target)}`);
-                }
-            }
-        }
-        for (const file of SPLAT_PATH) {
-            for (const target of localImports(join(RENDER, file))) {
-                if (MESH_PATH.some(other => target === join(RENDER, other))) {
-                    crossings.push(`${file} -> ${relative(RENDER, target)}`);
-                }
-            }
-        }
-        expect(crossings, `\n${crossings.join('\n')}\n`).toEqual([]);
-    });
-
-    it('has both paths reaching nothing but the deformation channel and their own files', () => {
-        const leaks = [...MESH_PATH, ...SPLAT_PATH].flatMap((file) => {
-            const absolute = join(RENDER, file);
-            return localImports(absolute)
-                .filter(target => !target.startsWith(RENDER) && !target.startsWith(join(SRC, 'deformation')))
-                .map(target => `${file} -> ${relative(SRC, target)}`);
+describe('everything handed to render/ gets drawn', () => {
+    it('has a way to draw every primitive kind of geometry that gets handed over', () => {
+        const handed = HANDED_OVER.flatMap(({ file, typedef }) => {
+            const kinds = declaredKinds(file, typedef);
+            expect(kinds.length, `${typedef} in ${file} declares no kind`).toBeGreaterThan(0);
+            return kinds;
         });
-        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+
+        const drawText = readFileSync(DRAW_JS, 'utf8');
+        const table = drawText.match(/const PAINTERS = \{([\s\S]*?)\n\};/);
+        expect(table, 'render/draw.js has no `const PAINTERS = { ... }` table').not.toBeNull();
+        const drawn = [...table[1].matchAll(/^\s*(\w+):/gm)].map(m => m[1]);
+
+        expect(new Set(drawn)).toEqual(new Set(handed));
     });
 
     it('pins WebGPU splats to the sorter that reads the deformed work buffer', () => {

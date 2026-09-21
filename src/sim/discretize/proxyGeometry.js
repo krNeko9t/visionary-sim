@@ -81,6 +81,8 @@
 
 /**
  * @typedef {object} Wireframe
+ * @property {'lines'} kind - What it is made of, so it can be drawn like any
+ *   other geometry carried by a field.
  * @property {Float32Array} positions - Vertex rest positions, 3 floats each;
  *   every one is a node's (I4).
  * @property {Float32Array} offsets - Per vertex, a rest-space vector pointing
