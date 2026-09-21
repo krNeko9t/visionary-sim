@@ -300,3 +300,18 @@ CFL 到抓取半径到水缸边界全部是米制；而且同一份扫描分散�
 - CLAUDE.md 新增的 Domain docs 段指向根目录 `CONTEXT.md` + `docs/adr/`，但项目文档规则那张表
   里没有它们，仓库里也还没有这两样东西。这次接入确实产出了几个新词（**前景物体** / **可动
   部分** / **锚定节点**），但要不要开 `CONTEXT.md` 是文档体系的选择，没有替使用者做主。
+
+## Comments
+
+### proxy-geometry 图 13 的影响（2026-09-21）
+
+- `ARCHITECTURE.md` 的欠账表**已整张删除**（[13](../proxy-geometry/issues/13-remaining-roots-to-adr.md)）。
+  「文档产出」里「只改一行：欠账表第一行的到期条件」**作废**，那一行已经不存在。
+- 删的理由：代码注释（`src/assets/splats/place.js:7-12`）与使用者都认为扫描文件**一般读不出**
+  重力方向与尺度，原表「可估，只能声明是借口」不成立，所以它不是欠账。手写的声明实际在
+  `src/scene/splats.js`、`src/scene/mixed.js`，不在 `place.js`/`capture.js`。
+- 使用者的初步方向（未定案）：有出处（nerfstudio 等重建附带的相机位姿）就读出处，否则退化为
+  人工声明——重力按轴向指定（X/Y/Z up）。本 spec 上面已有的「带相机位姿的扫描可以**核对**声明」
+  与这个方向一致。
+- **尺度不能退化为归一化**：抓取半径 0.03 m（ADR-0011）、`elementSize`（proxy-geometry 的
+  spec）、杨氏模量都是世界空间物理量，归一化后全部失去意义。退化方案里尺度也得由人声明。

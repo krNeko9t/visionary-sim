@@ -114,7 +114,7 @@ Status: ready-for-agent
 - 新建 `test/unit/proxyGeometry.test.js`：**一致性测试**，按实现参数化（今天只有 `VoxelLattice`
   一项，用两三个小形状造），逐条检查条目 1、2、4、5、6、7、8 的形状与 I1、I2、I3、I4、I6。I2 按
   上面的定义用 `wireframe()` 的线段检查；I3 用一趟暴力最近邻实测。第二个后端要接进来，先过这份
-  测试。在 `ARCHITECTURE.md` §五加一行：「代理几何的接口不变量（含球接触的密封条件）｜
+  测试。在 `ARCHITECTURE.md` §四（护栏表）加一行：「代理几何的接口不变量（含球接触的密封条件）｜
   `test/unit/proxyGeometry.test.js`」。
 
 还掉的债：`simulator.js`、`grip.js`、`bodyContact.js`、`broadphase.js`、`timestep.js`、`ui/panel.js`、
@@ -196,6 +196,6 @@ Status: ready-for-agent
 - **不实现第二个离散化后端**（四面体或点云）。这份 spec 的一致性测试就是它的准入条件，后端本身
   是下游的另一份工作。
 - **不换接触模型**。仍然是边界节点上的球（ADR-0008）；表面三角形接触是另一份工作。
-- **不改 `ARCHITECTURE.md` §三、§四的论证**，第 5 步照 11 的结论做的除外。§三第二条（批次规则）
-  归 10，§四各根归 13。
+- **不改 `ARCHITECTURE.md` §三的论证**，第 5 步照 11 的结论做的除外。§三第二条（批次规则）
+  归 10，原§四各根已由 13 转成 ADR-0009/0010/0011。
 - **不把标量 `invMass` 换成 3×3**，**不做静态规定（锚定）的机制**：各有自己的去处。

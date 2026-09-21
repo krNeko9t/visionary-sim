@@ -3,7 +3,7 @@ import { BLEND_NORMAL, Color, CULLFACE_NONE, Entity, StandardMaterial, Vec3 } fr
 /**
  * A glass box with an open top, standing on a floor.
  *
- * This is only how the boundary *looks*. The boundary itself is six analytic
+ * This is only how the boundary *looks*. The boundary itself is five analytic
  * planes inside the solver, derived from the same numbers -- which is why this
  * takes the bounds rather than owning them: two scenes can stand in the same
  * kind of tank without either of them owning the other's walls.

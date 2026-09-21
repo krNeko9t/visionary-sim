@@ -11,6 +11,12 @@
  * refilled. Sorting the points is not needed either: a bucket holds a fixed
  * handful and drops the rest, so there is no prefix sum and no allocation.
  *
+ * The grid lives in world space over the tank, not in any body's rest space.
+ * Each body already carries an occupancy grid, but it is a rest-space one:
+ * asking it "what is near this deformed point" would first need the
+ * deformation inverted, which is the one thing nobody can afford per node per
+ * substep. Refilling a world grid is cheaper than that inversion.
+ *
  * The layout is separate from the kernels that use it (`bodyContact.js`) for
  * the same reason `compliance.js` is separate from `elasticCells.js`: this part
  * is arithmetic that can be reasoned about and tested, and the other part is

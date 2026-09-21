@@ -1,6 +1,6 @@
 # 13 · §四 其余各根转成 ADR
 
-Status: open
+Status: resolved
 Type: grilling
 Blocked by: 05
 
@@ -37,3 +37,41 @@ Blocked by: 05
   不再算 4.2 的后果。§四 序言里的例子「半格球是体素点阵的后果」因此不再成立，转 4.3、处理序言
   时不要把它抄进任何 ADR。
 - 4.3 第一条的「按最坏材料与格子选定 CFL」：spec 第 1 步改读 `cflLength`。
+
+## Answer
+
+**§四 整节删除。**每个根过三道门（难以回退 / 无上下文会意外 / 真实取舍），过了的成 ADR、只留
+跨模块后果；没过的直接删。模块内部的后果先核实已在代码旁边再删，缺的补进 `src/` 注释（使用者
+批准的例外）。
+
+| 根 | 去向 | ADR 留下的后果 |
+|---|---|---|
+| 4.1 PlayCanvas + WebGPU compute | [ADR-0009](../../../docs/adr/0009-playcanvas-renders-webgpu-compute-simulates.md) | 只一条：两个 `wgsl/` 目录不受它约束（代码里原本没有，ADR 补上）。四条渲染后果在 `render/` 头部注释里 |
+| 4.3 XPBD + 稳定 Neo-Hookean | [ADR-0010](../../../docs/adr/0010-xpbd-substeps-with-stable-neo-hookean.md) | 固定量子与丢时；两条越界边界分属求解器与本构。CFL 改读 `cflLength`。Jacobi / 批次规则那条与§三推论重复，交给 10；桶与粗筛是 `bodyContact` 内部事 |
+| 4.4 三线性内嵌 | 删，不成 ADR | ——换它只动 `deformation/` 内部；三线性是点阵的后果，不是根 |
+| 4.5 场景边界是解析平面 | 删，不成 ADR | ——缺「真实取舍」。原文本身两处错：代码只解**五**个平面（顶是开的），平面住在 `sim/solver/wgsl/finalize.wgsl` 而不在 `sim/constraints/` |
+| 4.6 抓世界空间一团材料 | [ADR-0011](../../../docs/adr/0011-grip-takes-a-world-space-ball-of-material.md) | 只抓被点中的物体；容量截断；球不是测地邻域。原文对 4.1 的引用是悬空的 |
+| 欠账表 | 整张删 | ——三行都被代码注释反驳：SH 只读 DC 与手写参数化表面，代码明说是选择；扫描约定「可估」不成立（文件一般读不出重力与尺度）。欠账栏只写「知道它错」的东西 |
+| §四 序言 | 删 | ——组织原则已由 ADR-0004 取代，「半格球」的例子被 ADR-0008 推翻 |
+
+**开篇**改为：§一到§三是结构，可换的选择各是一条 ADR；换掉任何一条前三节不动，动了就说明它是
+结构。并按地基往上列出 ADR 的阅读顺序（0009 → 0010 → 0005/0006/0007 → 0008 → 0011 → 0002/0003）。
+§五 顺延为 §四。
+
+**编号不重排**（使用者建议把 4.1、4.3 放到 0001、0002，我否掉了）：编号是身份，0001–0008 已被
+`src/`、`CLAUDE.md`、`CONTEXT.md` 与各票引用；阅读顺序由 `ARCHITECTURE.md` 开篇那张列表给。
+
+**如实记录**：0009/0010 选择时的理由与替代方案**没有任何记录**（`DECISIONS.md` 从 2026-08-07
+开始），两条 ADR 照 ADR-0005 的先例写「没有记录，事后兑现的是……」。起草时我一度编了理由、并
+误写「`sim/` 不依赖 PlayCanvas」（实际 import 了缓冲与 Compute），已核实改正。
+
+**`src/` 改动**（使用者批准的注释例外，无逻辑改动）：
+- `src/sim/constraints/broadphase.js` 头部：粗筛为什么是世界空间网格、不能查物体静止空间的占据网格。
+- `src/scene/tank.js`、`src/scene/glass.js`：「six analytic planes」→ five。
+
+**连带**：10、11、12 各加评论；10、11、`spec.md` 里的「§五」改为「§四（护栏表）」，`spec.md` 199
+行改指 ADR；暂停中的 physdreamer spec 加评论——它计划改的欠账表那一行已不存在，并记下使用者对
+扫描约定的初步方向与「尺度不能归一化」。
+
+**顺带发现、未修**：`src/sim/constraints/wgsl/contacts.wgsl:56-57` 描述溢出保留规则的那句话语序
+混乱（说的是丢最高索引，与「保留最低 32 个」等价）。在 `src/` 豁免之外，留给使用者。

@@ -12,7 +12,7 @@ import { meshBody, shapeBody } from '../body/factory.js';
 
 /**
  * Interior of the tank, in metres. Plain data on purpose: the simulation
- * consumes it as six analytic planes and must not depend on PlayCanvas. The top
+ * consumes it as five analytic planes and must not depend on PlayCanvas. The top
  * is open -- there is no `y = max` wall.
  */
 const BOUNDS = {

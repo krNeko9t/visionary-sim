@@ -35,7 +35,7 @@ Blocked by: 03, 10
    那句验收。
 3. `renderPaths.test.js` 加不加线框这一行，加的话兑现的是什么（「它只认 `DeformationField`
    与一份静止空间线段几何」？）。
-4. §五那张表要不要多一行。
+4. §四（护栏表）那张表要不要多一行。
 
 ### 与 10 的关系
 
@@ -45,7 +45,7 @@ Blocked by: 03, 10
 
 ## 交付
 
-- `ARCHITECTURE.md`§三（或§五）就地改，`test/unit/renderPaths.test.js` 跟着改。
+- `ARCHITECTURE.md`§三（或§四护栏表）就地改，`test/unit/renderPaths.test.js` 跟着改。
 - 理由写成一条 ADR。
 - 不出新的 `src/` 设计：线框路径长什么样已由 03 的接口条目 4 定死。
 
@@ -58,3 +58,9 @@ Blocked by: 03, 10
 - I4 收紧了：`wireframe().positions` 就是节点的静止位置，收缩只给方向；一致性测试
   `proxyGeometry.test.js` 用它检查接触半径密封，所以 `wireframe()` 从此是被测试依赖的接口条目，
   不只是调试用。第 3 问「兑现的是什么」可以参考这一点。
+
+### 13 的结论对本票的影响（2026-09-21）
+
+- 4.4「要显示的东西三线性内嵌在代理几何里」**已删除、不成 ADR**：换它只动 `deformation/` 内部，
+  不难回退；三线性是点阵的后果（四面体上就是重心插值），不是独立的根。§三第一条承诺只说「内嵌」，
+  不说「三线性」。`F Σ Fᵀ` 与「中心取一次梯度、误差二阶」已在 `src/deformation/covariance.js` 旁边。
