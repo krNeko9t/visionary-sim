@@ -1,6 +1,6 @@
 # 06 · 细度的单位：`resolution` → `elementSize`
 
-Status: ready-for-agent
+Status: done
 Type: task
 Blocked by: 02
 
@@ -14,9 +14,9 @@ Blocked by: 02
 
 ## Acceptance criteria
 
-- [ ] 软体、工厂、体素化的网格尺寸函数、点云体积、全部场景（tank、football、splats、mixed）及相关测试改用 `elementSize`
-- [ ] 场景值二选一：要逐位保持行为写成 `0.16 / 16` 形式，否则直接写注释里的毫米数；同一场景内统一
-- [ ] 场景注释改说毫米，不再说「份」「格」；tank 的「全场共用一个尺度，CFL 因此一致」论证保留，改用 `elementSize` 表述
-- [ ] `body/material.js` 的稳定性论证改按单元尺度 / `cflLength` 说
-- [ ] 债单删 `scene/tank.js`、`scene/splats.js`、`scene/football.js`、`body/material.js`
-- [ ] `timestep.test.js`、`voxelize.test.js`、`cloudVolume.test.js`、`simulatorTiming.test.js` 与全部 `npm test` 全绿
+- [x] 软体、工厂、体素化的网格尺寸函数、点云体积、全部场景（tank、football、splats、mixed）及相关测试改用 `elementSize`
+- [x] 场景值二选一：要逐位保持行为写成 `0.16 / 16` 形式，否则直接写注释里的毫米数；同一场景内统一
+- [x] 场景注释改说毫米，不再说「份」「格」；tank 的「全场共用一个尺度，CFL 因此一致」论证保留，改用 `elementSize` 表述
+- [x] `body/material.js` 的稳定性论证改按单元尺度 / `cflLength` 说
+- [x] 债单删 `scene/tank.js`、`scene/splats.js`、`scene/football.js`、`body/material.js`
+- [x] `timestep.test.js`、`voxelize.test.js`、`cloudVolume.test.js`、`simulatorTiming.test.js` 与全部 `npm test` 全绿

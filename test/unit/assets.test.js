@@ -18,12 +18,12 @@ function loadAsset(name) {
 }
 
 describe.each([
-    { name: 'spot.obj', minVertices: 2900, resolution: 16 },
-    { name: 'suzanne.obj', minVertices: 500, resolution: 16 }
-])('$name survives the geometry pipeline', ({ name, minVertices, resolution }) => {
+    { name: 'spot.obj', minVertices: 2900, elementSize: 0.17 / 16 },
+    { name: 'suzanne.obj', minVertices: 500, elementSize: 0.17 / 16 }
+])('$name survives the geometry pipeline', ({ name, minVertices, elementSize }) => {
     const mesh = loadAsset(name);
     normalizeMesh(mesh.positions, 0.17);
-    const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { resolution });
+    const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { elementSize });
 
     it('parses into a non-degenerate triangle mesh', () => {
         expect(mesh.positions.length / 3).toBeGreaterThanOrEqual(minVertices);

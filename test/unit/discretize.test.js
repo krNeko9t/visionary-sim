@@ -42,15 +42,15 @@ function cloudOnCube(half) {
 
 /**
  * @param {Partial<import('../../src/body/material.js').Material>} [material] - Overrides.
- * @param {number} [resolution] - Requested detail.
+ * @param {number} [elementSize] - Requested element size, in metres.
  * @returns {import('../../src/sim/discretize/lattice/voxelLattice.js').VoxelLattice} Its proxy.
  */
-function proxyOf(material = {}, resolution = 8) {
+function proxyOf(material = {}, elementSize = 0.1 / 8) {
     const body = new SoftBody({
         name: 'test',
         source: { kind: 'shape', shape: sphere({ radius: 0.05 }) },
         material,
-        resolution
+        elementSize
     });
     return /** @type {any} */ (discretizeBody(body));
 }
@@ -64,7 +64,7 @@ describe('discretizeBody', () => {
     });
 
     it('gives a finer request smaller cells', () => {
-        expect(proxyOf({}, 16).spacing.min).toBeLessThan(proxyOf({}, 6).spacing.min);
+        expect(proxyOf({}, 0.1 / 16).spacing.min).toBeLessThan(proxyOf({}, 0.1 / 6).spacing.min);
     });
 
     it('takes every kind of rest geometry there is', () => {
@@ -80,7 +80,7 @@ describe('discretizeBody', () => {
         ];
 
         for (const source of sources) {
-            const { lattice } = discretizeBody(new SoftBody({ name: source.kind, source, resolution: 8 }));
+            const { lattice } = discretizeBody(new SoftBody({ name: source.kind, source, elementSize: 0.01 }));
             expect(lattice.cells.length, source.kind).toBeGreaterThan(0);
             expect(lattice.volume, source.kind).toBeGreaterThan(0);
         }

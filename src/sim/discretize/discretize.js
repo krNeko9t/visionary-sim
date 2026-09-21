@@ -33,13 +33,13 @@ const VOXELIZERS = {
  * @returns {import('./proxyGeometry.js').ProxyGeometry} Its simulation geometry.
  */
 export function discretizeBody(body) {
-    const { source, resolution, material } = body;
+    const { source, elementSize, material } = body;
     const voxelize = VOXELIZERS[source.kind];
     if (!voxelize) {
         throw new Error(`no way to discretise rest geometry of kind "${source.kind}"`);
     }
 
-    return new VoxelLattice(buildLattice(voxelize(source, { resolution }), { density: material.density }));
+    return new VoxelLattice(buildLattice(voxelize(source, { elementSize }), { density: material.density }));
 }
 
 /**

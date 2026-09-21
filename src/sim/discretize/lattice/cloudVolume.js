@@ -90,8 +90,8 @@ const NEIGHBOURS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0,
 
 /**
  * @param {import('../../../assets/splats/cloud.js').SplatCloud} cloud - Gaussians in world space.
- * @param {object} [options] - Layout and method options.
- * @param {number} [options.resolution] - Cells along the longest axis.
+ * @param {object} options - Layout and method options.
+ * @param {number} options.elementSize - Cell edge length, in metres.
  * @param {number} [options.padding] - Empty cells added on every side.
  * @param {number} [options.sigma] - Standard deviations counted as material.
  * @param {number} [options.seal] - Cells the shell is thickened by before filling.
@@ -107,7 +107,7 @@ export function voxelizeCloud(cloud, options = {}) {
     // Over the ellipsoids rather than over the centres, because the ellipsoids
     // are where the material is: a Gaussian is a blob, and a grid laid out to
     // the points at their middles would have the outer half of the outermost
-    // ones hanging over the edge. It costs a couple of percent of resolution on
+    // ones hanging over the edge. It costs a couple of percent more cells on
     // a real capture, where a Gaussian is a hundredth of the object.
     const bounds = materialBounds(cloud, sigma);
     if (!(Math.max(...bounds.min.map((v, axis) => bounds.max[axis] - v)) > 0)) {

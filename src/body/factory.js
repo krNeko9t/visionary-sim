@@ -18,12 +18,12 @@ import { SoftBody } from './softBody.js';
  * @param {string} options.name - Body name.
  * @param {number} options.size - Size of the longest axis, in metres.
  * @param {number[]} options.position - Where the base of the body sits.
- * @param {number} [options.resolution] - Requested simulation detail.
+ * @param {number} [options.elementSize] - Target simulation element size, in metres.
  * @param {import('./material.js').Material} [options.material] - Material parameters.
  * @param {number[]} [options.tint] - Linear RGB base colour.
  * @returns {Promise<SoftBody>} The body.
  */
-export async function meshBody(url, { name, size, position, resolution, material, tint }) {
+export async function meshBody(url, { name, size, position, elementSize, material, tint }) {
     const mesh = await loadObj(url);
     normalizeMesh(mesh.positions, size);
     translateMesh(mesh.positions, position);
@@ -33,7 +33,7 @@ export async function meshBody(url, { name, size, position, resolution, material
         source: { kind: 'mesh', mesh },
         render: { kind: 'triangles', mesh },
         material,
-        resolution,
+        elementSize,
         tint
     });
 }
@@ -43,12 +43,12 @@ export async function meshBody(url, { name, size, position, resolution, material
  * @param {object} options - Body options.
  * @param {string} options.name - Body name.
  * @param {number[]} options.position - Where the base of the body sits.
- * @param {number} [options.resolution] - Requested simulation detail.
+ * @param {number} [options.elementSize] - Target simulation element size, in metres.
  * @param {import('./material.js').Material} [options.material] - Material parameters.
  * @param {number[]} [options.tint] - Linear RGB base colour.
  * @returns {SoftBody} The body.
  */
-export function shapeBody(shape, { name, position, resolution, material, tint }) {
+export function shapeBody(shape, { name, position, elementSize, material, tint }) {
     const placed = translateShape(restOnGround(shape), position);
 
     return new SoftBody({
@@ -58,7 +58,7 @@ export function shapeBody(shape, { name, position, resolution, material, tint })
         // geometry and the distance function describe the same rest pose.
         render: { kind: 'triangles', mesh: placed.surface },
         material,
-        resolution,
+        elementSize,
         tint
     });
 }
@@ -85,11 +85,11 @@ export function shapeBody(shape, { name, position, resolution, material, tint })
  * @param {number} options.size - Size of the longest axis, in metres.
  * @param {number[]} options.position - Where the base of the body sits.
  * @param {number} [options.minOpacity] - Faintness below which a Gaussian is junk.
- * @param {number} [options.resolution] - Requested simulation detail.
+ * @param {number} [options.elementSize] - Target simulation element size, in metres.
  * @param {import('./material.js').Material} [options.material] - Material parameters.
  * @returns {Promise<SoftBody>} The body.
  */
-export async function splatBody(url, { name, convention, size, position, minOpacity, resolution, material }) {
+export async function splatBody(url, { name, convention, size, position, minOpacity, elementSize, material }) {
     const { cloud, report } = await loadCapture(url, { name, convention, size, position, minOpacity });
 
     return new SoftBody({
@@ -97,6 +97,6 @@ export async function splatBody(url, { name, convention, size, position, minOpac
         source: { kind: 'cloud', cloud, report },
         render: { kind: 'gaussians', cloud },
         material,
-        resolution
+        elementSize
     });
 }

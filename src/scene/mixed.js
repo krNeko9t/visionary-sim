@@ -34,7 +34,7 @@ export const mixedScene = {
             name: 'spot',
             size: 0.17,
             position: [0.0, 0.0, 0.0],
-            resolution: 12,
+            elementSize: 0.0142,
             material: JELLY,
             tint: [0.95, 0.42, 0.30]
         }),
@@ -46,7 +46,7 @@ export const mixedScene = {
             convention: BREAD.convention,
             size: BREAD.size,
             position: [0.0, 0.30, 0.0],
-            resolution: 12,
+            elementSize: 0.0158,
             material: CRUMB
         })
     ])

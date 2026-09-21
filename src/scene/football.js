@@ -18,8 +18,8 @@ import { JELLY, RUBBER } from './tank.js';
  *
  * What does *not* change is the reason the swap is this cheap, so it is worth
  * stating. The capture stands where the sphere stood and is sized to it, so the
- * layout is untouched; its 12 cells come to 8.7 mm against the sphere's 9 at
- * 11.1 mm, and the rubber cube at 11.3 mm is still the body setting the fixed
+ * layout is untouched; it asks for 8.7 mm elements against the sphere's
+ * 11.2 mm, and the rubber cube at 11.3 mm is still the body setting the fixed
  * physical step. The scene steps exactly as `tank` does.
  */
 
@@ -43,7 +43,7 @@ export const footballScene = {
             name: 'spot',
             size: 0.17,
             position: [-0.15, 0.18, -0.05],
-            resolution: 12,
+            elementSize: 0.0142,
             material: JELLY,
             tint: [0.95, 0.42, 0.30]
         }),
@@ -51,14 +51,14 @@ export const footballScene = {
             name: 'suzanne',
             size: 0.15,
             position: [0.14, 0.21, 0.06],
-            resolution: 12,
+            elementSize: 0.0125,
             material: RUBBER,
             tint: [0.55, 0.72, 0.95]
         }),
         shapeBody(torus({ majorRadius: 0.052, minorRadius: 0.022 }), {
             name: 'torus',
             position: [0.0, 0.33, 0.0],
-            resolution: 12,
+            elementSize: 0.0124,
             material: JELLY,
             tint: [0.98, 0.76, 0.32]
         }),
@@ -82,14 +82,14 @@ export const footballScene = {
             convention: 'y-up',
             size: 0.10,
             position: [-0.16, 0.36, 0.09],
-            resolution: 12,
+            elementSize: 0.0087,
             material: JELLY
         }),
 
         shapeBody(box({ halfExtents: [0.045, 0.045, 0.045] }), {
             name: 'cube',
             position: [0.17, 0.35, -0.09],
-            resolution: 8,
+            elementSize: 0.0113,
             material: RUBBER,
             tint: [0.80, 0.56, 0.95]
         })

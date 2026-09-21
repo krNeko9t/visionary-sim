@@ -38,17 +38,20 @@ export class SoftBody {
      * @param {RestGeometry} options.source - Rest shape, already placed in the world.
      * @param {import('./material.js').Material} [options.material] - Material parameters.
      * @param {RenderGeometry} [options.render] - Rest-space geometry to draw.
-     * @param {number} [options.resolution] - Requested simulation detail along the longest
-     *   axis. A hint to the simulator, not a property of the object; it lives here only so
-     *   that everything an author sets about a body is set in one place.
+     * @param {number} [options.elementSize] - Target size of one simulation element, in
+     *   metres of world space. What the author asks for, not what the simulator measures
+     *   afterwards: the spacing it actually produced is read off the proxy geometry, and
+     *   the two are different numbers. A hint to the simulator, not a property of the
+     *   object; it lives here only so that everything an author sets about a body is set
+     *   in one place.
      * @param {number[]} [options.tint] - Linear RGB base colour.
      */
-    constructor({ name, source, material, render = null, resolution = 16, tint = [0.92, 0.45, 0.26] }) {
+    constructor({ name, source, material, render = null, elementSize = 0.01, tint = [0.92, 0.45, 0.26] }) {
         this.name = name;
         this.source = source;
         this.material = { ...DEFAULT_MATERIAL, ...material };
         this.render = render;
-        this.resolution = resolution;
+        this.elementSize = elementSize;
         this.tint = tint;
     }
 }

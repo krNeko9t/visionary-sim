@@ -12,16 +12,16 @@ import { splatBody } from '../body/factory.js';
  * against picking one convention and calling it the standard.
  *
  * The other half is the split. `bread` is a body: the same Gaussians are handed
- * to the solver, which invents a volume from them and cuts it into cells.
+ * to the solver, which invents a volume from them and cuts it into elements.
  * `wolf` is scenery: drawn, never stepped, costing nothing but its pixels. That
  * is not a demonstration, it is what a scene-scale capture needs -- it arrives
  * split across several files and only some of them will ever be objects.
  *
  * What neither file states is what it is a picture *of*, and that matters once:
  * `bread` is a loaf, and `wolf` is a sitting plush toy, limbs tucked against its
- * body rather than a realistic animal's. The tucking is why
- * `sim/discretize/lattice/cloudVolume.js` argues the seal width against this capture --
- * it is the one here with gaps a seal could wrongly bridge. Both are 61 MB
+ * body rather than a realistic animal's. The tucking is why `cloudVolume.js`
+ * under `sim/discretize/` argues the seal width against this capture -- it is
+ * the one here with gaps a seal could wrongly bridge. Both are 61 MB
  * binaries no test opens, so this is the only place either shape is written
  * down; anything else describing them is being written from memory.
  */
@@ -37,7 +37,7 @@ const BOUNDS = {
  *
  * Lighter than the tank's jelly because a loaf is, and that costs substeps: the
  * wave speed is `sqrt((lambda + 2 mu) / rho)`, so dividing the density is the
- * same as multiplying the stiffness. At 9.4 mm cells this costs roughly 15
+ * same as multiplying the stiffness. At 9.5 mm elements this costs roughly 15
  * fixed physical steps per 1/60 s of wall time.
  */
 export const CRUMB = { youngsModulus: 1.2e4, poissonRatio: 0.40, density: 700, friction: 0.5 };
@@ -78,10 +78,10 @@ export const splatScene = {
     decorate: app => createGlassBox(app, BOUNDS),
     createBodies: () => Promise.all([
         bodyOf(BREAD, {
-            // 9.4 mm cells. Finer than this and the stamped shell of this
-            // particular capture starts needing the seal in
-            // `sim/discretize/lattice/cloudVolume.js` to stay solid at all.
-            resolution: 20,
+            // Finer than 9.5 mm and the stamped shell of this particular
+            // capture starts needing the seal in `cloudVolume.js` (under
+            // `sim/discretize/`) to stay solid at all.
+            elementSize: 0.0095,
             material: CRUMB
         })
     ]),
@@ -93,10 +93,9 @@ export const splatScene = {
 /**
  * Both captures as bodies. The wolf starts on the floor and the loaf falls onto
  * it, so the scene exercises the same cross-body contact path as mesh bodies.
- * Twelve cells on the longest axis deliberately favours the Gen12LP GPU: it
- * cuts elastic and contact work and, through the larger cells, permits a longer
- * stable physical step. It does not reduce the per-frame work-buffer bake of
- * either cloud.
+ * Elements of 16 and 21 mm deliberately favour the Gen12LP GPU: they cut
+ * elastic and contact work and, being larger, permit a longer stable physical
+ * step. Neither size reduces the per-frame work-buffer bake of either cloud.
  *
  * @type {import('./scenes.js').Scene}
  */
@@ -107,12 +106,12 @@ export const splatContactScene = {
     createBodies: () => Promise.all([
         bodyOf(BREAD, {
             position: [0.0, 0.30, 0.0],
-            resolution: 12,
+            elementSize: 0.0158,
             material: CRUMB
         }),
         bodyOf(WOLF, {
             position: [0.0, 0.0, 0.0],
-            resolution: 12,
+            elementSize: 0.0212,
             material: PLUSH
         })
     ])

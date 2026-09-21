@@ -28,15 +28,39 @@ function boxMesh(half) {
 }
 
 describe('gridForBounds', () => {
-    it('gives the longest axis exactly the requested resolution', () => {
-        const grid = gridForBounds({ min: [0, 0, 0], max: [0.4, 0.2, 0.1] }, { resolution: 20, padding: 2 });
-        expect(grid.dims[0]).toBe(20 + 4);
-        expect(grid.h).toBeCloseTo(0.02, 12);
+    it('lays every axis out in elements of the requested size', () => {
+        const grid = gridForBounds({ min: [0, 0, 0], max: [0.4, 0.2, 0.1] }, { elementSize: 0.02, padding: 2 });
+        expect(grid.dims).toEqual([20 + 4, 10 + 4, 5 + 4]);
+        expect(grid.h).toBe(0.02);
+    });
+
+    it('rounds a part of an element up rather than leaving material uncovered', () => {
+        const grid = gridForBounds({ min: [0, 0, 0], max: [0.41, 0.2, 0.1] }, { elementSize: 0.02, padding: 2 });
+        expect(grid.dims[0]).toBe(21 + 4);
+    });
+
+    it('does not round a whole number of elements up over float32 dust', () => {
+        // Mesh vertices are float32, so a model normalised to 0.15 m spans
+        // 0.15000000596 m -- and an author asking for 12.5 mm elements means
+        // twelve of them, not a thirteenth for the last six nanometres.
+        const extent = Math.fround(0.15);
+        expect(extent).toBeGreaterThan(0.15);
+        const grid = gridForBounds({ min: [0, 0, 0], max: [extent, extent, extent] }, { elementSize: 0.0125, padding: 2 });
+        expect(grid.dims).toEqual([16, 16, 16]);
+    });
+
+    it('refuses to guess an element size', () => {
+        // The option was called `resolution` and counted something else; a
+        // caller still passing it must fail rather than quietly get a default.
+        const bounds = { min: [0, 0, 0], max: [0.1, 0.1, 0.1] };
+        expect(() => gridForBounds(bounds, {})).toThrow(/elementSize/);
+        expect(() => gridForBounds(bounds, { resolution: 12 })).toThrow(/elementSize/);
+        expect(() => gridForBounds(bounds, { elementSize: 0 })).toThrow(/elementSize/);
     });
 
     it('surrounds the shape with empty padding', () => {
         const padding = 2;
-        const grid = gridForBounds({ min: [-1, -1, -1], max: [1, 1, 1] }, { resolution: 8, padding });
+        const grid = gridForBounds({ min: [-1, -1, -1], max: [1, 1, 1] }, { elementSize: 0.25, padding });
         expect(grid.origin[0]).toBeCloseTo(-1 - padding * grid.h, 12);
         expect(countOccupied(grid)).toBe(0);
     });
@@ -45,7 +69,7 @@ describe('gridForBounds', () => {
 describe('voxelizeSdf', () => {
     it('recovers the volume of a sphere', () => {
         const radius = 0.1;
-        const grid = voxelizeSdf(sphere({ radius }), { resolution: 32 });
+        const grid = voxelizeSdf(sphere({ radius }), { elementSize: 2 * radius / 32 });
         const measured = countOccupied(grid) * grid.h ** 3;
         const exact = (4 / 3) * Math.PI * radius ** 3;
         // Over-filling is deliberate -- a cell holding surface but no material
@@ -58,7 +82,7 @@ describe('voxelizeSdf', () => {
 
     it('leaves the hole of a torus empty', () => {
         const shape = torus({ majorRadius: 0.08, minorRadius: 0.03 });
-        const grid = voxelizeSdf(shape, { resolution: 28 });
+        const grid = voxelizeSdf(shape, { elementSize: 0.22 / 28 });
         const centre = [0, 1, 2].map(a => Math.floor((0 - grid.origin[a]) / grid.h));
         expect(grid.occupancy[cellIndex(grid, centre[0], centre[1], centre[2])]).toBe(0);
         expect(countOccupied(grid)).toBeGreaterThan(0);
@@ -69,7 +93,7 @@ describe('voxelizeMesh', () => {
     it('recovers the volume of a closed box', () => {
         const half = 0.5;
         const mesh = boxMesh(half);
-        const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { resolution: 20 });
+        const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { elementSize: 2 * half / 20 });
         const measured = countOccupied(grid) * grid.h ** 3;
         const exact = (2 * half) ** 3;
         expect(measured / exact).toBeGreaterThan(0.95);
@@ -85,7 +109,7 @@ describe('voxelizeMesh', () => {
             // Triangles 4 and 5 are the -y face; indices [12, 18).
             indices: new Uint32Array([...mesh.indices.slice(0, 12), ...mesh.indices.slice(18)])
         };
-        const grid = voxelizeMesh(withHole, meshBounds(withHole.positions), { resolution: 16 });
+        const grid = voxelizeMesh(withHole, meshBounds(withHole.positions), { elementSize: 1 / 16 });
         const measured = countOccupied(grid) * grid.h ** 3;
         const exact = 1.0;
         expect(measured / exact).toBeGreaterThan(0.7);
@@ -103,7 +127,7 @@ describe('voxelizeMesh', () => {
         expect(mesh.positions).toHaveLength(24);
         expect(mesh.indices).toHaveLength(36);
 
-        const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { resolution: 12 });
+        const grid = voxelizeMesh(mesh, meshBounds(mesh.positions), { elementSize: 1 / 12 });
         const fillRatio = countOccupied(grid) / grid.occupancy.length;
         expect(fillRatio).toBeGreaterThan(0.1);
         expect(fillRatio).toBeLessThan(0.75);
@@ -112,7 +136,7 @@ describe('voxelizeMesh', () => {
 
 describe('morphologicalClose', () => {
     it('seals a one-cell pit without eating the body', () => {
-        const grid = voxelizeSdf(box({ halfExtents: [0.1, 0.1, 0.1] }), { resolution: 12 });
+        const grid = voxelizeSdf(box({ halfExtents: [0.1, 0.1, 0.1] }), { elementSize: 0.2 / 12 });
         const before = countOccupied(grid);
 
         const pit = cellIndex(grid, Math.floor(grid.dims[0] / 2), Math.floor(grid.dims[1] / 2), Math.floor(grid.dims[2] / 2));

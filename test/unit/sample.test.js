@@ -66,7 +66,7 @@ describe('the deformation field reproduces affine motion exactly', () => {
     // reproduce an affine map, then rigid rotations of a body carry splats and
     // vertices along without distortion, and F recovers the exact linear part
     // for rotating Gaussian covariances.
-    const lattice = buildLattice(voxelizeSdf(box({ halfExtents: [0.06, 0.05, 0.04] }), { resolution: 10 }), { density: 1000 });
+    const lattice = buildLattice(voxelizeSdf(box({ halfExtents: [0.06, 0.05, 0.04] }), { elementSize: 0.12 / 10 }), { density: 1000 });
     const space = { origin: lattice.origin, h: lattice.h, cellDims: lattice.cellDims };
 
     /** An arbitrary non-symmetric affine map, column-major. */

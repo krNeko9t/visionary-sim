@@ -160,12 +160,6 @@ const DISCRETISATION_DEBT = {
     'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
     'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
     'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
-    'body/material.js': 'the stability bound is argued per cell',
-
-    // `resolution` is counted in cells along the longest axis; its unit changes.
-    'scene/tank.js': 'resolution unit',
-    'scene/splats.js': 'resolution unit',
-    'scene/football.js': 'resolution unit',
 
     // Prose that explains itself through the lattice downstream of it.
     'assets/shapes.js': 'SDFs are preferred because they voxelise exactly',

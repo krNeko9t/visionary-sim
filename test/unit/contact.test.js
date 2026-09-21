@@ -226,13 +226,14 @@ describe('worst-case bucket occupancy', () => {
         expect(worstCaseBucketOccupancy(cell, spacing)).toBeGreaterThanOrEqual(inside);
     });
 
-    it('stays within capacity for every current scene\'s resolution spread', () => {
+    it('stays within capacity for every current scene\'s element size spread', () => {
         // tank.js / splats.js keep every body in a scene within about a 1.3x
-        // resolution ratio of each other, football.js within 1.63x (its
-        // capture against spot); that should never trip the check
-        // bodyContact.js runs against BUCKET_SLOTS.
-        expect(worstCaseBucketOccupancy(0.01417, 0.01111)).toBeLessThanOrEqual(BUCKET_SLOTS);
-        expect(worstCaseBucketOccupancy(0.01417, 0.00869)).toBeLessThanOrEqual(BUCKET_SLOTS);
+        // element size ratio of each other (tank: spot's 14.2 mm against the
+        // sphere's 11.2), football.js within 1.63x (spot against the capture's
+        // 8.7 mm); that should never trip the check bodyContact.js runs
+        // against BUCKET_SLOTS.
+        expect(worstCaseBucketOccupancy(0.0142, 0.0112)).toBeLessThanOrEqual(BUCKET_SLOTS);
+        expect(worstCaseBucketOccupancy(0.0142, 0.0087)).toBeLessThanOrEqual(BUCKET_SLOTS);
     });
 });
 

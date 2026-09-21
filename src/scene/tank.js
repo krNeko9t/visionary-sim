@@ -5,9 +5,12 @@ import { meshBody, shapeBody } from '../body/factory.js';
 /**
  * The fish tank, and what stands in it.
  *
- * Resolutions are per body and mean "cells along the longest axis", so a 0.16 m
- * body at 16 gives 1 cm cells. Everything shares one cell size scale, which
- * keeps the CFL substep requirement uniform across the scene.
+ * Element sizes are per body and in metres, and they all sit between 11 and
+ * 14 mm. That shared scale is on purpose: the substep a body can survive
+ * shrinks with its element size, so the finest body sets the step for the
+ * whole scene, and one body far finer than the rest would make everyone pay
+ * for it. Keeping every `elementSize` within a narrow band keeps the CFL
+ * requirement uniform across the scene.
  */
 
 /**
@@ -27,8 +30,8 @@ const BOUNDS = {
  * `sum(w |grad C|^2)`; past that both constraints are projected hard, and
  * projecting the deviatoric constraint `||F|| -> 0` hard means `F -> 0` -- the
  * body collapses to a point. That ratio is exactly the CFL number
- * `c * dt_substep / h` with `c = sqrt((lambda + 2 mu) / rho)`, so a material is
- * only as stiff as the cell size and substep count can carry.
+ * `c * dt_substep / cflLength` with `c = sqrt((lambda + 2 mu) / rho)`, so a
+ * material is only as stiff as the element size and substep count can carry.
  *
  * The fixed physical step is chosen from that ratio at startup and whenever a
  * material changes. Render refresh only changes how many such steps are
@@ -48,7 +51,7 @@ export const tankScene = {
             name: 'spot',
             size: 0.17,
             position: [-0.15, 0.18, -0.05],
-            resolution: 12,
+            elementSize: 0.0142,
             material: JELLY,
             tint: [0.95, 0.42, 0.30]
         }),
@@ -56,28 +59,28 @@ export const tankScene = {
             name: 'suzanne',
             size: 0.15,
             position: [0.14, 0.21, 0.06],
-            resolution: 12,
+            elementSize: 0.0125,
             material: RUBBER,
             tint: [0.55, 0.72, 0.95]
         }),
         shapeBody(torus({ majorRadius: 0.052, minorRadius: 0.022 }), {
             name: 'torus',
             position: [0.0, 0.33, 0.0],
-            resolution: 12,
+            elementSize: 0.0124,
             material: JELLY,
             tint: [0.98, 0.76, 0.32]
         }),
         shapeBody(sphere({ radius: 0.05 }), {
             name: 'sphere',
             position: [-0.16, 0.36, 0.09],
-            resolution: 9,
+            elementSize: 0.0112,
             material: JELLY,
             tint: [0.55, 0.90, 0.62]
         }),
         shapeBody(box({ halfExtents: [0.045, 0.045, 0.045] }), {
             name: 'cube',
             position: [0.17, 0.35, -0.09],
-            resolution: 8,
+            elementSize: 0.0113,
             material: RUBBER,
             tint: [0.80, 0.56, 0.95]
         })
@@ -87,7 +90,7 @@ export const tankScene = {
 /**
  * The same tank holding the Stanford bunny, for measuring how the pipeline
  * copes with a large, non-watertight mesh: 70k triangles with open holes in its
- * base is a voxelisation stress test rather than scenery, which is why it is
+ * base is a stress test for turning a mesh into a volume rather than scenery, which is why it is
  * its own scene instead of a sixth body in the one above.
  *
  * @type {import('./scenes.js').Scene}
@@ -101,7 +104,7 @@ export const bunnyScene = {
             name: 'bunny',
             size: 0.20,
             position: [0, 0.25, 0],
-            resolution: 24,
+            elementSize: 0.0084,
             material: JELLY,
             tint: [0.88, 0.86, 0.82]
         })

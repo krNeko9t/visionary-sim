@@ -18,30 +18,44 @@
 const DEFAULT_PADDING = 2;
 
 /**
- * Lays out a grid covering `bounds` with `resolution` cells along its longest
- * axis, plus a ring of empty padding cells.
+ * Lays out a grid covering `bounds` in cells of edge `elementSize`, plus a ring
+ * of empty padding cells.
+ *
+ * The cell edge *is* the element size the author asked for, not something
+ * derived from it, so the same request gives the same cells on a body of any
+ * size. An axis whose extent is not a whole number of cells is rounded up: the
+ * grid may overhang the material, never fall short of it.
  *
  * The padding is not cosmetic: trilinear embedding needs a full cell of support
  * around every render point, and the morphological close below needs somewhere
  * to grow into.
  *
  * @param {{ min: number[], max: number[] }} bounds - Bounds to cover.
- * @param {object} [options] - Layout options.
- * @param {number} [options.resolution] - Cells along the longest axis.
+ * @param {object} options - Layout options.
+ * @param {number} options.elementSize - Cell edge length, in metres.
  * @param {number} [options.padding] - Empty cells added on every side.
  * @returns {OccupancyGrid} A grid with all cells empty.
  */
-export function gridForBounds(bounds, { resolution = 20, padding = DEFAULT_PADDING } = {}) {
+export function gridForBounds(bounds, { elementSize, padding = DEFAULT_PADDING } = {}) {
+    // No default here: the body has one, and a second one would quietly catch a
+    // caller that forgot to pass the size -- or that still passes the old
+    // `resolution`, which counted cells rather than measuring them.
+    if (!(elementSize > 0 && Number.isFinite(elementSize))) {
+        throw new Error(`gridForBounds: elementSize must be a positive length in metres, got ${elementSize}`);
+    }
+    const h = elementSize;
     const extent = [
         bounds.max[0] - bounds.min[0],
         bounds.max[1] - bounds.min[1],
         bounds.max[2] - bounds.min[2]
     ];
-    const h = Math.max(extent[0], extent[1], extent[2]) / resolution;
 
-    // The 1e-9 keeps the longest axis at exactly `resolution` cells instead of
-    // rounding up on floating point dust.
-    const dims = extent.map(e => Math.max(1, Math.ceil(e / h - 1e-9)) + 2 * padding);
+    // The tolerance keeps an extent that is a whole number of cells from
+    // rounding up over floating point dust. Mesh vertices are float32, so the
+    // dust is up to about 1e-7 of the extent: a model normalised to 0.15 m at
+    // 12.5 mm is twelve cells, not thirteen. Short by a millionth of a cell is
+    // well inside the padding.
+    const dims = extent.map(e => Math.max(1, Math.ceil(e / h - 1e-6)) + 2 * padding);
     const origin = bounds.min.map(v => v - h * padding);
 
     return {
@@ -96,8 +110,8 @@ export function countOccupied(grid) {
  *     leave the centre more than half a cell away.
  *
  * @param {import('../../../assets/shapes.js').Shape} shape - Shape to voxelise.
- * @param {object} [options] - Layout options, see {@link gridForBounds}.
- * @param {number} [options.resolution] - Cells along the longest axis.
+ * @param {object} options - Layout options, see {@link gridForBounds}.
+ * @param {number} options.elementSize - Cell edge length, in metres.
  * @param {number} [options.padding] - Empty cells added on every side.
  * @returns {OccupancyGrid} The filled grid.
  */
@@ -151,8 +165,8 @@ function anyCornerInside(shape, x, y, z, h) {
  *
  * @param {import('../../../assets/objLoader.js').TriangleMesh} mesh - Mesh to voxelise.
  * @param {{ min: number[], max: number[] }} bounds - Bounds of the mesh.
- * @param {object} [options] - Layout options.
- * @param {number} [options.resolution] - Cells along the longest axis.
+ * @param {object} options - Layout options.
+ * @param {number} options.elementSize - Cell edge length, in metres.
  * @param {number} [options.padding] - Empty cells added on every side.
  * @param {boolean} [options.close] - Run a morphological close to seal cracks.
  * @returns {OccupancyGrid} The filled grid.

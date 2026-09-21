@@ -81,12 +81,12 @@ const SPREAD = 0.0008;
 const SHELL = sphereShell(RADIUS, 6000);
 
 describe('voxelizeCloud', () => {
-    it('puts every Gaussian centre in a solid cell, at every resolution', () => {
+    it('puts every Gaussian centre in a solid cell, at every element size', () => {
         // The hard boundary, and the reason for the whole module. A centre in an
         // empty cell reads a deformation gradient torn between nodes that moved
         // and nodes with no mass, and the Gaussian drawn there smears. Checked
-        // at several resolutions because the failure comes from the surface
-        // landing badly against the grid, which a single resolution hides --
+        // at several element sizes because the failure comes from the surface
+        // landing badly against the grid, which a single size hides --
         // the same reason `shapes.test.js` sweeps.
         //
         // Deliberately asked through `locate`, which is what the render side
@@ -94,15 +94,17 @@ describe('voxelizeCloud', () => {
         // two drift apart and still agree with each other.
         const cloud = cloudAt(SHELL, SPREAD);
 
-        for (const resolution of [8, 12, 16, 24, 32]) {
-            const grid = voxelizeCloud(cloud, { resolution });
+        // About 8 to 32 cells across the 0.1 m ball, at sizes that land it
+        // differently against the grid each time.
+        for (const elementSize of [0.013, 0.0086, 0.0065, 0.0043, 0.0032]) {
+            const grid = voxelizeCloud(cloud, { elementSize });
             let outside = 0;
 
             for (let i = 0; i < cloud.count; i++) {
                 const centre = [...cloud.positions.slice(i * 3, i * 3 + 3)];
                 outside += occupancyAt(grid, centre) === 0 ? 1 : 0;
             }
-            expect(outside, `resolution ${resolution}`).toBe(0);
+            expect(outside, `elementSize ${elementSize}`).toBe(0);
         }
     });
 
@@ -111,8 +113,8 @@ describe('voxelizeCloud', () => {
         // the "body" is a bag: the right silhouette, a third of the mass, and it
         // deforms like a balloon.
         const cloud = cloudAt(SHELL, SPREAD);
-        const shell = voxelizeCloud(cloud, { resolution: 20, fill: false });
-        const solid = voxelizeCloud(cloud, { resolution: 20 });
+        const shell = voxelizeCloud(cloud, { elementSize: 0.005, fill: false });
+        const solid = voxelizeCloud(cloud, { elementSize: 0.005 });
 
         const exact = (4 / 3) * Math.PI * RADIUS ** 3;
         expect(countOccupied(shell) * shell.h ** 3 / exact).toBeLessThan(0.7);
@@ -133,12 +135,12 @@ describe('voxelizeCloud', () => {
         // fill really filled rather than merely running.
         const cloud = cloudAt(SHELL, SPREAD);
         const exact = (4 / 3) * Math.PI * RADIUS ** 3;
-        const error = resolution => {
-            const grid = voxelizeCloud(cloud, { resolution });
+        const error = elementSize => {
+            const grid = voxelizeCloud(cloud, { elementSize });
             return Math.abs(countOccupied(grid) * grid.h ** 3 - exact) / exact;
         };
 
-        expect(error(28)).toBeLessThan(error(10) * 0.7);
+        expect(error(0.0037)).toBeLessThan(error(0.01) * 0.7);
     });
 
     it('leaves an open capture hollow rather than flooding it', () => {
@@ -147,8 +149,8 @@ describe('voxelizeCloud', () => {
         // the alternative -- flooding outward from a seed -- would make one leak
         // fill the entire bounding box, and would look fine until it did not.
         const open = cloudAt(sphereShell(RADIUS, 6000, 0.75), SPREAD);
-        const shell = countOccupied(voxelizeCloud(open, { resolution: 20, fill: false }));
-        const filled = countOccupied(voxelizeCloud(open, { resolution: 20 }));
+        const shell = countOccupied(voxelizeCloud(open, { elementSize: 0.005, fill: false }));
+        const filled = countOccupied(voxelizeCloud(open, { elementSize: 0.005 }));
 
         expect(filled).toBeLessThan(shell * 1.5);
     });
@@ -157,7 +159,7 @@ describe('voxelizeCloud', () => {
         // Two things need it: trilinear embedding wants a full cell of support
         // around every point it carries, and the fill starts from the faces, so
         // material reaching them would shut it out.
-        const grid = voxelizeCloud(cloudAt(SHELL, SPREAD), { resolution: 16 });
+        const grid = voxelizeCloud(cloudAt(SHELL, SPREAD), { elementSize: 0.0065 });
         const [nx, ny, nz] = grid.dims;
         let onFace = 0;
 
@@ -182,7 +184,7 @@ describe('voxelizeCloud', () => {
         long.scales.set([0.05, 0.004, 0.004]);
         long.rotations.set([0, 0, Math.SQRT1_2, Math.SQRT1_2]);
 
-        const grid = voxelizeCloud(long, { resolution: 16, fill: false });
+        const grid = voxelizeCloud(long, { elementSize: 0.0125, fill: false });
         expect(occupancyAt(grid, [0, 0.08, 0])).toBe(1);
         expect(occupancyAt(grid, [0.08, 0, 0])).toBe(0);
     });

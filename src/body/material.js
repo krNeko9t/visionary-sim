@@ -41,11 +41,11 @@
  * nu = 0.25 is gamma = 2, which puts the barrier at 54% linear compression --
  * a sixth of the rest volume. `collapseScale` in `sim/constraints/compliance.js`
  * computes it, the panel reports it beside this slider, and
- * `test/unit/elastic.test.js` checks the formula against what a tetrahedron
+ * `test/unit/elastic.test.js` checks the formula against what a single element
  * actually survives.
  *
  * This floor used to be nu = 0.35, for a reason that no longer applies. The
- * two constraints of a tetrahedron were projected one after the other, which
+ * two constraints of an element were projected one after the other, which
  * damped them unequally -- `|grad C_H| = sqrt(3) |grad C_D|` at rest, so the
  * denominators differed -- and the pair left a net shrink per projection that
  * compounded until the body was a point. Only a hydrostatic constraint stiff
@@ -110,12 +110,13 @@ export function engineeringConstants({ mu, lambda }) {
 
 /**
  * Longitudinal wave speed. This is the primitive behind the CFL limit: a
- * substep has to be short enough that a wave cannot cross a cell.
+ * substep has to be short enough that a wave cannot cross an element.
  *
- * Turning it into a substep count needs a cell size, which only exists once a
- * solver has chosen a discretisation, so that lives on the simulation side in
- * `sim/constraints/compliance.js`. This function is the only place the wave speed
- * itself is defined.
+ * Turning it into a substep count needs a length, and not the `elementSize` an
+ * author asked for: the length that counts is the proxy geometry's measured
+ * `cflLength`, which only exists once the body has been discretised. So that
+ * lives on the simulation side in `sim/constraints/compliance.js`. This function
+ * is the only place the wave speed itself is defined.
  *
  * @param {Material} material - The material.
  * @returns {number} Wave speed in m/s.

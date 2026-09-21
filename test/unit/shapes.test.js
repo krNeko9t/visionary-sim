@@ -27,6 +27,16 @@ function sdfGradient(shape, [x, y, z], eps = 1e-5) {
     ].map(d => d / (2 * eps));
 }
 
+/**
+ * @param {import('../../src/assets/shapes.js').Shape} shape - The shape.
+ * @param {number} count - Cells wanted across its longest axis.
+ * @returns {number} The element size that gives exactly that many.
+ */
+function acrossLongest(shape, count) {
+    const { min, max } = shape.bounds;
+    return Math.max(...min.map((v, axis) => max[axis] - v)) / count;
+}
+
 const SHAPES = [
     { name: 'sphere', shape: sphere({ radius: 0.05 }), scale: 0.05 },
     { name: 'torus', shape: torus({ majorRadius: 0.052, minorRadius: 0.022 }), scale: 0.022 },
@@ -94,7 +104,7 @@ describe.each(SHAPES)('$name', ({ shape, scale }) => {
         expect(shape.surface.positions[0]).not.toBe(surface[0]);
     });
 
-    it.each([8, 9, 10, 12, 16])('embeds every surface vertex in solid material at resolution %i', (resolution) => {
+    it.each([8, 9, 10, 12, 16])('embeds every surface vertex in solid material at %i cells across', (count) => {
         // The precondition for being drawn at all, and it is about the eight
         // corner nodes rather than about the vertex: a node with no material
         // never moves, and one of those among the eight tears the deformation
@@ -103,9 +113,11 @@ describe.each(SHAPES)('$name', ({ shape, scale }) => {
         //
         // An occupied cell has mass on all eight of its corners by
         // construction, so this is the whole of the condition. Swept across
-        // resolutions because the failure it guards against was an alignment
-        // between the surface and the grid, which one resolution can hide.
-        const lattice = buildLattice(voxelizeSdf(shape, { resolution }), { density: 1000 });
+        // element sizes because the failure it guards against was an alignment
+        // between the surface and the grid, which one size can hide; counted
+        // across the shape so that each size lands the surface on the grid
+        // the same way for all three shapes.
+        const lattice = buildLattice(voxelizeSdf(shape, { elementSize: acrossLongest(shape, count) }), { density: 1000 });
         const space = { origin: lattice.origin, h: lattice.h, cellDims: lattice.cellDims };
         const occupied = new Set(lattice.cells);
         let uncovered = 0;
@@ -124,7 +136,7 @@ describe.each(SHAPES)('$name', ({ shape, scale }) => {
         // acceptable while it stays at the half cell the sampling intends. A
         // whole extra layer would leave the body visibly hovering above the
         // floor it is resting on.
-        const lattice = buildLattice(voxelizeSdf(shape, { resolution: 12 }), { density: 1000 });
+        const lattice = buildLattice(voxelizeSdf(shape, { elementSize: acrossLongest(shape, 12) }), { density: 1000 });
         const extent = [0, 1, 2].map(axis => shape.bounds.max[axis] - shape.bounds.min[axis]);
         const grown = extent.map(e => (e + lattice.h) / e).reduce((a, b) => a * b, 1);
 

@@ -7,11 +7,11 @@ import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 const DENSITY = 1000;
 
 /**
- * @param {number} resolution - Cells along the longest axis.
+ * @param {number} [elementSize] - Cell edge, in metres; twelve across by default.
  * @returns {import('../../src/sim/discretize/lattice/lattice.js').Lattice} A sphere lattice.
  */
-function sphereLattice(resolution = 12) {
-    return buildLattice(voxelizeSdf(sphere({ radius: 0.1 }), { resolution }), { density: DENSITY });
+function sphereLattice(elementSize = 0.2 / 12) {
+    return buildLattice(voxelizeSdf(sphere({ radius: 0.1 }), { elementSize }), { density: DENSITY });
 }
 
 describe('lattice', () => {
@@ -85,7 +85,7 @@ describe('lattice', () => {
     });
 
     it('places nodes on the grid corners', () => {
-        const lattice = sphereLattice(8);
+        const lattice = sphereLattice(0.2 / 8);
         const { origin, h, nodeDims, restPositions } = lattice;
 
         for (const [i, j, k] of [[0, 0, 0], [1, 2, 3], [nodeDims[0] - 1, nodeDims[1] - 1, nodeDims[2] - 1]]) {
@@ -114,7 +114,7 @@ describe('lattice', () => {
 
         expect(surface.length).toBeGreaterThan(0);
         // The boundary of a solid is a surface, so it grows like the square of
-        // the resolution while the body grows like the cube.
+        // the cell count across while the body grows like the cube.
         const active = [...lattice.invMass].filter(m => m > 0).length;
         expect(surface.length).toBeLessThan(active);
 

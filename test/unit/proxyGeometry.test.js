@@ -88,7 +88,7 @@ function sampleLattice({ parameters }, rest) {
  */
 const IMPLEMENTATIONS = {
     VoxelLattice: {
-        make: shape => new VoxelLattice(buildLattice(voxelizeSdf(shape, { resolution: 6 }), { density: DENSITY })),
+        make: shape => new VoxelLattice(buildLattice(voxelizeSdf(shape, { elementSize: 0.015 }), { density: DENSITY })),
         sample: sampleLattice
     }
 };
