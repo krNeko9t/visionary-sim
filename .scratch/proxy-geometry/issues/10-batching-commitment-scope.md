@@ -68,3 +68,11 @@ Blocked by: 03, 05, 13
   [ADR-0004](../../../docs/adr/0004-architecture-roots-become-adrs.md) 的判据转 4.3 时，桶容量
   硬界大概率被判为 `broadphase.js` 的模块内部事、从文档里消失，第 3、4 问会跟着缩小。等 13
   落地再做，免得两张票同时改 4.3。
+
+### 09 的结论对本票的影响（2026-09-21）
+
+- 弹性约束要搬进 `sim/discretize/lattice/`（[ADR-0007](../../../docs/adr/0007-discretisation-owns-elastic-not-contact.md)），
+  依赖方向翻成 `sim/discretize → sim/constraints`。§三第二条「一种约束自带它的批次规则」里「约束」
+  住在哪个目录，重构之后变了，改写时一起考虑。
+- 接触的桶容量硬界改读实测的 `spacing.min`（spec 第 1 步），它从此不再是「4.2 的后果」，而是
+  接口 I3 的一个读者。
