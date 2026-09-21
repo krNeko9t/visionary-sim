@@ -44,7 +44,7 @@
 | `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
 | `sim/debug/` | 使求解状态可见 |
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动 |
-| `render/` | 把形变表达成看得见的东西。表示法可以增加，通道只有一条 |
+| `render/` | 把被形变带动的几何画出来；不知道它从哪来 |
 | `ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
 
 `wgsl/` 不在表内：那是所在目录的着色器文本，不是另一个关注点。
@@ -63,16 +63,8 @@ sim/  ──────►  deformation/  ◄──────  render/
 ```
 
 `deformation/` 回答两件事：某个静止点现在在哪，它周围的空间被拉成什么样。后者使网格能求
-法线、高斯能转协方差，所以一条通道同时服务两种渲染。同一套数学有 CPU 与 GPU 两份实现，
+法线、高斯能转协方差，所以一条通道服务所有被带动的几何。同一套数学有 CPU 与 GPU 两份实现，
 前者是后者的参考解，由单元测试对齐。
-
-两种表示法并列，谁都不是另一个的过渡态：同一个场景可以两者兼有，接触发生在两者共同的节点
-上，因而与渲染表示法无关。`?scene=mixed` 就是这句话的验收——网格物体和 3DGS 物体同缸共模拟，
-互相接触。
-
-「形变要交给材质哪几个参数」因此只有一份实现，落在 `deformation/bind.js`。这不是自律的
-结果：`render/` 只能看见 `deformation/`，`sim/debug/` 只能看见 `sim/discretize/` 与
-`deformation/`，两者唯一的交集就是那里。想各写一份得先破坏分层才拿得到。
 
 ### 求解器叫不出约束的名字
 
@@ -104,7 +96,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 只有 `sim/discretize/lattice/` 可以说点阵的词；今天仍在说的文件逐个列进债单，债单只减不增——它就是「换掉点阵要动什么」 | 同上 |
 | 上面§二那张表 ↔ `src/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
-| 两条渲染路径并列且互不知情，声明的表示法都已接上 | `test/unit/renderPaths.test.js` |
+| 凡是会被交出来的几何都有画法 | `test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
 | 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `test/unit/timestep.test.js`、`simulatorTiming.test.js` |
 | 接触桶不受 GPU 原子插入顺序影响 | `test/unit/contact.test.js` |

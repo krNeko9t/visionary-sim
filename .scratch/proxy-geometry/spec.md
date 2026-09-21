@@ -147,7 +147,8 @@ Status: ready-for-agent
 - `deformation/sample.js`、`sample.wgsl`、`corners.js` 搬进驻留区；`latticeField()` 从 `bind.js` 搬过来
   挂成 `field()`；`simulator.field()` 改调它。
 - `bind.js` 只剩 `DeformationField` typedef、`COVARIANCE_WGSL`，以及那句契约（`shader` 必须声明
-  `deformationAt(rest) -> Deformation`）。改写 §二的 `deformation/` 那一行：它从此持有的是契约，
+  `deformationAt(rest) -> Deformation`）。头部「只有一份实现，因为 `render/` 与调试视图唯一的
+  交集在这里」那段论证删掉（11）：通道只持有契约，没有实现可以重复。改写 §二的 `deformation/` 那一行：它从此持有的是契约，
   不是实现。
 - 一致性测试补上 I5：在一个已知的仿射形变下，`deformationAt` 在静止节点处给出正确的位置与梯度。
 
@@ -159,9 +160,15 @@ Status: ready-for-agent
 - `latticeView.js` 改写成 `render/` 下的一条路径，只认 `DeformationField` 与 `wireframe()`；
   `sim/debug/` 目录删除，`ALLOWED` 删掉那一行，§二删掉那一行。
 - `architecture.test.js` 里 `render/` 那条词表测试的注释，删掉为 `sim/debug/` 写的豁免理由。
-- 这条路径由哪条测试兑现、`renderPaths.test.js` 怎么划「渲染路径」与「表示法」，以及
-  `ARCHITECTURE.md` §三第一条承诺怎么改写，都是
-  [11 · §三第一条承诺与线框渲染路径](issues/11-commitment-one-and-wireframe-path.md) 的结论，照它做。
+- 线框只是又一份被形变带动的几何：静止位置就是节点，图元是线段。`render/` 按**图元种类**
+  （三角形、高斯、线段）派发画法，不知道几何从物体来还是从代理几何来；`main.js` 把
+  `wireframe()` 当纯数据交进去，`render/` 不 import `sim/`。
+- `renderPaths.test.js`：「每种声明的 kind 都有 `VIEWS` 项」改成「凡是会被交出来的几何的图元
+  种类都有画法」（物体的 `RenderGeometry` 与 `wireframe()` 一起算）；删掉网格组与高斯组互不
+  import 那条（`render/` 内部的事，跨模块的边由 `architecture.test.js` 兑现）；GPU sorter 那条不动。
+  文件头改掉「两种表示法」的说法。
+- `ARCHITECTURE.md` 不用再动：§三、§二 `render/` 行、§四那一行已由
+  [11 · §三第一条承诺与线框渲染路径](issues/11-commitment-one-and-wireframe-path.md) 改好。
 
 还掉的债：`sim/debug/latticeView.js`。
 
@@ -184,6 +191,8 @@ Status: ready-for-agent
 - `assets/shapes.js`、`assets/tessellate.js`、`assets/splats/clean.js`、`assets/splats/measure.js`、
   `deformation/covariance.js`：改写用点阵解释自己的注释，说成「代理几何」「单元尺度」。这些文件
   没有接口条目要它们改，只是说的话会不再成立。
+- `scene/mixed.js` 头部：「one body from each render path」「contact … on the nodes」改说成
+  「接触发生在代理几何上，与画出来的是什么无关」；它是演示场景，不再自称§三的验收。
 - `broadphase.js` 的 hash grid、`timestep.js` 的 CFL 若还剩中性的 `cell`：在那个文件里改名
   （grid cell → bucket，cell crossing → element crossing），不要留在债单上。
 - 删掉 `DISCRETISATION_DEBT` 常量和引用它的两处；「没有已还清的债」那条测试随之删除，词表测试
