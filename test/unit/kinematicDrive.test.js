@@ -196,6 +196,7 @@ function fakeParticles(invMass) {
         invMass: arr,
         gpuInvMass: Float32Array.from(arr),
         prescribed: new Set(),
+        staticPrescribed: new Set(),
         bodies: [{ nodeCount: arr.length, invMass: arr }],
         offsets: [0],
         nodeInvMass: { write: vi.fn() },

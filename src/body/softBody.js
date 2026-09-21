@@ -38,6 +38,9 @@ export class SoftBody {
      * @param {RestGeometry} options.source - Rest shape, already placed in the world.
      * @param {import('./material.js').Material} [options.material] - Material parameters.
      * @param {RenderGeometry} [options.render] - Rest-space geometry to draw.
+     * @param {(x: number, y: number, z: number) => boolean} [options.staticRegion] -
+     *   Region prescribed at rest, in world metres. Evaluated when simulation
+     *   geometry is constructed; no declaration means no static prescription.
      * @param {number} [options.elementSize] - Target size of one simulation element, in
      *   metres of world space. What the author asks for, not what the simulator measures
      *   afterwards: the spacing it actually produced is read off the proxy geometry, and
@@ -46,11 +49,12 @@ export class SoftBody {
      *   in one place.
      * @param {number[]} [options.tint] - Linear RGB base colour.
      */
-    constructor({ name, source, material, render = null, elementSize = 0.01, tint = [0.92, 0.45, 0.26] }) {
+    constructor({ name, source, material, render = null, staticRegion = null, elementSize = 0.01, tint = [0.92, 0.45, 0.26] }) {
         this.name = name;
         this.source = source;
         this.material = { ...DEFAULT_MATERIAL, ...material };
         this.render = render;
+        this.staticRegion = staticRegion;
         this.elementSize = elementSize;
         this.tint = tint;
     }

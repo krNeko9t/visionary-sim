@@ -26,6 +26,7 @@ import stateWgsl from './state.wgsl?raw';
  * @property {Float32Array} restPositions - Rest positions, 3 floats per node.
  * @property {Float32Array} invMass - Inverse mass per node, 0 where inactive.
  * @property {number} nodeCount - Nodes in this body, including inactive ones.
+ * @property {number[]} [staticNodes] - Body-local static prescription, fixed at construction.
  */
 
 /** The particle half of every kernel's declarations. See `state.wgsl`. */
@@ -78,11 +79,12 @@ export class Particles {
         this.restPositions = positions;
         this.invMass = invMass;
 
-        // Which nodes the GPU currently skips whatever their material
-        // inverse mass says. Kept apart from `invMass` itself so
-        // that whatever asked for it -- a constraint driving those nodes some
-        // other way -- can be undone without forgetting what they actually
-        // weigh.
+        // Static prescription belongs to the body, not the current driver.
+        // Convert body-local indices once for this shared state; a rebuilt
+        // discretisation supplies a newly sampled set.
+        this.staticPrescribed = new Set(bodies.flatMap(({ staticNodes = [] }, b) =>
+            staticNodes.map(node => this.offsets[b] + node)));
+        // The replaceable set belongs to the current kinematic driver.
         this.prescribed = new Set();
         /** GPU-facing copy of `invMass`, with prescribed nodes forced to zero. */
         this.gpuInvMass = new Float32Array(invMass);
@@ -97,7 +99,7 @@ export class Particles {
         this.nodePos.write(0, positions);
         this.nodePrev.write(0, positions);
         this.nodeVel.write(0, new Float32Array(total * 4));
-        this.nodeInvMass.write(0, this.gpuInvMass);
+        this.uploadGpuMasses();
 
         // One staging copy reused for every parameter update, so a material
         // change does not allocate.
@@ -116,6 +118,26 @@ export class Particles {
      */
     offsetOf(bodyIndex) {
         return this.offsets[bodyIndex];
+    }
+
+    /**
+     * Material counts exclude inactive nodes and ignore kinematic ownership.
+     * @param {number} bodyIndex - Index into the body list.
+     * @returns {{ materialNodes: number, staticNodes: number, movableNodes: number }} Counts.
+     */
+    materialCounts(bodyIndex) {
+        let materialNodes = 0;
+        let staticNodes = 0;
+        const offset = this.offsets[bodyIndex];
+        for (let n = 0; n < this.bodies[bodyIndex].nodeCount; n++) {
+            if (this.invMass[offset + n] > 0) {
+                materialNodes++;
+                if (this.staticPrescribed.has(offset + n)) {
+                    staticNodes++;
+                }
+            }
+        }
+        return { materialNodes, staticNodes, movableNodes: materialNodes - staticNodes };
     }
 
     /**
@@ -162,7 +184,7 @@ export class Particles {
         this.uploadGpuMasses();
     }
 
-    /** Releases every prescribed node back to its material inverse mass. */
+    /** Releases kinematic prescription; static prescription remains in force. */
     clearPrescribed() {
         this.prescribed = new Set();
         this.uploadGpuMasses();
@@ -193,6 +215,9 @@ export class Particles {
      */
     uploadGpuMasses() {
         this.gpuInvMass.set(this.invMass);
+        for (const node of this.staticPrescribed) {
+            this.gpuInvMass[node] = 0;
+        }
         for (const node of this.prescribed) {
             this.gpuInvMass[node] = 0;
         }

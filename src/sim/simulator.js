@@ -1,4 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
+import { staticNodesInRegion } from './staticPrescription.js';
 import { DEFAULT_GRIPPED_PART_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
 import { discretizeBody, elasticConstraints } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
@@ -50,9 +51,12 @@ export class Simulator {
         // constraints. The stepper never learns what kind of constraint it is
         // running, which is what left room for a second kind, and now a third:
         // nodes that are not solved for, but told.
-        // `dof` rather than the whole proxy: these three arrays are the entire
-        // set of things the node storage is allowed to know.
-        this.particles = new Particles(device, this.simBodies.map(({ proxy }) => proxy.dof));
+        // State receives only node data and the sampled static prescription,
+        // never the proxy or the body's world-region declaration.
+        this.particles = new Particles(device, this.simBodies.map(({ body, proxy }) => ({
+            ...proxy.dof,
+            staticNodes: staticNodesInRegion(proxy.dof.restPositions, body.staticRegion)
+        })));
         this.drive = new KinematicDrive(device, this.particles);
         // Elasticity is the discretisation's to build (ADR-0007): what an
         // element is and how elements are batched is how the body was cut up.
@@ -203,10 +207,11 @@ export class Simulator {
                 worstCase: worstCaseHeldNodes(this.grip.radius, this.finestSpacing()),
                 capacity: this.drive.capacity
             },
-            perBody: this.simBodies.map(({ body, proxy }) => {
+            perBody: this.simBodies.map(({ body, proxy }, b) => {
                 const gamma = gammaOf(body.material);
                 return {
                     name: body.name,
+                    ...this.particles.materialCounts(b),
                     spacing: proxy.spacing,
                     scale: proxy.scale(),
                     gamma,

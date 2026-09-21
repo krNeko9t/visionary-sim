@@ -18,8 +18,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (n >= uniform.nodeCount) {
         return;
     }
-    // Zero is either an inactive node, one with no material, or one a
-    // constraint has prescribed for itself to drive this frame.
+    // Zero means inactive, statically prescribed, or kinematically prescribed.
     if (nodeInvMass[n] == 0.0) {
         return;
     }

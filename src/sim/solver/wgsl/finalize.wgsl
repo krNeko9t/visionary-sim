@@ -48,9 +48,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let prev = nodePrev[n].xyz;
     var p = nodePos[n].xyz;
 
-    // Zero inverse mass -- an inactive node with no material, or one some
-    // other constraint has prescribed this frame -- means nothing here moved
-    // it: it stays exactly where that constraint put it.
+    // Zero inverse mass -- inactive, statically or kinematically prescribed --
+    // means this pass leaves its position and velocity alone.
     if (nodeInvMass[n] == 0.0) {
         return;
     }
