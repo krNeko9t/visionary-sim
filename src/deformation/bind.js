@@ -1,5 +1,4 @@
 import covarianceWgsl from './covariance.wgsl?raw';
-import normalWgsl from './normal.wgsl?raw';
 
 /**
  * The one way a material reads the deformation.
@@ -28,11 +27,12 @@ import normalWgsl from './normal.wgsl?raw';
  * Nothing else it declares is part of the contract, and a consumer that calls
  * anything else is reading one sampler's internals.
  *
- * What a consumer does with the gradient is not the sampler's business, so it is
- * handed out here rather than in the field's text: a surface splices
- * {@link NORMAL_WGSL}, a Gaussian {@link COVARIANCE_WGSL}. Separate exports
- * rather than one, because a consumer should not pay to compile what it will
- * never call.
+ * A consumer whose geometry has a shape as well as a place -- a Gaussian, where a
+ * mesh vertex has only a place and a normal -- splices {@link COVARIANCE_WGSL}
+ * after the field's own text. It is a separate export rather than part of it
+ * because a surface should not pay to compile what it will never call, and it is
+ * here rather than in the field's text because it reads only the gradient and so
+ * works over any sampler.
  *
  * @typedef {object} DeformationField
  * @property {string} shader - WGSL declaring `deformationAt(rest) -> Deformation`,
@@ -53,10 +53,3 @@ import normalWgsl from './normal.wgsl?raw';
  * `covariance.wgsl`, and `covariance.js` for the derivation.
  */
 export const COVARIANCE_WGSL = covarianceWgsl;
-
-/**
- * What a surface does with the gradient a field hands it, as shader source: a
- * rest normal comes out as a deformed one. Depends on nothing but that
- * gradient, so it is spliced after the field's text. See `normal.wgsl`.
- */
-export const NORMAL_WGSL = normalWgsl;

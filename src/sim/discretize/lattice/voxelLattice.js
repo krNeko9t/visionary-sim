@@ -76,10 +76,11 @@ export class VoxelLattice {
     /**
      * The body's deformation, sampled trilinearly from its nodes.
      *
-     * The six names below are this sampler's, not the channel's, and they
-     * appear nowhere outside this directory. Every consumer forwards them
-     * unread (I5), so another implementation brings its own names and its own
-     * text and no consumer changes.
+     * The six names below are this sampler's, and no source outside this
+     * directory reads them; only the conformance test's CPU twin of the
+     * shader does. Every consumer forwards them unread (I5), so another
+     * implementation brings its own names and its own text and no consumer
+     * changes.
      *
      * Cheap enough to call every frame, but there is no reason to: the node
      * buffer is written in place by the solver, so a field applied once stays

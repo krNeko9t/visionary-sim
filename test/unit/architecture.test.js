@@ -184,11 +184,12 @@ const DISCRETISATION_DEBT = {
 function discretisationIn(file) {
     const text = readFileSync(join(SRC, file), 'utf8');
     return DISCRETISATION
-        // `deform` then a capital is the channel's own namespace: everything it
-        // pastes into someone else's shader starts that way, so inside
+        // `deform` then a capital is how every piece of shader text pasted into
+        // someone else's shader names what it introduces -- the channel's own
+        // (`covariance.wgsl`) and a sampler's parameters alike -- so inside
         // `deformation/` the pattern would catch the channel for existing.
-        // Outside it, the same name means someone is reading the channel's
-        // internals, which is the leak it was written for.
+        // Outside it and the resident, the same name means someone is reading
+        // a sampler's parameters, which is the leak it was written for.
         .filter(pattern => !(areaOf(file) === 'deformation' && pattern.source === '\\bdeform[A-Z]'))
         .filter(pattern => pattern.test(text));
 }

@@ -2,10 +2,11 @@
 // and the limit it accepts are written out in `covariance.js`, which is the CPU
 // reference the unit tests pin; this file is the copy that runs.
 //
-// Pasted into somebody else's shader like the sampler, and under the same rule:
-// every name introduced here begins `deform`. It uses the sampler only through
-// the gradient handed to it, so a caller that wants Gaussians includes both and a
-// caller that wants a surface includes one.
+// Pasted into somebody else's shader after a field's own text, and under the
+// same rule as a field's text: every name introduced here begins `deform`. It
+// uses the field only through the gradient handed to it, so it works over any
+// sampler, and a caller that wants Gaussians includes both where a caller that
+// wants a surface includes only the field.
 //
 // What comes out is a covariance, because that is what an ellipsoid is. Restating
 // it in whatever shape a particular renderer stores is that renderer's job -- see

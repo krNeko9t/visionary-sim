@@ -35,8 +35,6 @@ const DENSITY = 1000;
  * @callback Sampler
  * @param {import('../../src/deformation/bind.js').DeformationField} field - A field
  *   the implementation handed out.
- * @param {Float32Array} nodePositions - The array behind the buffer handle the
- *   field was made from, vec4 per node.
  * @param {number[]} rest - A rest point.
  * @returns {{ position: number[], gradient: Float32Array }} The deformed position
  *   and the column-major deformation gradient there.
@@ -47,12 +45,21 @@ const DENSITY = 1000;
  *
  * This is the one place in the file that reads a field's parameters, and it is
  * allowed to because it is not a caller: it is this implementation's own twin of
- * its shader text, standing in for a GPU the tests do not have.
+ * its shader text, standing in for a GPU the tests do not have. That the twin
+ * and the WGSL agree is not checked here; it is what the CPU reference is for.
+ * What is checked is everything the implementation hands over around that maths:
+ * the parameters, the node layout they index and the buffer they forward.
  *
  * @type {Sampler}
  */
-function sampleLattice({ parameters }, nodePositions, rest) {
-    const { deformOrigin: origin, deformH: h, deformCellDims: cellDims, deformNodeDims: nodeDims } = parameters;
+function sampleLattice({ parameters }, rest) {
+    const {
+        deformNodePos: nodePositions,
+        deformOrigin: origin,
+        deformH: h,
+        deformCellDims: cellDims,
+        deformNodeDims: nodeDims
+    } = parameters;
     const { cell, local } = locate({ origin, h, cellDims }, rest[0], rest[1], rest[2]);
     const corners = cellNodeIndices(nodeDims, cell[0], cell[1], cell[2]);
 
@@ -262,6 +269,7 @@ for (const [implementation, { make, sample }] of Object.entries(IMPLEMENTATIONS)
             it('declares the contract function in the shader its field carries (entry 3, I5)', () => {
                 const field = proxy.field({}, 0);
                 expect(typeof field.shader).toBe('string');
+                expect(field.shader).toMatch(/struct\s+Deformation\s*\{[^}]*position\s*:\s*vec3f[^}]*gradient\s*:\s*mat3x3f[^}]*\}/);
                 expect(field.shader).toMatch(/fn\s+deformationAt\s*\(\s*\w+\s*:\s*vec3f\s*\)\s*->\s*Deformation\b/);
                 expect(typeof field.parameters).toBe('object');
             });
@@ -285,7 +293,7 @@ for (const [implementation, { make, sample }] of Object.entries(IMPLEMENTATIONS)
                 const field = proxy.field(buffer, offset);
                 for (const node of materialNodes(proxy)) {
                     const rest = pointAt(restPositions, node);
-                    const { position, gradient } = sample(field, buffer, rest);
+                    const { position, gradient } = sample(field, rest);
                     const expected = moved(rest);
                     for (let axis = 0; axis < 3; axis++) {
                         expect(position[axis], `node ${node} axis ${axis}`).toBeCloseTo(expected[axis], 5);
