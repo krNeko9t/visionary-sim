@@ -19,9 +19,9 @@ import { splatBody } from '../body/factory.js';
  *
  * What neither file states is what it is a picture *of*, and that matters once:
  * `bread` is a loaf, and `wolf` is a sitting plush toy, limbs tucked against its
- * body rather than a realistic animal's. The tucking is why `cloudVolume.js`
- * under `sim/discretize/` argues the seal width against this capture -- it is
- * the one here with gaps a seal could wrongly bridge. Both are 61 MB
+ * body rather than a realistic animal's. The tucking is why the seal that
+ * closes a capture into a volume is argued against this one -- it is the one
+ * here with gaps a seal could wrongly bridge. Both are 61 MB
  * binaries no test opens, so this is the only place either shape is written
  * down; anything else describing them is being written from memory.
  */
@@ -78,9 +78,8 @@ export const splatScene = {
     decorate: app => createGlassBox(app, BOUNDS),
     createBodies: () => Promise.all([
         bodyOf(BREAD, {
-            // Finer than 9.5 mm and the stamped shell of this particular
-            // capture starts needing the seal in `cloudVolume.js` (under
-            // `sim/discretize/`) to stay solid at all.
+            // Finer than 9.5 mm and this particular capture starts needing
+            // the seal that closes it into a volume to stay solid at all.
             elementSize: 0.0095,
             material: CRUMB
         })
@@ -93,7 +92,7 @@ export const splatScene = {
 /**
  * Both captures as bodies. The wolf starts on the floor and the loaf falls onto
  * it, so the scene exercises the same cross-body contact path as mesh bodies.
- * Elements of 16 and 21 mm deliberately favour the Gen12LP GPU: they cut
+ * Elements of 15.8 and 21.2 mm deliberately favour the Gen12LP GPU: they cut
  * elastic and contact work and, being larger, permit a longer stable physical
  * step. Neither size reduces the per-frame work-buffer bake of either cloud.
  *

@@ -5,12 +5,13 @@ import { meshBody, shapeBody } from '../body/factory.js';
 /**
  * The fish tank, and what stands in it.
  *
- * Element sizes are per body and in metres, and they all sit between 11 and
- * 14 mm. That shared scale is on purpose: the substep a body can survive
- * shrinks with its element size, so the finest body sets the step for the
- * whole scene, and one body far finer than the rest would make everyone pay
- * for it. Keeping every `elementSize` within a narrow band keeps the CFL
- * requirement uniform across the scene.
+ * Element sizes are per body and in metres, and every body in `tankScene`
+ * sits between 11.2 and 14.2 mm. That shared scale is on purpose: the substep
+ * a body can survive shrinks with its element size (and with its material's
+ * wave speed), and the whole scene steps at the rate its most demanding body
+ * needs. A body cut far finer than the rest would make everyone pay for it;
+ * keeping every `elementSize` within a narrow band keeps the CFL requirement
+ * uniform across the scene, so only the materials set it apart.
  */
 
 /**
@@ -90,8 +91,8 @@ export const tankScene = {
 /**
  * The same tank holding the Stanford bunny, for measuring how the pipeline
  * copes with a large, non-watertight mesh: 70k triangles with open holes in its
- * base is a stress test for turning a mesh into a volume rather than scenery, which is why it is
- * its own scene instead of a sixth body in the one above.
+ * base is a stress test for turning a mesh into a volume rather than scenery,
+ * which is why it is its own scene instead of a sixth body in the one above.
  *
  * @type {import('./scenes.js').Scene}
  */
