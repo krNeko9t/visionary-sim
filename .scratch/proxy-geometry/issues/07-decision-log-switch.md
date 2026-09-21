@@ -1,6 +1,6 @@
 # 07 · 决策记录切到 docs/adr/
 
-Status: open
+Status: resolved
 Type: task
 
 ## Question
@@ -40,3 +40,16 @@ Type: task
 - 编号：0001 仍留给本票；05 已用掉 0004、0005。
 - `CLAUDE.md` 的 `ARCHITECTURE.md` 一行已被 05 改过（加了「细节写在代码旁边、可换的选择写成
   ADR」），改 `DECISIONS.md` 那一行时不要覆盖它。
+
+## Answer
+
+2026-09-21 执行完毕。
+
+- **[ADR-0001](../../../docs/adr/0001-decision-records-move-to-docs-adr.md)** 记下这次切换：只换「决策记录」一格，§四 那条旧理由按 05 的结论改为指向 ADR-0004；否掉的三条是「两份并存按领域/工程分工」「迁移旧条目」「封存后仍往里追加错误记录」。
+- **`DECISIONS.md` 封存**：标题下追加一行封存说明（日期 + 指向 ADR-0001），正文一字未改。封存是**完全只读**——「判断错在哪」不再有单独入口，写进推翻它的那条新 ADR 的 Considered Options。
+- **`CLAUDE.md`**：表里新增 `docs/adr/` 一行，`DECISIONS.md` 一行改为「2026-09-21 之前的决策与错误记录 / 封存，只读」；05 改过的 `ARCHITECTURE.md` 一行未动。另有一处票面没点名的：「改依赖表把理由追加进 `DECISIONS.md`」改为「写成 `docs/adr/` 的一条 ADR」——不改它，这条规则会逼人往封存文件里写。
+- **偏离「不动 `ARCHITECTURE.md`」**：只改了开头那句指针（「被推翻的方案与其理由在 `docs/adr/`（之前的在封存的 `DECISIONS.md`）」），否则它指向一个不再接收新内容的文件。这条禁令写于 05 之前，当时是为了不碰 §四；§四 未动。
+- **`test/unit/docs.test.js`**：BUDGET 注释里「move something to `DECISIONS.md`」改指 `docs/adr/`；它的断言不涉及 `docs/`，`docs.test.js` 与 `architecture.test.js` 13 条全绿。
+- **`docs/agents/domain.md`** 与现实一致（根目录 `CONTEXT.md` + `docs/adr/`），无需改。
+- **数字更正**：`DECISIONS.md` 实有 **14** 条（`^## 20` 计数），不是票面与图上写的 16 条。
+- 未动：`.scratch/physdreamer-alocasia/spec.md` 里三处「追加进 `DECISIONS.md`」——那份 spec 已按使用者决定暂停，恢复时按 ADR-0001 改写。

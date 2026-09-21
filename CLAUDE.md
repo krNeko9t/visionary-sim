@@ -6,14 +6,15 @@
 |---|---|---|
 | `ARCHITECTURE.md` | 当前架构设计 | 不记录历史、进度。只对打开某一个模块的人有用的细节写在那个模块的代码旁边，不写进这里；可换的选择写成 `docs/adr/` |
 | `CLAUDE.md`（本文件） | AI工作规则 | 只写能改变某个具体动作的句子。认识/表述类的句子一律不写。保持精简|
-| `DECISIONS.md` | 方案选择理由，判断分析，错误记录 | 过去时，带日期，只追加不修改 |
+| `docs/adr/` | 方案选择理由，被否的方案，判断错在哪 | 一条一个文件，编号递增；推翻旧决定写新的一条 |
+| `DECISIONS.md` | 2026-09-21 之前的决策与错误记录 | 封存，只读，不再追加 |
 
 ## 新增内容规则
 
 - 新界面走 `ui/`，不在 `main.js` 里堆事件监听。
 - `render/` 增加新表示法走 `deformation/bind.js`，不新写一份绑定。
 - 新增目录：同时更新 `ARCHITECTURE.md` §二的表和 `test/unit/architecture.test.js` 的依赖表。
-- 依赖表在architecture.test.js，改依赖表把理由追加进 `DECISIONS.md`。
+- 依赖表在architecture.test.js，改依赖表把理由写成 `docs/adr/` 的一条 ADR。
 
 ## Agent skills
 

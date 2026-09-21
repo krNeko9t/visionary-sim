@@ -34,7 +34,7 @@ const SRC = join(ROOT, 'src');
  * the current task needs them, so a line that does not change what someone does
  * next is not free -- it is a tax on every session that follows. The numbers are
  * deliberately close to current length: hitting the limit is the intended
- * prompt to move something to `DECISIONS.md`, to `ARCHITECTURE.md`, or to the
+ * prompt to move something to `docs/adr/`, to `ARCHITECTURE.md`, or to the
  * comment on the code it constrains, and raising it is a decision to be argued
  * for rather than a chore.
  */
