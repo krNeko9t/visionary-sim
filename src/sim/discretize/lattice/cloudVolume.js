@@ -89,7 +89,7 @@ const CELL_SAMPLES = [...CUBE_CORNERS, [0.5, 0.5, 0.5]];
 const NEIGHBOURS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
 /**
- * @param {import('../../assets/splats/cloud.js').SplatCloud} cloud - Gaussians in world space.
+ * @param {import('../../../assets/splats/cloud.js').SplatCloud} cloud - Gaussians in world space.
  * @param {object} [options] - Layout and method options.
  * @param {number} [options.resolution] - Cells along the longest axis.
  * @param {number} [options.padding] - Empty cells added on every side.
@@ -131,7 +131,7 @@ export function voxelizeCloud(cloud, options = {}) {
  * empty cells to start from, and that requirement should not be reachable only
  * by arguing from how the bounds were chosen two functions ago.
  *
- * @param {import('../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
+ * @param {import('../../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
  * @param {import('./voxelize.js').OccupancyGrid} grid - Grid to mark in place.
  * @param {number} sigma - Standard deviations counted as material.
  */
@@ -185,7 +185,7 @@ function stampCloud(cloud, grid, sigma) {
  * cells -- so that the box the grid is built to hold and the box that gets
  * stamped cannot disagree.
  *
- * @param {import('../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
+ * @param {import('../../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
  * @param {number} i - Which one.
  * @param {number} sigma - Standard deviations counted as material.
  * @param {Float32Array} columns - Filled with the column-major rotation.
@@ -212,7 +212,7 @@ function ellipsoidOf(cloud, i, sigma, columns, radius, half) {
 /**
  * The box holding every ellipsoid, which is the box the material is in.
  *
- * @param {import('../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
+ * @param {import('../../../assets/splats/cloud.js').SplatCloud} cloud - The Gaussians.
  * @param {number} sigma - Standard deviations counted as material.
  * @returns {{ min: number[], max: number[] }} The bounds.
  */

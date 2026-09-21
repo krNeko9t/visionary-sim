@@ -95,7 +95,7 @@ export function countOccupied(grid) {
  *     its centre is nearly so. A surface that clips a cell near a corner can
  *     leave the centre more than half a cell away.
  *
- * @param {import('./shapes.js').Shape} shape - Shape to voxelise.
+ * @param {import('../../../assets/shapes.js').Shape} shape - Shape to voxelise.
  * @param {object} [options] - Layout options, see {@link gridForBounds}.
  * @param {number} [options.resolution] - Cells along the longest axis.
  * @param {number} [options.padding] - Empty cells added on every side.
@@ -125,7 +125,7 @@ export function voxelizeSdf(shape, options = {}) {
 }
 
 /**
- * @param {import('./shapes.js').Shape} shape - Shape to test against.
+ * @param {import('../../../assets/shapes.js').Shape} shape - Shape to test against.
  * @param {number} x - Min corner of the cell along x.
  * @param {number} y - Min corner of the cell along y.
  * @param {number} z - Min corner of the cell along z.
@@ -149,7 +149,7 @@ function anyCornerInside(shape, x, y, z, h) {
 /**
  * Voxelises a triangle mesh by ray-parity along all three axes.
  *
- * @param {import('./objLoader.js').TriangleMesh} mesh - Mesh to voxelise.
+ * @param {import('../../../assets/objLoader.js').TriangleMesh} mesh - Mesh to voxelise.
  * @param {{ min: number[], max: number[] }} bounds - Bounds of the mesh.
  * @param {object} [options] - Layout options.
  * @param {number} [options.resolution] - Cells along the longest axis.
@@ -191,7 +191,7 @@ export function voxelizeMesh(mesh, bounds, options = {}) {
  * that at the vertices exactly (they are edge endpoints) and covers the rest of
  * the silhouette on the way.
  *
- * @param {import('./objLoader.js').TriangleMesh} mesh - Mesh to sample.
+ * @param {import('../../../assets/objLoader.js').TriangleMesh} mesh - Mesh to sample.
  * @param {OccupancyGrid} grid - Target grid.
  * @param {Uint8Array} surface - Per-cell surface flag, accumulated.
  */
@@ -240,7 +240,7 @@ function markEdgeCells(mesh, grid, surface) {
  * The three axes share this code through an index permutation rather than three
  * near-identical loops.
  *
- * @param {import('./objLoader.js').TriangleMesh} mesh - Mesh to sample.
+ * @param {import('../../../assets/objLoader.js').TriangleMesh} mesh - Mesh to sample.
  * @param {OccupancyGrid} grid - Target grid.
  * @param {number} axis - Ray direction, 0/1/2 for x/y/z.
  * @param {Uint8Array} votes - Per-cell interior vote count, accumulated.
