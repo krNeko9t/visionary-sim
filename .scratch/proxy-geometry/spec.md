@@ -155,7 +155,7 @@ Status: ready-for-agent
 还掉的债：`sample.js`、`sample.wgsl`、`corners.js`、`bind.js`。
 兑现：`sample.test.js`、`renderPaths.test.js`、`proxyGeometry.test.js`。
 
-### 第 5 步 · 线框成为一条渲染路径（等 11 关闭再做）
+### 第 5 步 · 线框成为一条渲染路径
 
 - `latticeView.js` 改写成 `render/` 下的一条路径，只认 `DeformationField` 与 `wireframe()`；
   `sim/debug/` 目录删除，`ALLOWED` 删掉那一行，§二删掉那一行。
@@ -172,7 +172,6 @@ Status: ready-for-agent
 
 还掉的债：`sim/debug/latticeView.js`。
 
-第 6、7 步不依赖本步，11 没关时可以先做。
 
 ### 第 6 步 · 细度的单位
 
@@ -195,6 +194,10 @@ Status: ready-for-agent
   「接触发生在代理几何上，与画出来的是什么无关」；它是演示场景，不再自称§三的验收。
 - `broadphase.js` 的 hash grid、`timestep.js` 的 CFL 若还剩中性的 `cell`：在那个文件里改名
   （grid cell → bucket，cell crossing → element crossing），不要留在债单上。
+- 抓取链改用 `CONTEXT.md` 的词（12）：`handle` / `handleTarget` / `handleVelocity` / `setHandle`
+  → `grabTarget` 系列（`simulator.js`、`kinematicDrive.js`、`drive*.wgsl`）；typedef `Grip` →
+  `GrippedPart`（`grip.js`）；`DEFAULT_GRAB_RADIUS` → 说握持物半径的名字；`kinematicDrive.js` 里
+  「handle anchor」拆开说成锚点与抓取目标。不进债单，与本步一起改。
 - 删掉 `DISCRETISATION_DEBT` 常量和引用它的两处；「没有已还清的债」那条测试随之删除，词表测试
   改成不带豁免表。
 

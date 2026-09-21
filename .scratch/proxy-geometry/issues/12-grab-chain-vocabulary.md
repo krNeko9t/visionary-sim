@@ -1,6 +1,6 @@
 # 12 · 抓取链上那五个词
 
-Status: open
+Status: resolved
 Type: grilling
 Blocked by: 04
 
@@ -48,3 +48,29 @@ ADR；若只是「挑了个更好的词」，不写 ADR。
 - 4.6 已转成 [ADR-0011](../../../docs/adr/0011-grip-takes-a-world-space-ball-of-material.md)。
   半径上下界只在 `sim/grip.js` 里；ADR 留的是跨模块的三条（只抓被点中的物体、容量截断、球不是
   测地邻域）。原文「集合容量来自 4.1 提到的固定缓冲」是悬空引用，4.1 从没提过。
+
+## Answer
+
+**票面那张表有两处错**：`grab` 不只在 `ui/`——`Simulator.grab()` 一次做完找锚点、扩握持、`drive.hold()`，
+`moveGrab`/`releaseGrab` 也在 `sim/`，它指的是**整次交互**；另有第六个词 `hold`（`KinematicDrive.hold`、
+「held set」），即 `CONTEXT.md` 里的「持有者」。
+
+1. **不是五个概念，也不是五个阶段**：三个领域概念 + 两个动作 + 一个已收的词。
+   `pick`、`drive` 是动作/代码名，不收；锚点 04 已收；收三条——**抓取**（交互）、**握持物**（被带走
+   的材料）、**抓取目标**（世界空间里被拖的点）。
+2. **收录**：以上三条，追加在「自由度要服从什么」组的「锚点」之后。`pick` 无撞名，不收。
+3. **`_Avoid_`**：
+   - 抓取：不指被带走的材料；**被抓住 ≠ 被规定**——柔律下握持物仍被解出，只有硬律经
+     `setPrescribed` 让它成为运动学规定。
+   - 握持物（英文 `Gripped part`，使用者定）：`grip` 不当动词用，这正是 grip/grab 同义撞车的拆法；
+     大小不用节点数说（ADR-0011）。
+   - 抓取目标（使用者提出以 `grabTarget` 代替 `handle`）：`handle` 撞资源句柄（`bind.js:63`、
+     `attachGrabber` 的返回值），且 `kinematicDrive.js` 的「handle anchor」把锚点和它粘在一起；也不读成
+     每个节点各自的目标——那是它加上各自偏移。
+
+「运动学规定」条目里的「持有者」**保持泛指**，抓取只是今天唯一的一种，不把定义焊在指针上。
+
+**不写 ADR**：挑了更好的词，没有难以回退的取舍；分界的理由已在 ADR-0002 / ADR-0011。
+
+**不动 `src/`**：代码改名（`handle*`→`grabTarget*`、`Grip`→`GrippedPart`、`DEFAULT_GRAB_RADIUS`、
+「handle anchor」）作为一条追加进 [`spec.md`](../spec.md) 第 7 步。
