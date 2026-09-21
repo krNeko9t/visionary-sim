@@ -7,9 +7,8 @@ import { createMetricRegion } from './metricRegion.js';
 
 /**
  * Already transformed offline: no capture placement or second normalisation.
- * r is a declaration in metres, independent of simulation resolution. Production
- * must leave it absent until real-asset calibration (ticket 07) supplies evidence.
- * Tests may declare a tolerance for their own synthetic assets.
+ * r is an explicit declaration in metres, independent of simulation resolution.
+ * Callers must supply their calibrated tolerance; no fallback is inferred.
  * @param {{r?: number}} [declaration] - Calibrated asset declaration.
  * @returns {import('./scenes.js').Scene} A scene sharing one preparation promise.
  */
@@ -87,4 +86,5 @@ async function loadMovingPoints(url) {
     return samples;
 }
 
-export const alocasiaScene = createAlocasiaScene();
+// Real-asset calibration and evidence limits: ticket 07, 2026-09-22.
+export const alocasiaScene = createAlocasiaScene({ r: 0.016 });

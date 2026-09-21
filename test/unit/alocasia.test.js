@@ -164,9 +164,18 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         fetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
         await expect(createAlocasiaScene({ r: 0.05 }).prepare()).rejects.toThrow(/404/);
     });
-    it('refuses the uncalibrated production declaration before loading assets', async () => {
-        expect(sceneNamed('alocasia')).toBe(alocasiaScene);
-        await expect(alocasiaScene.createBodies()).rejects.toThrow(/r.*not calibrated/);
+    it('loads the production declaration with the calibrated metric region', async () => {
+        const scene = sceneNamed('alocasia');
+        expect(scene).toBe(alocasiaScene);
+        const [body] = await scene.createBodies();
+        expect(body.source.report).toContain('alocasia r=0.016 m;');
+        expect(body.staticRegion(0.0159, 0.25, 0)).toBe(false);
+        expect(body.staticRegion(0.0161, 0.25, 0)).toBe(true);
+        expect(scene.counts).toMatchObject({ movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
+        expect((await scene.scenery()).map(item => item.name)).toEqual(['alocasia-fixed', 'alocasia-background']);
+    });
+    it('refuses an undeclared API tolerance before loading assets', async () => {
+        await expect(createAlocasiaScene().createBodies()).rejects.toThrow(/r.*not calibrated/);
         expect(loadCloud).not.toHaveBeenCalled();
     });
 });
