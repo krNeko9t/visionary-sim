@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { countOccupied } from '../../src/sim/discretize/voxelize.js';
+import { countOccupied } from '../../src/sim/discretize/lattice/voxelize.js';
 import { locate } from '../../src/deformation/sample.js';
 import { mat3FromQuat } from '../../src/sim/discretize/mat3.js';
-import { voxelizeCloud } from '../../src/sim/discretize/cloudVolume.js';
+import { voxelizeCloud } from '../../src/sim/discretize/lattice/cloudVolume.js';
 
 /**
  * Turning a capture into something the solver can move.
@@ -66,7 +66,7 @@ function sphereShell(radius, count, cover = 1) {
 }
 
 /**
- * @param {import('../../src/sim/discretize/voxelize.js').OccupancyGrid} grid - The grid.
+ * @param {import('../../src/sim/discretize/lattice/voxelize.js').OccupancyGrid} grid - The grid.
  * @param {number[]} point - A world position.
  * @returns {number} 1 when the cell holding it is material.
  */

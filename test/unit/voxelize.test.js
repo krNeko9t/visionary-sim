@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { box, sphere, torus } from '../../src/assets/shapes.js';
-import { cellIndex, countOccupied, gridForBounds, morphologicalClose, voxelizeMesh, voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { cellIndex, countOccupied, gridForBounds, morphologicalClose, voxelizeMesh, voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 import { meshBounds, parseObj } from '../../src/assets/objLoader.js';
 
 /**

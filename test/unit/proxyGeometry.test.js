@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { box, sphere } from '../../src/assets/shapes.js';
-import { buildLattice } from '../../src/sim/discretize/lattice.js';
+import { buildLattice } from '../../src/sim/discretize/lattice/lattice.js';
 import { VoxelLattice } from '../../src/sim/discretize/lattice/voxelLattice.js';
-import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 
 /**
  * What every discretisation has to give the rest of the simulation, checked

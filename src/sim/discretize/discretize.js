@@ -1,8 +1,8 @@
 import { meshBounds } from '../../assets/objLoader.js';
-import { buildLattice } from './lattice.js';
+import { buildLattice } from './lattice/lattice.js';
 import { VoxelLattice } from './lattice/voxelLattice.js';
-import { voxelizeCloud } from './cloudVolume.js';
-import { voxelizeMesh, voxelizeSdf } from './voxelize.js';
+import { voxelizeCloud } from './lattice/cloudVolume.js';
+import { voxelizeMesh, voxelizeSdf } from './lattice/voxelize.js';
 
 /**
  * Turns a body the author described into degrees of freedom the solver can move.
@@ -19,7 +19,7 @@ import { voxelizeMesh, voxelizeSdf } from './voxelize.js';
  * the thing that grows: every new way of describing an object arrives here, and
  * arriving here should mean adding a line rather than editing a branch.
  *
- * @type {Record<string, (source: any, options: object) => import('./voxelize.js').OccupancyGrid>}
+ * @type {Record<string, (source: any, options: object) => import('./lattice/voxelize.js').OccupancyGrid>}
  */
 const VOXELIZERS = {
     mesh: (source, options) => voxelizeMesh(source.mesh, meshBounds(source.mesh.positions), options),

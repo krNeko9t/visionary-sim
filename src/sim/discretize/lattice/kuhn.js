@@ -1,5 +1,5 @@
-import { CUBE_CORNERS } from '../../deformation/corners.js';
-import { mat3FromColumns, mat3Inverse } from './mat3.js';
+import { CUBE_CORNERS } from '../../../deformation/corners.js';
+import { mat3FromColumns, mat3Inverse } from '../mat3.js';
 
 /**
  * Kuhn (Freudenthal) decomposition of a cube into 6 tetrahedra.

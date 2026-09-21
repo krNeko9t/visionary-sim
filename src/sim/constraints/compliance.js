@@ -1,5 +1,5 @@
 import { lameParameters, waveSpeed } from '../../body/material.js';
-import { KUHN_TET_VOLUME_FRACTION } from '../discretize/kuhn.js';
+import { KUHN_TET_VOLUME_FRACTION } from '../discretize/lattice/kuhn.js';
 
 /**
  * What a material becomes once XPBD is the solver.
@@ -17,7 +17,7 @@ import { KUHN_TET_VOLUME_FRACTION } from '../discretize/kuhn.js';
  */
 
 /**
- * @param {import('../discretize/lattice.js').Lattice} lattice - Simulation geometry.
+ * @param {import('../discretize/lattice/lattice.js').Lattice} lattice - Simulation geometry.
  * @returns {number} Rest volume of a single tetrahedron, in m^3.
  */
 export function tetRestVolume(lattice) {
@@ -31,7 +31,7 @@ export function tetRestVolume(lattice) {
  * handful of uniforms change, never the lattice.
  *
  * @param {import('../../body/material.js').Material} material - The material.
- * @param {import('../discretize/lattice.js').Lattice} lattice - Simulation geometry.
+ * @param {import('../discretize/lattice/lattice.js').Lattice} lattice - Simulation geometry.
  * @returns {{ deviatoric: number, hydrostatic: number, gamma: number }} Solver constants.
  */
 export function elementCompliance(material, lattice) {

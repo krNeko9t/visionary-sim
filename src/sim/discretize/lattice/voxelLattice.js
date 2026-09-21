@@ -1,6 +1,6 @@
 import { latticeField } from '../../../deformation/bind.js';
 import { CUBE_CORNERS } from '../../../deformation/corners.js';
-import { cellCoords, cellNodeIndices, surfaceNodes } from '../lattice.js';
+import { cellCoords, cellNodeIndices, surfaceNodes } from './lattice.js';
 
 /**
  * A contact node's radius, as a fraction of the cell size.
@@ -35,7 +35,7 @@ const CUBE_EDGES = [
  */
 export class VoxelLattice {
     /**
-     * @param {import('../lattice.js').Lattice} lattice - The bare grid, already built.
+     * @param {import('./lattice.js').Lattice} lattice - The bare grid, already built.
      */
     constructor(lattice) {
         /** The bare grid. Read from outside only by `ElasticCells`, and not for long. */

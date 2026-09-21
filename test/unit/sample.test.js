@@ -7,9 +7,9 @@ import {
     trilinearGradients,
     trilinearWeights
 } from '../../src/deformation/sample.js';
-import { buildLattice, cellNodeIndices } from '../../src/sim/discretize/lattice.js';
+import { buildLattice, cellNodeIndices } from '../../src/sim/discretize/lattice/lattice.js';
 import { box } from '../../src/assets/shapes.js';
-import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 
 const SPACE = { origin: [-0.1, 0, -0.05], h: 0.02, cellDims: [10, 8, 6] };
 

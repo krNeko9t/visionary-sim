@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { locate } from '../../src/deformation/sample.js';
-import { buildLattice } from '../../src/sim/discretize/lattice.js';
+import { buildLattice } from '../../src/sim/discretize/lattice/lattice.js';
 import { meshBounds, normalizeMesh, parseObj } from '../../src/assets/objLoader.js';
-import { cellIndex, countOccupied, voxelizeMesh } from '../../src/sim/discretize/voxelize.js';
+import { cellIndex, countOccupied, voxelizeMesh } from '../../src/sim/discretize/lattice/voxelize.js';
 
 /**
  * @param {string} name - File name under public/models.

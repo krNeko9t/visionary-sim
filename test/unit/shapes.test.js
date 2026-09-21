@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { box, sphere, torus, translateShape } from '../../src/assets/shapes.js';
 import { locate } from '../../src/deformation/sample.js';
-import { buildLattice, cellIndex } from '../../src/sim/discretize/lattice.js';
-import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { buildLattice, cellIndex } from '../../src/sim/discretize/lattice/lattice.js';
+import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 
 /**
  * An analytic shape has two descriptions of itself -- a distance function the

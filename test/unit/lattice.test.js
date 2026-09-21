@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex, surfaceNodes } from '../../src/sim/discretize/lattice.js';
+import { COLOR_COUNT, buildLattice, cellColor, cellCoords, cellIndex, cellNodeIndices, nodeIndex, surfaceNodes } from '../../src/sim/discretize/lattice/lattice.js';
 import { sphere } from '../../src/assets/shapes.js';
-import { voxelizeSdf } from '../../src/sim/discretize/voxelize.js';
+import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 
 const DENSITY = 1000;
 
 /**
  * @param {number} resolution - Cells along the longest axis.
- * @returns {import('../../src/sim/discretize/lattice.js').Lattice} A sphere lattice.
+ * @returns {import('../../src/sim/discretize/lattice/lattice.js').Lattice} A sphere lattice.
  */
 function sphereLattice(resolution = 12) {
     return buildLattice(voxelizeSdf(sphere({ radius: 0.1 }), { resolution }), { density: DENSITY });

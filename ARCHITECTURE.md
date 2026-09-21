@@ -107,5 +107,5 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 抓取集合握住的材料量不随点阵分辨率变化 | `test/unit/grip.test.js` |
 
 这些约束的**推导写在它约束的那段代码旁边**，不在这里：泊松比下限在 `body/material.js`，
-封口宽度在 `sim/discretize/cloudVolume.js`，填充在 `sim/discretize/voxelize.js`。文档复述
+封口宽度在 `sim/discretize/lattice/cloudVolume.js`，填充在 `sim/discretize/lattice/voxelize.js`。文档复述
 它们只会得到一份会过期的副本。

@@ -1,6 +1,6 @@
-import { CUBE_CORNERS } from '../../deformation/corners.js';
+import { CUBE_CORNERS } from '../../../deformation/corners.js';
 import { cellIndex, dilated, eroded, gridForBounds } from './voxelize.js';
-import { mat3FromQuat } from './mat3.js';
+import { mat3FromQuat } from '../mat3.js';
 
 /**
  * Giving a cloud of Gaussians an inside.

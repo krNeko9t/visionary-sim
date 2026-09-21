@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { KUHN_TETS, KUHN_TET_VOLUME_FRACTION, kuhnRestShapeInverses, kuhnRestShapes } from '../../src/sim/discretize/kuhn.js';
+import { KUHN_TETS, KUHN_TET_VOLUME_FRACTION, kuhnRestShapeInverses, kuhnRestShapes } from '../../src/sim/discretize/lattice/kuhn.js';
 import { CUBE_CORNERS } from '../../src/deformation/corners.js';
 import { mat3Determinant, mat3Multiply } from '../../src/sim/discretize/mat3.js';
-import { cellNodeIndices } from '../../src/sim/discretize/lattice.js';
+import { cellNodeIndices } from '../../src/sim/discretize/lattice/lattice.js';
 
 /**
  * @param {ArrayLike<number>} m - Column-major 3x3.

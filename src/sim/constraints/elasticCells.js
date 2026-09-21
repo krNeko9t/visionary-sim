@@ -7,8 +7,8 @@ import {
     StorageBuffer
 } from 'playcanvas';
 
-import { COLOR_COUNT } from '../discretize/lattice.js';
-import { KUHN_TETS, kuhnRestShapeInverses } from '../discretize/kuhn.js';
+import { COLOR_COUNT } from '../discretize/lattice/lattice.js';
+import { KUHN_TETS, kuhnRestShapeInverses } from '../discretize/lattice/kuhn.js';
 import { STATE_WGSL } from '../state/particles.js';
 import { elementCompliance } from './compliance.js';
 import cellsWgsl from './wgsl/cells.wgsl?raw';
@@ -33,7 +33,7 @@ import projectWgsl from './wgsl/project.wgsl?raw';
  * it.
  *
  * @typedef {object} CellBody
- * @property {import('../discretize/lattice.js').Lattice} lattice - Cells and their layout.
+ * @property {import('../discretize/lattice/lattice.js').Lattice} lattice - Cells and their layout.
  * @property {import('../../body/material.js').Material} material - What they are made of.
  */
 
@@ -69,7 +69,7 @@ function f32Literal(value) {
 /**
  * Emits the Kuhn decomposition as WGSL constants.
  *
- * Generated rather than hand-written so `discretize/kuhn.js` stays the single
+ * Generated rather than hand-written so `discretize/lattice/kuhn.js` stays the single
  * source of truth: the unit tests check the orientation and the inverses there,
  * and the GPU gets exactly what they checked.
  *
@@ -92,7 +92,7 @@ function kuhnConstants() {
         .join(',\n');
 
     return [
-        '// Generated from discretize/kuhn.js -- do not edit here.',
+        '// Generated from discretize/lattice/kuhn.js -- do not edit here.',
         `var<private> KUHN_TETS: array<vec4u, 6> = array<vec4u, 6>(\n${tets}\n);`,
         '// Rest shape inverses for a unit cube; scaled by 1/h per body.',
         `var<private> KUHN_REST_INV: array<mat3x3f, 6> = array<mat3x3f, 6>(\n${inverses}\n);`,

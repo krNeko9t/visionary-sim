@@ -69,7 +69,7 @@ export function shapeBody(shape, { name, position, resolution, material, tint })
  * The one body whose two geometries are the same object: the Gaussians are what
  * is drawn, and they are also all the solver is given to work out where the
  * material is. That is not a shortcut -- there is nothing else in the file --
- * and it is why `sim/discretize/cloudVolume.js` exists.
+ * and it is why `sim/discretize/` has a `cloudVolume.js`.
  *
  * The declaration this takes is the same one `loadCapture` takes, and it stays
  * verbose on purpose. Neither the up axis nor the unit can be read out of a PLY,

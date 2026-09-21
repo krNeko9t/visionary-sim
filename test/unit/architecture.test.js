@@ -152,10 +152,6 @@ const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
  */
 const DISCRETISATION_DEBT = {
     // Moves into the resident as it stands.
-    'sim/discretize/lattice.js': 'moves',
-    'sim/discretize/kuhn.js': 'moves',
-    'sim/discretize/voxelize.js': 'moves',
-    'sim/discretize/cloudVolume.js': 'moves',
     'sim/constraints/elasticCells.js': 'moves: the lattice hands over its own elastic constraints',
     'sim/constraints/wgsl/cells.wgsl': 'moves with elasticCells.js',
     'sim/constraints/wgsl/project.wgsl': 'moves with elasticCells.js',
