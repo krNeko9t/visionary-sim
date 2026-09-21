@@ -1,8 +1,7 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { DEFAULT_GRAB_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
-import { discretizeBody } from './discretize/discretize.js';
+import { discretizeBody, elasticConstraints } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
-import { ElasticCells } from './constraints/elasticCells.js';
 import { KinematicDrive } from './constraints/kinematicDrive.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
@@ -55,12 +54,14 @@ export class Simulator {
         // set of things the node storage is allowed to know.
         this.particles = new Particles(device, this.simBodies.map(({ proxy }) => proxy.dof));
         this.drive = new KinematicDrive(device, this.particles);
-        // The one place outside the discretisation that still sees the grid
-        // behind a proxy -- every proxy today is a `VoxelLattice` -- until the
-        // elastic constraint is handed out by the discretisation itself.
-        this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
-            ({ body, proxy }) => ({ lattice: proxy.lattice, material: body.material })
-        ));
+        // Elasticity is the discretisation's to build (ADR-0007): what an
+        // element is and how elements are batched is how the body was cut up.
+        this.elasticSets = elasticConstraints(
+            device,
+            this.particles,
+            this.simBodies.map(({ proxy }) => proxy),
+            this.simBodies.map(({ body }) => body.material)
+        );
         this.contact = new BodyContact(device, this.particles, this.simBodies.map(({ proxy }) => proxy), tank);
         // Order is solve order. Driven nodes go first: under the hard law
         // nothing else can move them anyway, and this is what lets the
@@ -69,7 +70,7 @@ export class Simulator {
         // so it has the final word on where a node may be: elasticity can push
         // a node back into whatever it was resting on, and only one of the two
         // is allowed to be wrong about that.
-        this.stepper = new Stepper(device, this.particles, [this.drive, this.elastic, this.contact]);
+        this.stepper = new Stepper(device, this.particles, [this.drive, ...this.elasticSets, this.contact]);
 
         // Render frames decide when GPU work may be recorded, but not how much
         // physical time one solve represents. The clock turns their irregular
@@ -333,7 +334,9 @@ export class Simulator {
             damping: body.material.damping,
             friction: body.material.friction
         });
-        this.elastic.uploadParams();
+        for (const elastic of this.elasticSets) {
+            elastic.uploadParams();
+        }
         // Stiffness and density change the wave rate. The fractional backlog is
         // kept as seconds by the clock; only all future physical steps change.
         this.clock.setStepDuration(stableStepDuration(this.waveRate()));
@@ -467,7 +470,9 @@ export class Simulator {
     destroy() {
         this.stepper.destroy();
         this.contact.destroy();
-        this.elastic.destroy();
+        for (const elastic of this.elasticSets) {
+            elastic.destroy();
+        }
         this.drive.destroy();
         this.particles.destroy();
     }

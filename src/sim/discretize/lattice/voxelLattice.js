@@ -24,9 +24,9 @@ const CUBE_EDGES = [
  * The voxel lattice as a {@link import('../proxyGeometry.js').ProxyGeometry}.
  *
  * Everything outside this directory sees a body's discretisation through the
- * entries below and nothing else; `lattice` is the one exception, and it is
- * temporary: the elastic constraint still reads cells and colours straight off
- * it, until it moves in here and is handed out as this lattice's own.
+ * entries below and nothing else. The elastic constraint is not among them
+ * because it is built over every lattice in the scene at once; see
+ * `elasticConstraints()` in `elasticCells.js`.
  *
  * How the lattice meets each invariant is written next to the entry that
  * carries it.
@@ -38,7 +38,7 @@ export class VoxelLattice {
      * @param {import('./lattice.js').Lattice} lattice - The bare grid, already built.
      */
     constructor(lattice) {
-        /** The bare grid. Read from outside only by `ElasticCells`, and not for long. */
+        /** The bare grid. Read by `ElasticCells` and nothing outside this directory. */
         this.lattice = lattice;
 
         // Dense, inactive nodes included: `nodeCount` is every slot the grid

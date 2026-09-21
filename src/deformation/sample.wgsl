@@ -9,7 +9,7 @@
 // Deformed node positions for the whole scene. The solver writes them as vec4f
 // because a storage buffer it writes wants 16-byte alignment; this body's nodes
 // start at `deformNodeOffset`. That layout is the one thing the two banks agree
-// on, and `sim/constraints/wgsl/cells.wgsl` declares the same array read-write.
+// on, and `sim/state/state.wgsl` declares the same array read-write.
 var<storage, read> deformNodePos: array<vec4f>;
 
 uniform deformOrigin: vec3f;

@@ -8,10 +8,10 @@
 // Within a tetrahedron the two constraints are *not* taken in turn. They are
 // evaluated at the same deformation gradient and solved as one 2x2 block, which
 // is what makes a compressible material hold its shape; see xpbdCouple in
-// cells.wgsl for why taking them in turn does not.
+// sim/constraints/wgsl/xpbdCouple.wgsl for why taking them in turn does not.
 //
 // Cells of one colour agree in index parity on every axis, so they never share
-// a node (see cellColor in discretize/lattice/lattice.js). A whole colour therefore runs
+// a node (see cellColor in lattice.js). A whole colour therefore runs
 // in parallel with no atomics and no read-modify-write races, and eight
 // dispatches cover the scene. This is what makes Gauss-Seidel convergence
 // available on a GPU at all; plain Jacobi would need far more iterations.

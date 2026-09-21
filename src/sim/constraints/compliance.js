@@ -1,5 +1,4 @@
 import { lameParameters, waveSpeed } from '../../body/material.js';
-import { KUHN_TET_VOLUME_FRACTION } from '../discretize/lattice/kuhn.js';
 
 /**
  * What a material becomes once XPBD is the solver.
@@ -10,33 +9,26 @@ import { KUHN_TET_VOLUME_FRACTION } from '../discretize/lattice/kuhn.js';
  * Replacing the solver replaces this file and leaves the material alone.
  *
  * The constitutive model is the stable Neo-Hookean of Macklin & Muller (2021).
- * Each tetrahedron carries two constraints:
+ * Each element carries two constraints:
  *
  *   deviatoric   C_D = ||F||_F              compliance 1 / (mu * V)
  *   hydrostatic  C_H = det(F) - gamma       compliance 1 / (lambda * V)
  */
 
 /**
- * @param {import('../discretize/lattice/lattice.js').Lattice} lattice - Simulation geometry.
- * @returns {number} Rest volume of a single tetrahedron, in m^3.
- */
-export function tetRestVolume(lattice) {
-    return KUHN_TET_VOLUME_FRACTION * lattice.h ** 3;
-}
-
-/**
- * XPBD compliances for a material at a given discretisation.
+ * XPBD compliances for a material in an element of a given rest volume.
  *
- * Cheap to recompute, which is what makes the material sliders live: only a
- * handful of uniforms change, never the lattice.
+ * The volume is the only thing of the element the formula sees, so whoever
+ * owns the elements works it out and this stays the solver's arithmetic. Cheap
+ * to recompute, which is what makes the material sliders live: only a handful
+ * of uniforms change, never an element.
  *
  * @param {import('../../body/material.js').Material} material - The material.
- * @param {import('../discretize/lattice/lattice.js').Lattice} lattice - Simulation geometry.
+ * @param {number} restVolume - Rest volume of one element, in m^3.
  * @returns {{ deviatoric: number, hydrostatic: number, gamma: number }} Solver constants.
  */
-export function elementCompliance(material, lattice) {
+export function elementCompliance(material, restVolume) {
     const { mu, lambda } = lameParameters(material);
-    const restVolume = tetRestVolume(lattice);
     return {
         deviatoric: 1 / (mu * restVolume),
         hydrostatic: 1 / (lambda * restVolume),

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MATERIAL, POISSON_RANGE, waveSpeed } from '../../src/body/material.js';
 import { collapseScale, elementCompliance, gammaOf, waveRatio } from '../../src/sim/constraints/compliance.js';
 
-/** A stand-in lattice: only the cell size reaches the compliance maths. */
-const cell = h => ({ h });
+/** A rest volume of an element `h` across, in m^3; the only thing of the element the maths sees. */
+const volume = h => h ** 3;
 
 describe('element compliance', () => {
     it('keeps gamma clear of where rest stops being a minimum', () => {
@@ -13,15 +13,15 @@ describe('element compliance', () => {
         // it with room to spare, since the barrier is a real deformation a body
         // can be pushed through. See collapseScale and the POISSON_RANGE
         // comment in body/material.js.
-        const worst = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: POISSON_RANGE.min }, cell(0.02));
+        const worst = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: POISSON_RANGE.min }, volume(0.02));
 
         expect(worst.gamma).toBeLessThan(4);
         expect(collapseScale(worst.gamma)).toBeLessThan(0.6);
     });
 
     it('makes stiffer materials less compliant', () => {
-        const soft = elementCompliance({ ...DEFAULT_MATERIAL, youngsModulus: 1e4 }, cell(0.02));
-        const stiff = elementCompliance({ ...DEFAULT_MATERIAL, youngsModulus: 1e6 }, cell(0.02));
+        const soft = elementCompliance({ ...DEFAULT_MATERIAL, youngsModulus: 1e4 }, volume(0.02));
+        const stiff = elementCompliance({ ...DEFAULT_MATERIAL, youngsModulus: 1e6 }, volume(0.02));
 
         expect(stiff.deviatoric).toBeLessThan(soft.deviatoric);
         expect(stiff.hydrostatic).toBeLessThan(soft.hydrostatic);
@@ -31,8 +31,8 @@ describe('element compliance', () => {
     });
 
     it('drives gamma towards 1 as the material becomes incompressible', () => {
-        const compressible = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: 0.36 }, cell(0.02));
-        const incompressible = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: 0.49 }, cell(0.02));
+        const compressible = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: 0.36 }, volume(0.02));
+        const incompressible = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: 0.49 }, volume(0.02));
 
         expect(incompressible.gamma).toBeLessThan(compressible.gamma);
         expect(incompressible.gamma).toBeGreaterThan(1);
@@ -40,11 +40,11 @@ describe('element compliance', () => {
     });
 
     it('softens compliance as the elements get bigger', () => {
-        const fine = elementCompliance(DEFAULT_MATERIAL, cell(0.01));
-        const coarse = elementCompliance(DEFAULT_MATERIAL, cell(0.02));
+        const fine = elementCompliance(DEFAULT_MATERIAL, volume(0.01));
+        const coarse = elementCompliance(DEFAULT_MATERIAL, volume(0.02));
         // alpha = 1 / (mu * V) and V scales with h^3, so doubling h divides the
         // compliance by eight. Getting this wrong changes the effective
-        // stiffness whenever the resolution changes.
+        // stiffness whenever the element size changes.
         expect(fine.deviatoric / coarse.deviatoric).toBeCloseTo(8, 6);
     });
 });
@@ -54,8 +54,8 @@ describe('gammaOf', () => {
         // Why the scene report can ask the material for gamma directly rather
         // than going through any body's discretisation.
         const material = { ...DEFAULT_MATERIAL, poissonRatio: 0.4 };
-        expect(gammaOf(material)).toBe(elementCompliance(material, cell(0.005)).gamma);
-        expect(gammaOf(material)).toBe(elementCompliance(material, cell(0.04)).gamma);
+        expect(gammaOf(material)).toBe(elementCompliance(material, volume(0.005)).gamma);
+        expect(gammaOf(material)).toBe(elementCompliance(material, volume(0.04)).gamma);
     });
 });
 

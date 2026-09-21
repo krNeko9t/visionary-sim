@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATERIAL, POISSON_RANGE, lameParameters } from '../../src/body/material.js';
 import { CUBE_CORNERS } from '../../src/deformation/corners.js';
-import { KUHN_TETS, kuhnRestShapeInverses } from '../../src/sim/discretize/lattice/kuhn.js';
+import { KUHN_TETS, kuhnRestShapeInverses, tetRestVolume } from '../../src/sim/discretize/lattice/kuhn.js';
 import { mat3Determinant, mat3FromColumns, mat3Multiply } from '../../src/sim/discretize/mat3.js';
-import { collapseScale, elementCompliance, tetRestVolume } from '../../src/sim/constraints/compliance.js';
+import { collapseScale, elementCompliance } from '../../src/sim/constraints/compliance.js';
 
 /**
  * What one tetrahedron's projection does, and where the material's limits
  * actually come from.
  *
- * The scheme lives in `sim/constraints/wgsl/project.wgsl` and cannot be run here, so
+ * The scheme lives in `sim/discretize/lattice/wgsl/project.wgsl` and cannot be run here, so
  * this file carries a transcription of it -- the same status as the WGSL copy of
  * `cellCoords`, and kept honest the same way, by reading the two side by side.
  * Both schemes are transcribed: the coupled 2x2 block that ships, and the
@@ -201,11 +201,11 @@ const DT = 1 / (60 * 20);
  */
 function restTet(poissonRatio, tet = 0) {
     const material = { ...DEFAULT_MATERIAL, poissonRatio };
-    const lattice = { h: H };
-    const { deviatoric, hydrostatic, gamma } = elementCompliance(material, lattice);
+    const volume = tetRestVolume(H);
+    const { deviatoric, hydrostatic, gamma } = elementCompliance(material, volume);
 
     // Lumped the way the lattice lumps: the tetrahedron's mass over its corners.
-    const nodeMass = (material.density * tetRestVolume(lattice)) / 4;
+    const nodeMass = (material.density * volume) / 4;
 
     const { mu, lambda } = lameParameters(material);
 
@@ -215,7 +215,7 @@ function restTet(poissonRatio, tet = 0) {
         w: Array.from({ length: 4 }, () => 1 / nodeMass),
         mu,
         lambda,
-        volume: tetRestVolume(lattice),
+        volume,
         c: {
             alphaDev: deviatoric / (DT * DT),
             alphaHyd: hydrostatic / (DT * DT),
@@ -573,7 +573,7 @@ describe('the barrier that is left', () => {
         // at all. POISSON_RANGE.min is chosen to keep well clear of it: the
         // worst legal material has to lose five sixths of its volume first.
         for (const nu of RATIOS) {
-            const { gamma } = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: nu }, { h: H });
+            const { gamma } = elementCompliance({ ...DEFAULT_MATERIAL, poissonRatio: nu }, tetRestVolume(H));
 
             expect(gamma, `nu = ${nu}`).toBeLessThan(4);
             expect(collapseScale(gamma), `nu = ${nu}`).toBeLessThan(0.6);
@@ -597,9 +597,9 @@ describe('the constants the block is built from', () => {
         // pinning separately from the projection that relies on it.
         const material = { ...DEFAULT_MATERIAL, poissonRatio: 0.3 };
         const { mu, lambda } = lameParameters(material);
-        const { deviatoric, hydrostatic } = elementCompliance(material, { h: H });
+        const { deviatoric, hydrostatic } = elementCompliance(material, tetRestVolume(H));
 
         expect((deviatoric * mu) / (hydrostatic * lambda)).toBeCloseTo(1, 12);
-        expect(deviatoric * mu).toBeCloseTo(1 / tetRestVolume({ h: H }), 6);
+        expect(deviatoric * mu).toBeCloseTo(1 / tetRestVolume(H), 6);
     });
 });

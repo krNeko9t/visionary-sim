@@ -1,58 +1,10 @@
-// What the elastic constraint needs on top of the particle declarations: which
-// cells there are, what each one is made of, and the 2x2 block that projects
-// one tetrahedron.
+// XPBD multipliers for the two constraints of one element, solved together as
+// a 2x2 block.
 //
-// `elasticCells.js` prepends the generated Kuhn constants, then `state.wgsl`,
-// then this file, to its projection kernel. Nothing outside this constraint
-// includes it -- the stepper's own passes move nodes without ever learning that
-// a cell exists.
-
-// Per-body constants for this constraint. 64 bytes, written by
-// `elasticCells.js` to this exact layout.
-//
-// The lattice's world origin is deliberately absent. It is what the render side
-// needs in order to find the cell a rest point falls in; nothing in here has to
-// locate anything, because a cell arrives already identified. It used to be
-// uploaded anyway, every frame, unread.
-struct CellParams {
-    cellDims: vec3u,
-    nodeOffset: u32,
-    nodeDims: vec3u,
-    pad0: u32,
-    h: f32,
-    alphaDev: f32,
-    alphaHyd: f32,
-    gamma: f32,
-    relaxation: f32,
-    pad1: f32,
-    pad2: f32,
-    pad3: f32,
-}
-
-var<storage, read> cellParams: array<CellParams>;
-
-// One entry per occupied cell: (body index, linear cell index), grouped by
-// colour across every body at once.
-var<storage, read> cells: array<vec2u>;
-
-fn cellCoords(dims: vec3u, linear: u32) -> vec3u {
-    return vec3u(
-        linear % dims.x,
-        (linear / dims.x) % dims.y,
-        linear / (dims.x * dims.y)
-    );
-}
-
-// Corner `c` of a cell sits at offset (c&1, (c>>1)&1, (c>>2)&1), matching
-// CUBE_CORNERS in deformation/corners.js.
-fn cornerNode(cp: CellParams, coord: vec3u, corner: u32) -> u32 {
-    let offset = vec3u(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u);
-    let n = coord + offset;
-    return cp.nodeOffset + n.x + cp.nodeDims.x * (n.y + cp.nodeDims.y * n.z);
-}
-
-// XPBD multipliers for the two constraints of one tetrahedron, solved together
-// as a 2x2 block.
+// The stable Neo-Hookean pair of `compliance.js`, and nothing about how the
+// elements were made: whoever owns the elements works out `c`, the gradients
+// and their `gram`, and pastes this file into its kernel to turn them into
+// multipliers.
 //
 // Lambda is deliberately not accumulated: with one projection per substep it
 // starts at zero, so the `alpha * lambda` term of the full XPBD update is

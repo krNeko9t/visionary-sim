@@ -1,4 +1,5 @@
 import { meshBounds } from '../../assets/objLoader.js';
+import { elasticConstraints as latticeElasticConstraints } from './lattice/elasticCells.js';
 import { buildLattice } from './lattice/lattice.js';
 import { VoxelLattice } from './lattice/voxelLattice.js';
 import { voxelizeCloud } from './lattice/cloudVolume.js';
@@ -39,4 +40,30 @@ export function discretizeBody(body) {
     }
 
     return new VoxelLattice(buildLattice(voxelize(source, { resolution }), { density: material.density }));
+}
+
+/**
+ * Who builds the elastic constraints, one entry per implementation. Each picks
+ * out the proxies that are its own and ignores the rest.
+ */
+const ELASTIC = [latticeElasticConstraints];
+
+/**
+ * The elastic constraints of every body in the scene: what the proxy geometry
+ * hands the solver that is not per body.
+ *
+ * The discretisation builds them, not `sim/constraints/`, because an element,
+ * its rest shape and the rule for batching elements are all knowledge of how
+ * the body was cut up. Contact is the opposite case and stays over there: it
+ * couples bodies, and one broadphase has to see all of them (ADR-0007).
+ *
+ * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+ * @param {import('../state/particles.js').Particles} particles - Every body's nodes.
+ * @param {import('./proxyGeometry.js').ProxyGeometry[]} proxies - Every body's proxy, in scene order.
+ * @param {import('../../body/material.js').Material[]} materials - Each body's
+ *   material, same order, edited in place later.
+ * @returns {import('./proxyGeometry.js').ElasticConstraint[]} In the order they should be solved.
+ */
+export function elasticConstraints(device, particles, proxies, materials) {
+    return ELASTIC.flatMap(build => build(device, particles, proxies, materials));
 }

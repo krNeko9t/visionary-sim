@@ -93,6 +93,22 @@
  */
 
 /**
+ * What `elasticConstraints()` in `discretize.js` hands the simulator: the
+ * stepper's `ConstraintSet`, plus the two things only the simulator asks of an
+ * elastic constraint. It is not an entry on the object above because it is not
+ * one body's: an implementation builds one constraint over every body that is
+ * its own, so a batch can span the scene (ADR-0007). Restated here rather than
+ * imported because `sim/discretize` may not reach `sim/solver` (ADR-0013).
+ *
+ * @typedef {object} ElasticConstraint
+ * @property {object[]} passes - Dispatches it wants per substep, in order.
+ * @property {(dt: number) => void} setSubstepDt - Told the substep duration each frame.
+ * @property {() => void} uploadParams - Re-reads the materials it was handed,
+ *   which are edited in place.
+ * @property {() => void} destroy - Frees its GPU resources.
+ */
+
+/**
  * How finely something is cut, as a person reads it: a count and the word for
  * what was counted. Only counts with the same word add up.
  *

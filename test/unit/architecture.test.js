@@ -36,9 +36,12 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  * - `body` may reach only `assets`. A body describes an object; it must not
  *   learn how anyone chose to simulate it, or that choice becomes expensive to
  *   change.
- * - `sim/discretize` may not reach `sim/state`, `sim/constraints` or
- *   `sim/solver`. How an object is cut up must not depend on who solves it, so
- *   that either can be replaced alone.
+ * - `sim/discretize` may reach `sim/state`, `sim/constraints` and `body`, and
+ *   not `sim/solver`. A discretisation hands over its own elastic constraints,
+ *   because what an element is and how elements are batched is knowledge of
+ *   how the body was cut up (ADR-0007); building them takes the nodes, the
+ *   solver's formulas -- XPBD compliance and the constitutive block -- and the
+ *   material. It still cannot see the stepper that runs them (ADR-0013).
  * - `sim/discretize/lattice` reaches what `sim/discretize` does, plus the
  *   neutral side of `sim/discretize` itself. It is a row of its own because it
  *   is the one directory allowed to know the proxy is a lattice
@@ -53,10 +56,13 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  *   `sim/constraints`. The stepper runs whatever constraint sets it is handed
  *   and must stay unable to name them; the moment it can, "add a constraint
  *   type" turns back into "edit the loop".
- * - `sim/constraints` may reach `sim/state`, `sim/discretize` and `body`. A
- *   constraint is entitled to know what it is constraining and what the thing
- *   is made of. It may not reach `sim/solver`: constraints are run, they do not
- *   run anything.
+ * - `sim/constraints` may reach `sim/state` and `body`. A constraint is
+ *   entitled to know the nodes it moves and what the thing is made of, but not
+ *   how the body was cut up: contact reads a proxy's `contactSurface()` handed
+ *   to it, and the elastic constraint lives on the discretisation's side, so
+ *   nothing here needs to import `sim/discretize` -- and must not, or the edge
+ *   would run both ways (ADR-0013). It may not reach `sim/solver`: constraints
+ *   are run, they do not run anything.
  * - `ui` may reach `sim` and `body` and nothing else. It edits materials and
  *   drives the simulation, and it does both through the surfaces those two
  *   already publish. Letting it reach a lattice or a buffer would put a second
@@ -67,10 +73,10 @@ const ALLOWED = {
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
-    'sim/discretize': ['deformation', 'assets'],
-    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets'],
+    'sim/discretize': ['deformation', 'assets', 'sim/state', 'sim/constraints', 'body'],
+    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets', 'sim/state', 'sim/constraints', 'body'],
     'sim/state': [],
-    'sim/constraints': ['sim/state', 'sim/discretize', 'body'],
+    'sim/constraints': ['sim/state', 'body'],
     'sim/solver': ['sim/state'],
     'sim/debug': ['sim/discretize', 'deformation'],
     render: ['deformation'],
@@ -152,9 +158,6 @@ const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
  */
 const DISCRETISATION_DEBT = {
     // Moves into the resident as it stands.
-    'sim/constraints/elasticCells.js': 'moves: the lattice hands over its own elastic constraints',
-    'sim/constraints/wgsl/cells.wgsl': 'moves with elasticCells.js',
-    'sim/constraints/wgsl/project.wgsl': 'moves with elasticCells.js',
     'deformation/sample.js': 'moves: the sampler is the lattice\'s, the channel keeps only the contract',
     'deformation/sample.wgsl': 'moves with sample.js',
     'deformation/corners.js': 'moves with sample.js',
@@ -162,12 +165,10 @@ const DISCRETISATION_DEBT = {
     // Stays, and stops speaking the lattice once the neutral interface covers it.
     'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
     'deformation/bind.js': '`latticeField()` moves out, the typedef and contract stay',
-    'sim/simulator.js': 'hands `ElasticCells` the lattice behind each proxy until it moves in',
     'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
     'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
-    'sim/constraints/compliance.js': 'rest volume from `h`; moves in with the elastic constraint',
     'main.js': 'imports the wireframe view from `sim/debug/latticeView.js` until it is a render path',
-    'body/material.js': 'the stability bound is argued per cell and cites `cells.wgsl`',
+    'body/material.js': 'the stability bound is argued per cell',
 
     // `resolution` is counted in cells along the longest axis; its unit changes.
     'scene/tank.js': 'resolution unit',

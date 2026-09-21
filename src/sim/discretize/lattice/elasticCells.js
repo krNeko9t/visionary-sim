@@ -7,10 +7,12 @@ import {
     StorageBuffer
 } from 'playcanvas';
 
-import { COLOR_COUNT } from '../discretize/lattice/lattice.js';
-import { KUHN_TETS, kuhnRestShapeInverses } from '../discretize/lattice/kuhn.js';
-import { STATE_WGSL } from '../state/particles.js';
-import { elementCompliance } from './compliance.js';
+import { elementCompliance } from '../../constraints/compliance.js';
+import xpbdCoupleWgsl from '../../constraints/wgsl/xpbdCouple.wgsl?raw';
+import { STATE_WGSL } from '../../state/particles.js';
+import { COLOR_COUNT } from './lattice.js';
+import { KUHN_TETS, kuhnRestShapeInverses, tetRestVolume } from './kuhn.js';
+import { VoxelLattice } from './voxelLattice.js';
 import cellsWgsl from './wgsl/cells.wgsl?raw';
 import projectWgsl from './wgsl/project.wgsl?raw';
 
@@ -18,11 +20,14 @@ import projectWgsl from './wgsl/project.wgsl?raw';
  * One kind of constraint: the elastic response of a voxel cell, six Kuhn
  * tetrahedra at a time.
  *
- * This is where everything about lattices now stops. It owns the cells it
- * solves, the buffer that describes them, the shader that projects them, and
- * the rule by which they are batched -- and it hands the stepper nothing but an
- * ordered list of passes to dispatch. The stepper does not know what is in
- * them.
+ * It lives with the lattice rather than in `sim/constraints/` because the
+ * cells, their rest shapes and the rule by which they are batched are all the
+ * lattice's knowledge, and a neutral table of cells does not exist (ADR-0007).
+ * What it borrows from the solver side is only the formulas: the compliances
+ * in `compliance.js` and the 2x2 block in `xpbdCouple.wgsl`. It owns the cells
+ * it solves, the buffer that describes them, the shader that projects them,
+ * and the batching -- and it hands the stepper nothing but an ordered list of
+ * passes to dispatch. The stepper does not know what is in them.
  *
  * That shape is not decoration. Contact between bodies is the next constraint,
  * and it agrees with this one on almost nothing: its constraints are discovered
@@ -33,8 +38,9 @@ import projectWgsl from './wgsl/project.wgsl?raw';
  * it.
  *
  * @typedef {object} CellBody
- * @property {import('../discretize/lattice/lattice.js').Lattice} lattice - Cells and their layout.
- * @property {import('../../body/material.js').Material} material - What they are made of.
+ * @property {import('./lattice.js').Lattice} lattice - Cells and their layout.
+ * @property {import('../../../body/material.js').Material} material - What they are made of.
+ * @property {number} slot - The body's index in the scene, for `Particles.offsetOf`.
  */
 
 /** Threads per workgroup; must match `@workgroup_size` in the kernel. */
@@ -69,7 +75,7 @@ function f32Literal(value) {
 /**
  * Emits the Kuhn decomposition as WGSL constants.
  *
- * Generated rather than hand-written so `discretize/lattice/kuhn.js` stays the single
+ * Generated rather than hand-written so `kuhn.js` stays the single
  * source of truth: the unit tests check the orientation and the inverses there,
  * and the GPU gets exactly what they checked.
  *
@@ -92,7 +98,7 @@ function kuhnConstants() {
         .join(',\n');
 
     return [
-        '// Generated from discretize/lattice/kuhn.js -- do not edit here.',
+        '// Generated from sim/discretize/lattice/kuhn.js -- do not edit here.',
         `var<private> KUHN_TETS: array<vec4u, 6> = array<vec4u, 6>(\n${tets}\n);`,
         '// Rest shape inverses for a unit cube; scaled by 1/h per body.',
         `var<private> KUHN_REST_INV: array<mat3x3f, 6> = array<mat3x3f, 6>(\n${inverses}\n);`,
@@ -100,10 +106,34 @@ function kuhnConstants() {
     ].join('\n');
 }
 
+/**
+ * `elasticConstraints()` of `discretize.js`, for every lattice in the scene at once.
+ *
+ * All of them go into one {@link ElasticCells}, so that a colour is one
+ * dispatch across the scene rather than one per body. That is co-location, not
+ * coupling: it is safe because bodies own disjoint node ranges (I6).
+ *
+ * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+ * @param {import('../../state/particles.js').Particles} particles - Every body's nodes.
+ * @param {import('../proxyGeometry.js').ProxyGeometry[]} proxies - Every body's
+ *   proxy, in scene order; the ones that are not lattices are someone else's.
+ * @param {import('../../../body/material.js').Material[]} materials - Each
+ *   body's material, same order. Read again on every `uploadParams()`, so edit
+ *   them in place.
+ * @returns {import('../proxyGeometry.js').ElasticConstraint[]} Nothing if no
+ *   body is a lattice, one constraint otherwise.
+ */
+export function elasticConstraints(device, particles, proxies, materials) {
+    const bodies = proxies.flatMap((proxy, slot) => (proxy instanceof VoxelLattice
+        ? [{ lattice: proxy.lattice, material: materials[slot], slot }]
+        : []));
+    return bodies.length > 0 ? [new ElasticCells(device, particles, bodies)] : [];
+}
+
 export class ElasticCells {
     /**
      * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
-     * @param {import('../state/particles.js').Particles} particles - Nodes to move.
+     * @param {import('../../state/particles.js').Particles} particles - Nodes to move.
      * @param {CellBody[]} bodies - Lattices and their materials, in scene order.
      */
     constructor(device, particles, bodies) {
@@ -148,7 +178,7 @@ export class ElasticCells {
         this.shader = new Shader(device, {
             name: 'sim-elastic-cells',
             shaderLanguage: SHADERLANGUAGE_WGSL,
-            cshader: `${kuhnConstants()}\n${STATE_WGSL}\n${cellsWgsl}\n${projectWgsl}`
+            cshader: `${kuhnConstants()}\n${STATE_WGSL}\n${xpbdCoupleWgsl}\n${cellsWgsl}\n${projectWgsl}`
         });
 
         // One instance per colour: same shader, but each carries its own range
@@ -190,15 +220,15 @@ export class ElasticCells {
         const { paramFloats, paramUints, bodies, particles } = this;
 
         for (let b = 0; b < bodies.length; b++) {
-            const { lattice, material } = bodies[b];
+            const { lattice, material, slot } = bodies[b];
             const { cellDims, nodeDims, h } = lattice;
-            const { deviatoric, hydrostatic, gamma } = elementCompliance(material, lattice);
+            const { deviatoric, hydrostatic, gamma } = elementCompliance(material, tetRestVolume(h));
             const base = b * PARAMS_WORDS;
 
             paramUints[base + PARAMS_FIELDS.cellDims] = cellDims[0];
             paramUints[base + PARAMS_FIELDS.cellDims + 1] = cellDims[1];
             paramUints[base + PARAMS_FIELDS.cellDims + 2] = cellDims[2];
-            paramUints[base + PARAMS_FIELDS.nodeOffset] = particles.offsetOf(b);
+            paramUints[base + PARAMS_FIELDS.nodeOffset] = particles.offsetOf(slot);
 
             paramUints[base + PARAMS_FIELDS.nodeDims] = nodeDims[0];
             paramUints[base + PARAMS_FIELDS.nodeDims + 1] = nodeDims[1];

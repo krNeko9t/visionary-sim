@@ -18,7 +18,7 @@
  * @property {number} relaxation - Kelvin-Voigt relaxation time, in seconds. How
  *   long a deformation takes to stop ringing. Unlike {@link Material.damping}
  *   this acts on the rate of deformation rather than on velocity, so it leaves
- *   free fall and spin alone; see `xpbdCouple` in `sim/constraints/wgsl/cells.wgsl`.
+ *   free fall and spin alone; see `xpbdCouple` in `sim/constraints/wgsl/xpbdCouple.wgsl`.
  *   Zero is a perfectly elastic material, which rings until something else takes
  *   the energy.
  */
@@ -53,7 +53,7 @@
  * so nu had to stay near 0.5. Solving the two as a coupled 2x2 block removed
  * that mechanism outright rather than shrinking it: at `F = I` the corrections
  * now cancel identically, for any gamma, dt or mass. See `xpbdCouple` in
- * `sim/constraints/wgsl/cells.wgsl`.
+ * `sim/constraints/wgsl/xpbdCouple.wgsl`.
  *
  * So the floor moved for one reason and stopped for another. What it buys is
  * material that is genuinely compressible: at nu = 0.25 a body can lose a third

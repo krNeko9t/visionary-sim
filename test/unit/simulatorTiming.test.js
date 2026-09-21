@@ -132,7 +132,7 @@ describe('Simulator owns the timing seam', () => {
         const sim = {
             simBodies: [{ body: { material }, proxy }],
             particles: { setParams: vi.fn(), uploadMasses: vi.fn() },
-            elastic: { uploadParams: vi.fn() },
+            elasticSets: [{ uploadParams: vi.fn() }],
             clock: new FixedTimestep(stableStepDuration(waveRatio(material, proxy.cflLength))),
             worst: Simulator.prototype.worst,
             waveRate: Simulator.prototype.waveRate
@@ -146,6 +146,6 @@ describe('Simulator owns the timing seam', () => {
         expect(sim.clock.stepDuration).toBeLessThan(previous);
         expect(sim.clock.snapshot().backlogTime).toBe(backlog);
         expect(sim.particles.setParams).toHaveBeenCalledOnce();
-        expect(sim.elastic.uploadParams).toHaveBeenCalledOnce();
+        expect(sim.elasticSets[0].uploadParams).toHaveBeenCalledOnce();
     });
 });

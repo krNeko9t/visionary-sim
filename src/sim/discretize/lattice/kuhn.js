@@ -38,6 +38,18 @@ export const KUHN_TETS = Object.freeze([
 export const KUHN_TET_VOLUME_FRACTION = 1 / 6;
 
 /**
+ * Every tetrahedron of a cell has the same rest volume, which is why the
+ * elastic constraint can hand `elementCompliance` one number per body rather
+ * than one per element.
+ *
+ * @param {number} h - Cell edge length, in metres.
+ * @returns {number} Rest volume of a single tetrahedron, in m^3.
+ */
+export function tetRestVolume(h) {
+    return KUHN_TET_VOLUME_FRACTION * h ** 3;
+}
+
+/**
  * Rest shape matrices `Dm = [p1-p0, p2-p0, p3-p0]` for a cell of edge length
  * `h`, one per tetrahedron, as column-major 3x3.
  *
