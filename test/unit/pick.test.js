@@ -46,6 +46,14 @@ describe('nearestNodeToRay', () => {
         expect(pick([[0, 0, -1]])).toBe(-1);
     });
 
+    it('looks past static material at the original tolerance, or misses an all-static ray', () => {
+        const positions = nodes([[0, 0, 1], [0.05, 0, 2], [0.2, 0, 1.5]]);
+        const masses = Float32Array.from([2, 3, 4]);
+        expect(nearestNodeToRay(positions, masses, FORWARD.origin, FORWARD.direction, 0.1, new Set([0]))).toBe(1);
+        expect(nearestNodeToRay(positions, masses, FORWARD.origin, FORWARD.direction, 0.1, new Set([0, 1]))).toBe(-1);
+        expect(Array.from(masses)).toEqual([2, 3, 4]);
+    });
+
     it('reports a miss rather than the least bad answer', () => {
         expect(pick([[0.4, 0, 1], [0, 0.4, 2]])).toBe(-1);
     });

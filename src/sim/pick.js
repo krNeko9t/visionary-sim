@@ -12,6 +12,18 @@
  */
 
 /**
+ * Grabbing follows material and static ownership, never the composed GPU mass:
+ * a node already held kinematically remains eligible for a new grab.
+ * @param {Float32Array} invMass - Material inverse masses.
+ * @param {number} node - Global node index.
+ * @param {Set<number>} [staticPrescribed] - Body-owned static nodes.
+ * @returns {boolean} Whether the node can be held.
+ */
+export function isGrabbableNode(invMass, node, staticPrescribed) {
+    return invMass[node] > 0 && !staticPrescribed?.has(node);
+}
+
+/**
  * The nearest grabbable node the ray passes within `radius` of.
  *
  * Nearest along the ray rather than nearest to it, so clicking a body in front
@@ -23,17 +35,16 @@
  * @param {number[]} origin - Ray origin.
  * @param {number[]} direction - Unit ray direction.
  * @param {number} radius - How far off the ray a node may be and still count.
+ * @param {Set<number>} [staticPrescribed] - Global static node indices.
  * @returns {number} Node index, or -1 if the ray missed everything.
  */
-export function nearestNodeToRay(nodes, invMass, origin, direction, radius) {
+export function nearestNodeToRay(nodes, invMass, origin, direction, radius, staticPrescribed) {
     const radiusSquared = radius * radius;
     let best = -1;
     let bestDepth = Infinity;
 
     for (let n = 0; n < invMass.length; n++) {
-        // A node with no material never moves, so grabbing one would look like
-        // the drag simply failing.
-        if (invMass[n] === 0) {
+        if (!isGrabbableNode(invMass, n, staticPrescribed)) {
             continue;
         }
 

@@ -1,4 +1,4 @@
-import { bodyOfNode } from './pick.js';
+import { bodyOfNode, isGrabbableNode } from './pick.js';
 
 /**
  * Turning where the ray landed into what the hand actually holds.
@@ -36,7 +36,7 @@ import { bodyOfNode } from './pick.js';
 /**
  * @typedef {object} GrippedPart
  * @property {number[]} nodes - Global node indices to hold, nearest the
- *   anchor first. `nodes[0]` is always the anchor node itself.
+ *   anchor first. `nodes[0]` is the anchor when eligible; otherwise the set is empty.
  * @property {number[][]} offsets - Each node's offset from the anchor,
  *   `[x, y, z]`, same order as `nodes` -- exactly the shape
  *   {@link import('./constraints/kinematicDrive.js').KinematicDrive#hold} takes.
@@ -46,17 +46,19 @@ import { bodyOfNode } from './pick.js';
 
 /**
  * Holds just the node the ray hit. The strategy that does not consult a
- * radius at all -- `options` is accepted only so both strategies share one
- * call shape and can sit in the same lookup table.
+ * radius at all. Static and empty anchors return an empty held set.
  *
  * @param {Float32Array} positions - Node positions, 4 floats per node.
- * @param {Float32Array} invMass - Per-node inverse mass; unused here, kept
- *   for signature parity with {@link withinRadius}.
+ * @param {Float32Array} invMass - Material inverse mass per node.
  * @param {number} anchor - Global index of the node the ray hit.
- * @param {object} [options] - Ignored.
- * @returns {GrippedPart} One node, zero offset.
+ * @param {object} [options]
+ * @param {Set<number>} [options.staticPrescribed] - Global static node indices.
+ * @returns {GrippedPart} One eligible node with zero offset, or an empty set.
  */
-export function singleNode(positions, invMass, anchor, options) {
+export function singleNode(positions, invMass, anchor, { staticPrescribed } = {}) {
+    if (!isGrabbableNode(invMass, anchor, staticPrescribed)) {
+        return { nodes: [], offsets: [], found: 0 };
+    }
     return { nodes: [anchor], offsets: [[0, 0, 0]], found: 1 };
 }
 
@@ -74,9 +76,8 @@ export function singleNode(positions, invMass, anchor, options) {
  * resolution dependence back in through the one door this module exists to
  * close.
  *
- * Nodes with `invMass === 0` are excluded, the same rule `pick.js` applies:
- * a node with no material never moves, so grip can never hold
- * something the aim could never have hit.
+ * Static and empty nodes are excluded before counting and truncation, using
+ * the same eligibility as picking. An ineligible anchor returns an empty set.
  *
  * Ties in distance are broken by node index. Not cosmetic: where nodes are
  * laid out regularly, several neighbours of a node sit at *exactly* equal
@@ -90,11 +91,15 @@ export function singleNode(positions, invMass, anchor, options) {
  * @param {number} params.radius - World-space radius, metres.
  * @param {number[]} params.nodeOffsets - Start of each body's node range in
  *   the shared arrays, ascending -- `Particles.offsets`.
+ * @param {Set<number>} [params.staticPrescribed] - Global static node indices.
  * @param {number} [params.limit] - Most nodes to return; the rest are still
  *   counted into `found`. Defaults to unlimited.
- * @returns {GrippedPart} The held set, nearest-first, anchor always at index 0.
+ * @returns {GrippedPart} The held set, nearest-first, eligible anchor at index 0.
  */
-export function withinRadius(positions, invMass, anchor, { radius, nodeOffsets, limit = Infinity }) {
+export function withinRadius(positions, invMass, anchor, { radius, nodeOffsets, limit = Infinity, staticPrescribed }) {
+    if (!isGrabbableNode(invMass, anchor, staticPrescribed)) {
+        return { nodes: [], offsets: [], found: 0 };
+    }
     const ax = positions[anchor * 4];
     const ay = positions[anchor * 4 + 1];
     const az = positions[anchor * 4 + 2];
@@ -106,7 +111,7 @@ export function withinRadius(positions, invMass, anchor, { radius, nodeOffsets, 
 
     const candidates = [];
     for (let n = start; n < end; n++) {
-        if (n === anchor || invMass[n] === 0) {
+        if (n === anchor || !isGrabbableNode(invMass, n, staticPrescribed)) {
             continue;
         }
         const dx = positions[n * 4] - ax;

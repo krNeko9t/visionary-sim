@@ -103,6 +103,66 @@ const body = (staticRegion, elementSize = 0.02) => new SoftBody({
     elementSize
 });
 
+describe('public grabbing respects body-owned static material', () => {
+    it.each(['hard', 'compliant'])('rejects a direct %s hold containing static nodes before changing the active hold', law => {
+        const sim = new Simulator(device, [body((x, y, z) => z < 0)], bounds);
+        sim.setDriveLaw(law);
+        const fixed = [...sim.particles.staticPrescribed].find(n => sim.particles.invMass[n] > 0);
+        const movable = Array.from(sim.particles.invMass.keys()).find(n => sim.particles.invMass[n] > 0 && !sim.particles.staticPrescribed.has(n));
+        sim.drive.hold([movable], [[0, 0, 0]]);
+        const before = sim.drive.driven.bytes.slice();
+        expect(() => sim.drive.hold([movable, fixed], [[0, 0, 0], [1, 0, 0]])).toThrow(/static/);
+        expect(sim.drive.driven.bytes).toEqual(before);
+        expect(sim.drive.drivenCount).toBe(1);
+        expect(sim.drive.heldNodes).toEqual([movable]);
+        sim.destroy();
+    });
+
+    it.each(['hard', 'compliant'])('uploads only movable material for %s and preserves it across law changes and regrabs', async law => {
+        const sim = new Simulator(device, [body((x, y, z) => z < 0)], bounds);
+        sim.setDriveLaw(law);
+        const material = sim.particles.invMass.slice();
+        const ray = [[0, 0, -0.2], [0, 0, 1]];
+        const hit = await sim.grab(...ray);
+        expect(hit.held).toBeGreaterThan(1);
+        expect(hit.position[2]).toBeGreaterThanOrEqual(0);
+        const held = () => {
+            const uploaded = new Uint32Array(sim.drive.driven.bytes.buffer);
+            return Array.from({ length: sim.drive.drivenCount }, (_, i) => uploaded[i * 8]);
+        };
+        const initial = held();
+        expect(initial.every(n => material[n] > 0 && !sim.particles.staticPrescribed.has(n))).toBe(true);
+        // The sphere actually overlaps static material: this is not an empty
+        // exclusion test that would pass without wiring the selector's filter.
+        expect([...sim.particles.staticPrescribed].some(n => material[n] > 0 &&
+            Math.hypot(...hit.position.map((v, axis) => v - sim.particles.restPositions[n * 4 + axis])) < sim.grip.radius)).toBe(true);
+        for (const nextLaw of ['hard', 'compliant', 'hard']) {
+            sim.setDriveLaw(nextLaw);
+            expect(held()).toEqual(initial);
+            expect((await sim.grab(...ray)).position).toEqual(hit.position);
+            expect(held()).toEqual(initial);
+        }
+        expect(Array.from(sim.particles.invMass)).toEqual(Array.from(material));
+        sim.setGrip('singleNode');
+        expect((await sim.grab(...ray)).held).toBe(1);
+        expect(held()).toEqual(initial.slice(0, 1));
+        sim.releaseGrab();
+        expect(sim.drive.passes).toEqual([]);
+        expect([...sim.particles.staticPrescribed].every(n => sim.particles.gpuInvMass[n] === 0)).toBe(true);
+        sim.destroy();
+    });
+
+    it('misses all-static material without activating either drive law', async () => {
+        const sim = new Simulator(device, [body(() => true)], bounds);
+        for (const law of ['hard', 'compliant']) {
+            sim.setDriveLaw(law);
+            expect(await sim.grab([0, 0, -0.2], [0, 0, 1])).toBeNull();
+            expect(sim.drive.passes).toEqual([]);
+        }
+        sim.destroy();
+    });
+});
+
 describe('Simulator assembles body-owned static prescription', () => {
     it('supports undeclared, empty and full regions and reports material counts per body', () => {
         const sim = new Simulator(device, [body(), body(() => false), body(() => true)], bounds);

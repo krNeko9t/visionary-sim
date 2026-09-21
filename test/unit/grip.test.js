@@ -108,13 +108,37 @@ describe('singleNode', () => {
         expect(grip.found).toBe(1);
     });
 
-    it('ignores whatever options it is given', () => {
+    it('ignores the radius option', () => {
         const grip = singleNode(new Float32Array(4), new Float32Array(1).fill(1), 0, { radius: 999 });
         expect(grip.nodes).toEqual([0]);
     });
 });
 
 describe('withinRadius contract', () => {
+    it('filters static material before counting and truncating without growing the ball or crossing bodies', () => {
+        const positions = Float32Array.from([
+            0, 0, 0, 0, 0.01, 0, 0, 0, 0.02, 0, 0, 0,
+            -0.02, 0, 0, 0, 0.025, 0, 0, 0, 0.04, 0, 0, 0, 0, 0, 0, 0
+        ]);
+        const masses = new Float32Array(7).fill(1);
+        const options = { radius: 0.03, nodeOffsets: [0, 6], limit: 2, staticPrescribed: new Set([1]) };
+        const grip = withinRadius(positions, masses, 0, options);
+        expect(grip.nodes).toEqual([0, 2]);
+        expect(grip.found).toBe(4);
+        expect(withinRadius(positions, masses, 0, { ...options, limit: 9 }).nodes).toEqual([0, 2, 3, 4]);
+    });
+
+    it('both strategies reject static or empty anchors', () => {
+        const positions = new Float32Array(8);
+        const masses = Float32Array.from([1, 0]);
+        const options = { radius: 1, nodeOffsets: [0], staticPrescribed: new Set([0]) };
+        for (const strategy of Object.values(GRIPS)) {
+            for (const anchor of [0, 1]) {
+                expect(strategy(positions, masses, anchor, options)).toEqual({ nodes: [], offsets: [], found: 0 });
+            }
+        }
+    });
+
     it('always holds the anchor first, with an exact zero offset', () => {
         const { positions, invMass, nodeOffsets, centre } = lattice(0.01);
         const grip = withinRadius(positions, invMass, centre, { radius: 0.03, nodeOffsets });

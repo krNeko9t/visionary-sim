@@ -381,7 +381,8 @@ export class Simulator {
         // a body has a node within reach. This is aim tolerance, not hand size:
         // it stays a property of the discretisation on purpose, see `sim/grip.js`.
         const aimRadius = this.coarsestSpacing() * 1.2;
-        const anchor = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, aimRadius);
+        const anchor = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, aimRadius,
+            this.particles.staticPrescribed);
         if (anchor < 0) {
             return null;
         }
@@ -389,6 +390,7 @@ export class Simulator {
         const grip = GRIPS[this.grip.strategy](nodes, this.particles.invMass, anchor, {
             radius: this.grip.radius,
             nodeOffsets: this.particles.offsets,
+            staticPrescribed: this.particles.staticPrescribed,
             limit: this.drive.capacity
         });
         if (grip.found > grip.nodes.length) {

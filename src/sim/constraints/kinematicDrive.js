@@ -149,8 +149,14 @@ export class KinematicDrive {
      * @param {number[][]} offsets - Each node's offset from the anchor at this
      *   moment, which is where the grab target starts, `[x, y, z]`, same order
      *   as `nodes`.
+     * @throws {Error} If a static node is included; the current hold is unchanged.
      */
     hold(nodes, offsets) {
+        // Both kernels write positions directly, even for zero GPU mass.
+        // Reject before any writes so a caller cannot override body ownership.
+        if (nodes.some(node => this.particles.staticPrescribed.has(node))) {
+            throw new Error('[drive] cannot hold a static prescribed node');
+        }
         if (nodes.length === 0) {
             this.release();
             return;
