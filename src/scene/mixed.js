@@ -4,14 +4,12 @@ import { BREAD, CRUMB } from './splats.js';
 import { JELLY } from './tank.js';
 
 /**
- * One body from each render path, sharing a tank.
+ * A mesh and a Gaussian capture sharing a tank.
  *
- * This is the scene that argues §三's claim rather than merely stating it: the
- * two representations are not a route from one to the other, they are two
- * things that coexist. `spot` never learns the Gaussians exist, `bread` never
- * learns the triangles do, and contact between them happens on the nodes both
- * discretisations produce -- the same path `splats-contact` uses between two
- * captures, exercised here between a mesh and a cloud instead.
+ * Contact happens on the proxy geometry, and has nothing to do with what is
+ * drawn: `spot` never learns the Gaussians exist, `bread` never learns the
+ * triangles do, and the collision between them is the same one `splats-contact`
+ * runs between two captures.
  *
  * Materials and the bread declaration are imported rather than restated, for
  * the reason `scene/splats.js` gives for `BREAD` itself: a fact about an asset

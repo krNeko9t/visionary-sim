@@ -102,13 +102,13 @@ function node(overrides = {}) {
 
 describe('the broadphase grid', () => {
     const bounds = { min: [-0.30, 0.0, -0.20], max: [0.30, 0.50, 0.20] };
-    const cell = 0.0142;
-    const grid = broadphaseGrid(bounds, cell);
+    const bucketSize = 0.0142;
+    const grid = broadphaseGrid(bounds, bucketSize);
 
     it('covers the bounds with a margin bucket on every side', () => {
-        expect(grid.origin).toEqual([bounds.min[0] - cell, bounds.min[1] - cell, bounds.min[2] - cell]);
+        expect(grid.origin).toEqual([bounds.min[0] - bucketSize, bounds.min[1] - bucketSize, bounds.min[2] - bucketSize]);
         for (let axis = 0; axis < 3; axis++) {
-            const span = grid.origin[axis] + grid.dims[axis] * cell;
+            const span = grid.origin[axis] + grid.dims[axis] * bucketSize;
             expect(span).toBeGreaterThanOrEqual(bounds.max[axis]);
         }
         expect(grid.bucketCount).toBe(grid.dims[0] * grid.dims[1] * grid.dims[2]);
@@ -120,9 +120,9 @@ describe('the broadphase grid', () => {
         // contact silently stops happening rather than going visibly wrong.
         for (const [i, j, k] of [[0, 0, 0], [1, 2, 3], [grid.dims[0] - 1, grid.dims[1] - 1, grid.dims[2] - 1]]) {
             const centre = [
-                grid.origin[0] + (i + 0.5) * cell,
-                grid.origin[1] + (j + 0.5) * cell,
-                grid.origin[2] + (k + 0.5) * cell
+                grid.origin[0] + (i + 0.5) * bucketSize,
+                grid.origin[1] + (j + 0.5) * bucketSize,
+                grid.origin[2] + (k + 0.5) * bucketSize
             ];
             expect(bucketOf(grid, centre)).toBe(i + grid.dims[0] * (j + grid.dims[1] * k));
         }
@@ -143,7 +143,7 @@ describe('the broadphase grid', () => {
         const empty = broadphaseGrid(bounds, 0);
         expect(Number.isFinite(empty.bucketCount)).toBe(true);
         expect(empty.bucketCount).toBeGreaterThan(0);
-        expect(empty.cell).toBeGreaterThan(0);
+        expect(empty.bucketSize).toBeGreaterThan(0);
     });
 
     it('never separates two points that could touch by more than one bucket', () => {
@@ -152,7 +152,7 @@ describe('the broadphase grid', () => {
         // twenty-six buckets around its own, so any pair inside that distance
         // has to land within one step on every axis. The reach of a pair is
         // `r_i + r_j`, which is at most twice the widest radius, which is what
-        // the cell size is set to -- so testing at exactly `cell` covers every
+        // the bucket size is set to -- so testing at exactly `bucketSize` covers every
         // pair that can ever be in contact.
         let random = 12345;
         const next = () => {
@@ -166,10 +166,10 @@ describe('the broadphase grid', () => {
                 bounds.min[1] + next() * (bounds.max[1] - bounds.min[1]),
                 bounds.min[2] + next() * (bounds.max[2] - bounds.min[2])
             ];
-            // A random offset strictly shorter than one cell.
+            // A random offset strictly shorter than one bucket.
             const direction = [next() * 2 - 1, next() * 2 - 1, next() * 2 - 1];
             const near = point.map((v, axis) =>
-                v + (direction[axis] / Math.max(length(direction), 1e-9)) * cell * 0.999 * next());
+                v + (direction[axis] / Math.max(length(direction), 1e-9)) * bucketSize * 0.999 * next());
 
             const a = bucketOf(grid, point);
             const b = bucketOf(grid, near);
@@ -188,15 +188,15 @@ describe('the broadphase grid', () => {
 });
 
 describe('worst-case bucket occupancy', () => {
-    it('gives a small, fixed bound when a body shares its own cell size', () => {
-        // The cell a body itself sets (via `widest` in bodyContact.js) is its
+    it('gives a small, fixed bound when a body sets the bucket size itself', () => {
+        // The bucket size a body itself sets (via `widest` in bodyContact.js) is its
         // own node spacing, so at most a couple of its nodes share one bucket.
         expect(worstCaseBucketOccupancy(0.01, 0.01)).toBe(2 ** 3);
         expect(worstCaseBucketOccupancy(0.01, 0.01)).toBeLessThanOrEqual(BUCKET_SLOTS);
     });
 
-    it('grows fast for a body much finer than the grid cell', () => {
-        // A body an order of magnitude finer than the cell that some coarser
+    it('grows fast for a body much finer than the bucket', () => {
+        // A body an order of magnitude finer than the bucket that some coarser
         // body in the scene set can pack far more than BUCKET_SLOTS nodes into
         // one bucket in the worst case.
         expect(worstCaseBucketOccupancy(0.05, 0.005)).toBeGreaterThan(BUCKET_SLOTS);
@@ -207,23 +207,23 @@ describe('worst-case bucket occupancy', () => {
         // apart can have, and denser than a grid of that spacing by sqrt(2). A
         // bound argued from a grid's rows would be exceeded here.
         const spacing = 0.001;
-        const cell = 0.01;
+        const bucketSize = 0.01;
         const a = spacing * Math.SQRT2;
         const basis = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
         let inside = 0;
-        for (let i = 0; i * a < cell; i++) {
-            for (let j = 0; j * a < cell; j++) {
-                for (let k = 0; k * a < cell; k++) {
+        for (let i = 0; i * a < bucketSize; i++) {
+            for (let j = 0; j * a < bucketSize; j++) {
+                for (let k = 0; k * a < bucketSize; k++) {
                     for (const [u, v, w] of basis) {
                         const p = [(i + u) * a, (j + v) * a, (k + w) * a];
-                        inside += p.every(x => x < cell) ? 1 : 0;
+                        inside += p.every(x => x < bucketSize) ? 1 : 0;
                     }
                 }
             }
         }
 
-        expect(inside).toBeGreaterThan((Math.ceil(cell / spacing) + 1) ** 3);
-        expect(worstCaseBucketOccupancy(cell, spacing)).toBeGreaterThanOrEqual(inside);
+        expect(inside).toBeGreaterThan((Math.ceil(bucketSize / spacing) + 1) ** 3);
+        expect(worstCaseBucketOccupancy(bucketSize, spacing)).toBeGreaterThanOrEqual(inside);
     });
 
     it('stays within capacity for every current scene\'s element size spread', () => {

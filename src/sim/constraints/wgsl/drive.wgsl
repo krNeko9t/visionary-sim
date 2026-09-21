@@ -1,5 +1,5 @@
 // What the kinematic drive constraint needs on top of the particle
-// declarations: which nodes it is driving this substep, where the handle
+// declarations: which nodes it is driving this substep, where the grab target
 // currently is, and (for the compliant law only) how stiffly it is held.
 //
 // `kinematicDrive.js` prepends `state.wgsl` and then this file to each of its
@@ -19,17 +19,19 @@ struct Driven {
     pad0: u32,
     pad1: u32,
     pad2: u32,
-    // Offset from the handle anchor at the moment this node was taken up.
-    // Adding it to `handleTarget` every substep is what makes a held set
-    // translate rigidly with the handle rather than collapse onto one point.
+    // Offset from the anchor at the moment this node was taken up -- the
+    // grab target starts on the anchor, so this is also the offset from it.
+    // Adding it to `grabTarget` every substep is what makes a held set
+    // translate rigidly with the grab target rather than collapse onto one
+    // point.
     // w unused.
     offset: vec4f,
 }
 
 var<storage, read> driven: array<Driven>;
 
-uniform handleTarget: vec3f;
-uniform handleVelocity: vec3f;
+uniform grabTarget: vec3f;
+uniform grabTargetVelocity: vec3f;
 uniform drivenCount: u32;
 uniform dt: f32;
 // Compliant law only: see `wgsl/driveCompliant.wgsl` for what this means

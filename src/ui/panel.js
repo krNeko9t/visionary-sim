@@ -198,7 +198,7 @@ export function createPanel(sim, { onProxyToggle }) {
         }
         gripRadius.warn(stats.grip.worstCase > stats.grip.capacity
             ? `半径内最多 ${stats.grip.worstCase} 个节点，超过 ${stats.grip.capacity} 的持有上限，` +
-              `抓取会截断到最近的那些——范围重新随点阵分辨率变化。`
+              `抓取会截断到最近的那些——范围重新随单元尺度变化。`
             : null);
     }
 

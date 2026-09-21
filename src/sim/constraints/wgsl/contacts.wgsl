@@ -66,7 +66,7 @@ const BUCKET_SLOTS: u32 = 32u;
 
 uniform gridOrigin: vec3f;
 uniform gridDims: vec3u;
-uniform gridCell: f32;
+uniform bucketSize: f32;
 uniform bucketCount: u32;
 uniform surfaceCount: u32;
 
@@ -78,7 +78,7 @@ uniform surfaceCount: u32;
 // which costs contacts in exactly the situation where there are none.
 fn gridCoord(p: vec3f) -> vec3u {
     let last = vec3f(uniform.gridDims) - vec3f(1.0);
-    return vec3u(clamp(floor((p - uniform.gridOrigin) / uniform.gridCell), vec3f(0.0), last));
+    return vec3u(clamp(floor((p - uniform.gridOrigin) / uniform.bucketSize), vec3f(0.0), last));
 }
 
 fn bucketAt(coord: vec3u) -> u32 {

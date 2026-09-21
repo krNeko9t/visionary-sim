@@ -16,25 +16,25 @@ import driveHardWgsl from './wgsl/driveHard.wgsl?raw';
  * The third kind of constraint: some nodes are not solved for, they are told.
  *
  * Elasticity and contact each discover what a node should do from the state
- * around it. This one is the opposite -- whoever is holding a handle already
- * knows where a node should go, and the only question left is how literally
- * to enforce that. Two answers to that question live here, chosen at runtime
- * rather than at construction, because the choice belongs to whoever is
- * holding the handle, not to the scene:
+ * around it. This one is the opposite -- whoever is holding the nodes already
+ * knows where each should go, and the only question left is how literally to
+ * enforce that. Two answers to that question live here, chosen at runtime
+ * rather than at construction, because the choice belongs to the holder, not
+ * to the scene:
  *
  *   - `hard` zeroes the driven nodes' inverse mass, through
  *     `Particles.setPrescribed`, and moves them itself in a pass that stands
  *     in for both `predict` and `finalize` on exactly those nodes. Nothing
  *     else can move them.
- *   - `compliant` leaves their mass alone and only nudges position toward the
- *     handle by a fraction a response time controls -- see
+ *   - `compliant` leaves their mass alone and only nudges position toward
+ *     their goals by a fraction a response time controls -- see
  *     `wgsl/driveCompliant.wgsl` for the derivation. Elasticity, contact and
  *     the tank can all still move a compliant-held node.
  *
- * Which nodes are held and where the handle is are two updates at two
+ * Which nodes are held and where the grab target is are two updates at two
  * different rates: the held set changes on a fresh hold, roughly once per
- * drag; the handle target changes every frame the pointer moves. `hold` and
- * `release` write the driven set and its buffer; `setHandle` only ever
+ * drag; the grab target changes every frame the pointer moves. `hold` and
+ * `release` write the driven set and its buffer; `setGrabTarget` only ever
  * touches two uniforms, cheaply enough to call every frame.
  *
  * @typedef {'hard'|'compliant'} DriveLaw
@@ -63,7 +63,7 @@ const DRIVEN_FIELDS = {
 };
 
 /**
- * How long the compliant law takes to close most of the way to the handle.
+ * How long the compliant law takes to close most of the way to a node's goal.
  * Small enough to read as "following" rather than "detached" -- see
  * `wgsl/driveCompliant.wgsl` for what the number means physically.
  */
@@ -103,8 +103,8 @@ export class KinematicDrive {
         for (const compute of Object.values(this.computes)) {
             compute.setParameter('responseTime', RESPONSE_TIME);
             compute.setParameter('drivenCount', 0);
-            compute.setParameter('handleTarget', [0, 0, 0]);
-            compute.setParameter('handleVelocity', [0, 0, 0]);
+            compute.setParameter('grabTarget', [0, 0, 0]);
+            compute.setParameter('grabTargetVelocity', [0, 0, 0]);
         }
     }
 
@@ -146,8 +146,9 @@ export class KinematicDrive {
      * whatever was held before.
      *
      * @param {number[]} nodes - Global node indices to hold.
-     * @param {number[][]} offsets - Each node's offset from the handle anchor
-     *   at this moment, `[x, y, z]`, same order as `nodes`.
+     * @param {number[][]} offsets - Each node's offset from the anchor at this
+     *   moment, which is where the grab target starts, `[x, y, z]`, same order
+     *   as `nodes`.
      */
     hold(nodes, offsets) {
         if (nodes.length === 0) {
@@ -183,13 +184,13 @@ export class KinematicDrive {
     }
 
     /**
-     * @param {number[]} target - World position the handle is at.
-     * @param {number[]} velocity - Handle's velocity this frame, world units per second.
+     * @param {number[]} target - World position the grab target is at.
+     * @param {number[]} velocity - The grab target's velocity this frame, world units per second.
      */
-    setHandle(target, velocity) {
+    setGrabTarget(target, velocity) {
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('handleTarget', target);
-            compute.setParameter('handleVelocity', velocity);
+            compute.setParameter('grabTarget', target);
+            compute.setParameter('grabTargetVelocity', velocity);
         }
     }
 

@@ -26,10 +26,10 @@ import { Vec3 } from 'playcanvas';
  */
 
 /**
- * How far outside the tank the handle target may be pulled. Bounds the
- * handle, not the held nodes directly: with `sim/grip.js`'s `withinRadius`
+ * How far outside the tank the grab target may be pulled. Bounds the grab
+ * target, not the held nodes directly: with `sim/grip.js`'s `withinRadius`
  * strategy a held node can sit up to `REACH + this.grip.radius` outside the
- * tank, since it follows the handle at a fixed offset. Not tightened to
+ * tank, since it follows the grab target at a fixed offset. Not tightened to
  * account for that -- those nodes carry zero inverse mass under the hard
  * drive law, so the tank's planes could not reach them regardless, the same
  * accepted cost `KinematicDrive` already carries for a single held node.

@@ -2,7 +2,8 @@
  * Parametric surfaces as triangles.
  *
  * The analytic bodies are defined by distance functions, which the simulator
- * can voxelise directly but the renderer has nothing to draw. This turns them
+ * can build its proxy geometry from directly but the renderer has nothing to
+ * draw. This turns them
  * into geometry, and only for that: the simulation still reads the distance
  * function, so the triangles carry no authority over the body's shape.
  *

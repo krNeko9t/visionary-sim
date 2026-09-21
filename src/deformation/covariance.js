@@ -18,9 +18,9 @@
  *
  * One honest limit, which a picture would not reveal: `F` is read once, at the
  * centre. The field is trilinear, not affine, so `F` genuinely varies across a
- * Gaussian's own width; at the resolutions this project uses a splat is a third
- * of a cell across, so the far side of a large splat is carried by a gradient
- * that is not quite its own. The error is second order in that width and it shows
+ * Gaussian's own width; at the element sizes this project uses a splat is a
+ * third of an element across, so the far side of a large splat is carried by a
+ * gradient that is not quite its own. The error is second order in that width and it shows
  * up as a slightly wrong shape, never as a wrong place.
  *
  * `covariance.wgsl` is the same maths on the GPU and is the copy that actually

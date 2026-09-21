@@ -131,50 +131,19 @@ const DISCRETISATION = [
  * The one directory that may speak {@link DISCRETISATION}: it holds the
  * lattice, so it is the only place that has to know one exists. Everything
  * else sees a body's discretisation as a `ProxyGeometry`
- * (`sim/discretize/proxyGeometry.js`). The proxy-geometry refactor is still
- * moving the lattice's files in; {@link DISCRETISATION_DEBT} is what is left.
+ * (`sim/discretize/proxyGeometry.js`).
  */
 const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
-
-/**
- * Every file outside {@link DISCRETISATION_RESIDENT} that still speaks the
- * lattice today, and why.
- *
- * This table is the cost of replacing the voxel lattice. It used to be a
- * sentence in `ARCHITECTURE.md` -- "swapping it touches `sim/discretize/` and
- * little else" -- and that sentence was wrong twice, because nothing checked
- * it (ADR-0004). Here it cannot drift either way: a file that starts speaking
- * the lattice and is not listed fails, and a listed file that has stopped
- * speaking it fails too, so the list only ever shrinks and never overstates.
- *
- * Every entry is a real cost, not a false positive. A word that matches here
- * and means something neutral does not get an entry; it gets renamed, or the
- * pattern gets narrower with a reason written next to it.
- *
- * All of it is paid by the proxy-geometry refactor
- * (`.scratch/proxy-geometry/issues/09-refactor-spec.md`); the reasons say which
- * part of that refactor pays each one.
- */
-const DISCRETISATION_DEBT = {
-    // Stays, and stops speaking the lattice once the neutral interface covers it.
-    'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
-    'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
-    'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
-
-    // Prose that explains itself through the lattice downstream of it.
-    'assets/shapes.js': 'SDFs are preferred because they voxelise exactly',
-    'assets/tessellate.js': 'says the simulator voxelises',
-    'assets/splats/clean.js': 'cleaning exists because an empty cell cannot move',
-    'assets/splats/measure.js': 'sizes compared against cells',
-    'deformation/covariance.js': 'the gradient\'s error measured in cells'
-};
 
 /**
  * @param {string} file - Path relative to `src`.
  * @returns {RegExp[]} The {@link DISCRETISATION} patterns `file` matches.
  */
 function discretisationIn(file) {
-    const text = readFileSync(join(SRC, file), 'utf8');
+    // Import specifiers are blanked out: a path into the resident says where a
+    // module lives, not what it is, and who may reach the resident at all is
+    // an import rule -- {@link DISCRETISATION_RESIDENT}'s own test below.
+    const text = readFileSync(join(SRC, file), 'utf8').replace(/from\s+'[^']*'/g, "from ''");
     return DISCRETISATION
         // `deform` then a capital is how every piece of shader text pasted into
         // someone else's shader names what it introduces -- the channel's own
@@ -199,8 +168,9 @@ function discretisationIn(file) {
  * `setPrescribed`/`clearPrescribed`, which say nothing about who is asking or
  * why.
  *
- * `handle` is deliberately not on this list: `sim/solver/stepper.js` already
- * uses the word for something else ("handles the read-after-write hazards").
+ * `handle` is deliberately not on this list: the grab chain no longer says it,
+ * and `sim/solver/stepper.js` uses the word for something else ("handles the
+ * read-after-write hazards").
  */
 const INTERACTION = [/\bgrab/i, /\bpointer/i, /\bdrag/i, /\bgrip/i];
 
@@ -341,21 +311,24 @@ describe('the layering the file tree claims', () => {
         // does not know something can say so without naming it.
         const leaks = sourceFiles()
             .filter(file => !file.startsWith(`${DISCRETISATION_RESIDENT}/`))
-            .filter(file => !(file in DISCRETISATION_DEBT))
             .flatMap(file => discretisationIn(file).map(pattern => `src/${file} matches ${pattern}`));
 
         expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
     });
 
-    it('lists no discretisation debt that has already been paid', () => {
-        // The other half of the rule above. Without it the table can only
-        // grow, and a list of what replacing the lattice costs that includes
-        // files it no longer costs is the same wrong sentence it replaced.
-        const paid = Object.keys(DISCRETISATION_DEBT)
-            .filter(file => !sourceFiles().includes(file) || discretisationIn(file).length === 0)
-            .map(file => `src/${file} is listed as debt but no longer speaks the lattice`);
+    it('lets only the discretisation\'s dispatch reach into the lattice', () => {
+        // The half of the rule above that the word list hands over. A module
+        // that imports from the resident knows the lattice exists whatever it
+        // names the binding, so the edge is checked here, by import, and the
+        // word list is left to catch what no import shows. `sim/discretize/`
+        // is the one place that chooses which proxy geometry a body gets, so
+        // it is the one place that has to know where each kind lives (ADR-0014).
+        const leaks = EDGES
+            .filter(({ to }) => areaOf(to) === DISCRETISATION_RESIDENT)
+            .filter(({ from }) => areaOf(from) !== DISCRETISATION_RESIDENT && areaOf(from) !== 'sim/discretize')
+            .map(({ from, to }) => `${from} -> ${to}`);
 
-        expect(paid, `\n${paid.join('\n')}\n`).toEqual([]);
+        expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
     });
 
     it('keeps the degrees of freedom and the stepper free of interaction', () => {

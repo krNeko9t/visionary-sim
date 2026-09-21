@@ -34,7 +34,7 @@ import { bodyOfNode } from './pick.js';
  */
 
 /**
- * @typedef {object} Grip
+ * @typedef {object} GrippedPart
  * @property {number[]} nodes - Global node indices to hold, nearest the
  *   anchor first. `nodes[0]` is always the anchor node itself.
  * @property {number[][]} offsets - Each node's offset from the anchor,
@@ -54,7 +54,7 @@ import { bodyOfNode } from './pick.js';
  *   for signature parity with {@link withinRadius}.
  * @param {number} anchor - Global index of the node the ray hit.
  * @param {object} [options] - Ignored.
- * @returns {Grip} One node, zero offset.
+ * @returns {GrippedPart} One node, zero offset.
  */
 export function singleNode(positions, invMass, anchor, options) {
     return { nodes: [anchor], offsets: [[0, 0, 0]], found: 1 };
@@ -92,7 +92,7 @@ export function singleNode(positions, invMass, anchor, options) {
  *   the shared arrays, ascending -- `Particles.offsets`.
  * @param {number} [params.limit] - Most nodes to return; the rest are still
  *   counted into `found`. Defaults to unlimited.
- * @returns {Grip} The held set, nearest-first, anchor always at index 0.
+ * @returns {GrippedPart} The held set, nearest-first, anchor always at index 0.
  */
 export function withinRadius(positions, invMass, anchor, { radius, nodeOffsets, limit = Infinity }) {
     const ax = positions[anchor * 4];
@@ -148,7 +148,7 @@ export const GRIPS = { singleNode, withinRadius };
  * one-sided hedge would blur the claim that the hand's size is resolution
  * independent.
  */
-export const DEFAULT_GRAB_RADIUS = 0.03;
+export const DEFAULT_GRIPPED_PART_RADIUS = 0.03;
 
 /**
  * Deterministic upper bound on how many nodes a `radius`-ball can contain on a

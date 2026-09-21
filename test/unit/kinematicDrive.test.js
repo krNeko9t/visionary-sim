@@ -35,13 +35,13 @@ const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /**
- * CPU transcription of `wgsl/driveHard.wgsl`. `goal` is `handleTarget +
+ * CPU transcription of `wgsl/driveHard.wgsl`. `goal` is `grabTarget +
  * offset`, already summed -- the kernel's own addition is nothing more than
  * that.
  *
  * @param {number[]} here - The node's current position.
  * @param {number[]} goal - Where it should end up.
- * @param {number[]} velocity - The handle's velocity this frame.
+ * @param {number[]} velocity - The grab target's velocity this frame.
  * @param {number} dt - Substep duration.
  * @returns {{ position: number[], velocity: number[] }} What the kernel writes.
  */
@@ -56,7 +56,7 @@ function driveHard(here, goal, velocity, dt) {
  * CPU transcription of `wgsl/driveCompliant.wgsl`.
  *
  * @param {number[]} p - The node's current position.
- * @param {number[]} goal - Where the handle would like it.
+ * @param {number[]} goal - Where the grab target would like it.
  * @param {number} dt - Substep duration.
  * @param {number} responseTime - Compliant law's `tau`.
  * @returns {number[]} The corrected position.
@@ -69,7 +69,7 @@ function driveCompliant(p, goal, dt, responseTime) {
 describe('the hard drive law', () => {
     const DT = 1 / 1200;
 
-    it('advances by exactly the handle velocity when the goal is still far off', () => {
+    it('advances by exactly the grab target velocity when the goal is still far off', () => {
         const velocity = [1, 0, 0];
         const { position } = driveHard([0, 0, 0], [10, 0, 0], velocity, DT);
 
@@ -100,7 +100,7 @@ describe('the hard drive law', () => {
         expect(here[2]).toBeCloseTo(goal[2], 12);
     });
 
-    it('keeps the handle\'s velocity as its own while still travelling, so a release lets it fly', () => {
+    it('keeps the grab target\'s velocity as its own while still travelling, so a release lets it fly', () => {
         const velocity = [0.3, -0.1, 0.2];
         // A goal far enough away that this substep does not land on it.
         const { velocity: nodeVelocity } = driveHard([0, 0, 0], [10, 10, 10], velocity, DT);
@@ -110,7 +110,7 @@ describe('the hard drive law', () => {
         expect(nodeVelocity[2]).toBeCloseTo(velocity[2], 9);
     });
 
-    it('reports zero velocity once the handle itself is still', () => {
+    it('reports zero velocity once the grab target itself is still', () => {
         const { position, velocity } = driveHard([1, 2, 3], [1, 2, 3], [0, 0, 0], DT);
 
         expect(position).toEqual([1, 2, 3]);
@@ -119,7 +119,7 @@ describe('the hard drive law', () => {
 });
 
 describe('the offset that keeps a held set rigid', () => {
-    it('keeps two held nodes\' separation fixed as the handle moves', () => {
+    it('keeps two held nodes\' separation fixed as the grab target moves', () => {
         const dt = 1 / 1200;
         const offsetA = [0.01, 0, 0];
         const offsetB = [-0.02, 0.03, 0];

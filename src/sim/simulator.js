@@ -1,5 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
-import { DEFAULT_GRAB_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
+import { DEFAULT_GRIPPED_PART_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
 import { discretizeBody, elasticConstraints } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
 import { KinematicDrive } from './constraints/kinematicDrive.js';
@@ -83,20 +83,20 @@ export class Simulator {
             this.particles.setParams(b, { damping, friction });
         }
 
-        // Where the handle is, and where it was last frame -- the only two
+        // Where the grab target is, and where it was last frame -- the only two
         // numbers `dispatch` needs to hand `this.drive` a velocity for this
-        // frame's substeps. `previousTarget` only advances when a dispatch
+        // frame's substeps. `previousPosition` only advances when a dispatch
         // actually runs, so a frame with nothing to simulate never loses the
         // motion in between.
-        this.handle = { target: [0, 0, 0], previousTarget: [0, 0, 0] };
+        this.grabTarget = { position: [0, 0, 0], previousPosition: [0, 0, 0] };
         /**
-         * Which nodes a grab holds, and how big a hand `withinRadius` uses.
-         * `withinRadius` is the default: `singleNode` is what "拖哪里都很重，
-         * 点阵越密越重" was describing, kept only because a switchable strategy
-         * needs both a control and a fallback arm, same reasoning as keeping
-         * the compliant drive law alongside the hard one.
+         * Which nodes a grab holds, and how big a gripped part `withinRadius`
+         * takes. `withinRadius` is the default: `singleNode` is what made a
+         * drag feel heavier the finer the body was, kept only because a
+         * switchable strategy needs both a control and a fallback arm, same
+         * reasoning as keeping the compliant drive law alongside the hard one.
          */
-        this.grip = { strategy: 'withinRadius', radius: DEFAULT_GRAB_RADIUS };
+        this.grip = { strategy: 'withinRadius', radius: DEFAULT_GRIPPED_PART_RADIUS };
         /** Set by {@link requestStep}, consumed by the next {@link step}. */
         this.pendingStep = false;
     }
@@ -292,17 +292,17 @@ export class Simulator {
             tankMax: this.tank.max
         });
 
-        // The handle's velocity this frame, not read off any input device:
-        // just how far its target moved since last frame's dispatch, divided
+        // The grab target's velocity this frame, not read off any input
+        // device: just how far it moved since last frame's dispatch, divided
         // among this frame's substeps. Skipped while nothing is held, so an
-        // idle scene never pays for it and `previousTarget` never drifts away
-        // from `target` in between holds.
+        // idle scene never pays for it and `previousPosition` never drifts away
+        // from `position` in between holds.
         if (this.drive.drivenCount > 0) {
-            const { target, previousTarget } = this.handle;
+            const { position, previousPosition } = this.grabTarget;
             const frameDt = steps * this.clock.stepDuration;
-            this.drive.setHandle(target, [0, 1, 2].map(axis =>
-                (target[axis] - previousTarget[axis]) / frameDt));
-            this.handle.previousTarget = target;
+            this.drive.setGrabTarget(position, [0, 1, 2].map(axis =>
+                (position[axis] - previousPosition[axis]) / frameDt));
+            this.grabTarget.previousPosition = position;
         }
 
         this.device.computeDispatch(this.stepper.sequence(steps), 'softbody-step');
@@ -395,8 +395,8 @@ export class Simulator {
 
         const position = [nodes[anchor * 4], nodes[anchor * 4 + 1], nodes[anchor * 4 + 2]];
         this.drive.hold(grip.nodes, grip.offsets);
-        this.handle.target = position;
-        this.handle.previousTarget = position;
+        this.grabTarget.position = position;
+        this.grabTarget.previousPosition = position;
 
         return { bodyIndex: bodyOfNode(this.particles.offsets, anchor), position, held: grip.nodes.length };
     }
@@ -437,12 +437,12 @@ export class Simulator {
     }
 
     /**
-     * Moves the handle {@link grab} attached to a world position.
+     * Moves the grab target of the grab {@link grab} started to a world position.
      *
-     * @param {number[]} position - World position to move the handle to.
+     * @param {number[]} position - World position to move the grab target to.
      */
     moveGrab(position) {
-        this.handle.target = position;
+        this.grabTarget.position = position;
     }
 
     /** Releases whatever {@link grab} is currently holding. */
@@ -451,7 +451,7 @@ export class Simulator {
     }
 
     /**
-     * Switches how a held node is driven toward the handle.
+     * Switches how a held node is driven toward the grab target.
      *
      * @param {import('./constraints/kinematicDrive.js').DriveLaw} law - The drive law.
      */

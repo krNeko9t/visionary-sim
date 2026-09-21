@@ -40,18 +40,18 @@
  * whole region is as arbitrary as it looks; nothing is ever binned into it.
  *
  * @param {{ min: number[], max: number[] }} bounds - Region to cover.
- * @param {number} cell - Bucket edge length: the largest contact diameter.
- * @returns {{ origin: number[], cell: number, dims: number[], bucketCount: number }} The layout.
+ * @param {number} bucketSize - Bucket edge length: the largest contact diameter.
+ * @returns {{ origin: number[], bucketSize: number, dims: number[], bucketCount: number }} The layout.
  */
-export function broadphaseGrid(bounds, cell) {
-    const edge = cell > 0
-        ? cell
+export function broadphaseGrid(bounds, bucketSize) {
+    const edge = bucketSize > 0
+        ? bucketSize
         : Math.max(...bounds.min.map((min, axis) => bounds.max[axis] - min));
     const dims = bounds.min.map((min, axis) =>
         Math.max(1, Math.ceil((bounds.max[axis] - min) / edge)) + 2);
     return {
         origin: bounds.min.map(min => min - edge),
-        cell: edge,
+        bucketSize: edge,
         dims,
         bucketCount: dims[0] * dims[1] * dims[2]
     };
@@ -64,7 +64,7 @@ export function broadphaseGrid(bounds, cell) {
  * A hard bound, not a probabilistic guess, and it asks nothing of how the
  * nodes are arranged beyond that gap. Cut the bucket into small cubes of edge
  * `spacing / sqrt(3)`: each is less than `spacing` across its diagonal, so it
- * can hold at most one node, and there are `ceil(sqrt(3) * cell / spacing)`
+ * can hold at most one node, and there are `ceil(sqrt(3) * bucketSize / spacing)`
  * of them along each axis. The bucket size is set from the coarsest body in
  * the scene (`bodyContact.js`), so a much finer body sharing it can pack far
  * more than a coarse body's own ~1 node per bucket -- this is what lets
@@ -75,12 +75,12 @@ export function broadphaseGrid(bounds, cell) {
  * being right except that warning: an overflowing bucket is still handled
  * deterministically by `wgsl/sort.wgsl`.
  *
- * @param {number} cell - Bucket edge length.
+ * @param {number} bucketSize - Bucket edge length.
  * @param {number} spacing - Smallest distance between two of the body's nodes.
  * @returns {number} Worst-case node count in one bucket.
  */
-export function worstCaseBucketOccupancy(cell, spacing) {
-    const perAxis = Math.ceil((Math.sqrt(3) * cell) / spacing);
+export function worstCaseBucketOccupancy(bucketSize, spacing) {
+    const perAxis = Math.ceil((Math.sqrt(3) * bucketSize) / spacing);
     return perAxis ** 3;
 }
 
@@ -93,14 +93,14 @@ export function worstCaseBucketOccupancy(cell, spacing) {
  * cannot invent a contact, since the narrow phase measures the real distance
  * whichever bucket a pair was found in.
  *
- * @param {{ origin: number[], cell: number, dims: number[] }} grid - The layout.
+ * @param {{ origin: number[], bucketSize: number, dims: number[] }} grid - The layout.
  * @param {number[]} point - World position.
  * @returns {number} Linear bucket index.
  */
 export function bucketOf(grid, point) {
     let index = 0;
     for (let axis = 2; axis >= 0; axis--) {
-        const raw = Math.floor((point[axis] - grid.origin[axis]) / grid.cell);
+        const raw = Math.floor((point[axis] - grid.origin[axis]) / grid.bucketSize);
         index = index * grid.dims[axis] + Math.min(grid.dims[axis] - 1, Math.max(0, raw));
     }
     return index;

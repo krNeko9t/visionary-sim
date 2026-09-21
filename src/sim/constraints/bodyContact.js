@@ -99,11 +99,11 @@ export class BodyContact {
         // later. Only a warning reads the spacing, which is all a measured
         // spacing is allowed to carry.
         if (Number.isFinite(finest)) {
-            const worstCase = worstCaseBucketOccupancy(this.grid.cell, finest);
+            const worstCase = worstCaseBucketOccupancy(this.grid.bucketSize, finest);
             if (worstCase > BUCKET_SLOTS) {
                 console.warn(
                     `[contact] the finest body's node spacing (${finest.toFixed(4)}m) can pack ` +
-                    `up to ${worstCase} nodes into one ${this.grid.cell.toFixed(4)}m contact ` +
+                    `up to ${worstCase} nodes into one ${this.grid.bucketSize.toFixed(4)}m contact ` +
                     `bucket, over the ${BUCKET_SLOTS}-slot capacity. Buckets that dense fall back ` +
                     'to an O(surfaceCount) scan every substep instead of staying rare -- narrow ' +
                     'the resolution gap between bodies in this scene.'
@@ -183,7 +183,7 @@ export class BodyContact {
         compute.setParameter('contactGrid', this.contactGrid);
         compute.setParameter('gridOrigin', this.grid.origin);
         compute.setParameter('gridDims', this.grid.dims);
-        compute.setParameter('gridCell', this.grid.cell);
+        compute.setParameter('bucketSize', this.grid.bucketSize);
         compute.setParameter('bucketCount', this.grid.bucketCount);
         compute.setParameter('surfaceCount', this.surfaceCount);
         compute.setParameter('gain', GAIN);

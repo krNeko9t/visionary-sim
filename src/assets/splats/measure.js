@@ -19,9 +19,9 @@ const DEFAULT_TRIM = 0.01;
 /**
  * The box holding all but the outermost `trim` of the centres on each axis.
  *
- * Per-axis rather than by distance from the centroid, because that is what a
- * lattice is laid out along, and because a capture's junk is rarely radially
- * symmetric.
+ * Per-axis rather than by distance from the centroid, because an axis-aligned
+ * box is what the bounds are used as downstream, and because a capture's junk
+ * is rarely radially symmetric.
  *
  * @param {import('./cloud.js').SplatCloud} cloud - The cloud.
  * @param {object} [options] - Trimming options.
@@ -81,7 +81,7 @@ export function measureCloud(cloud, options = {}) {
         centre: robust.min.map((v, axis) => v + extent[axis] * 0.5),
         /** How much wider the untrimmed box is: the floater tax, per axis. */
         floaterRatio: sizeOf(raw).map((v, axis) => (extent[axis] > 0 ? v / extent[axis] : 1)),
-        /** Half the diagonal of a Gaussian, so it compares with cell sizes. */
+        /** Half the diagonal of a Gaussian, so it compares with element sizes. */
         splatRadius: quantiles(perSplatMax(cloud.scales, cloud.count)),
         opacity: quantiles(Float32Array.from(cloud.opacity))
     };

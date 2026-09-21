@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_GRAB_RADIUS, GRIPS, singleNode, withinRadius, worstCaseHeldNodes } from '../../src/sim/grip.js';
+import { DEFAULT_GRIPPED_PART_RADIUS, GRIPS, singleNode, withinRadius, worstCaseHeldNodes } from '../../src/sim/grip.js';
 
 /**
  * The property that is this milestone: how much material the hand commands
@@ -50,7 +50,7 @@ function lattice(h, extent = 0.12) {
 }
 
 /**
- * @param {import('../../src/sim/grip.js').Grip} grip - A held set.
+ * @param {import('../../src/sim/grip.js').GrippedPart} grip - A held set.
  * @param {number} h - The lattice's node spacing.
  * @returns {number} Material commanded, in cubic metres, at one cell per node.
  */
@@ -182,13 +182,13 @@ describe('GRIPS', () => {
     });
 });
 
-describe('DEFAULT_GRAB_RADIUS', () => {
+describe('DEFAULT_GRIPPED_PART_RADIUS', () => {
     it('clears the coarsest cell in the repo (the wolf, 0.02 m) so the ball holds more than the anchor', () => {
-        expect(DEFAULT_GRAB_RADIUS).toBeGreaterThan(0.02);
+        expect(DEFAULT_GRIPPED_PART_RADIUS).toBeGreaterThan(0.02);
     });
 
     it('stays well under the smallest body in the repo (~0.15 m)', () => {
-        expect(DEFAULT_GRAB_RADIUS * 2).toBeLessThan(0.15);
+        expect(DEFAULT_GRIPPED_PART_RADIUS * 2).toBeLessThan(0.15);
     });
 });
 

@@ -93,7 +93,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 谁可以依赖谁、无环、各区域都在 | `test/unit/architecture.test.js` |
 | `deformation/` 里不出现渲染器的词汇（**知识边**，import 表看不见） | 同上 |
 | `render/` 里不出现离散化的词汇（同上，反向。这条决定体素点阵能不能真的换掉） | 同上 |
-| 只有 `sim/discretize/lattice/` 可以说点阵的词；今天仍在说的文件逐个列进债单，债单只减不增——它就是「换掉点阵要动什么」 | 同上 |
+| 只有 `sim/discretize/lattice/` 可以说点阵的词，也只有 `sim/discretize/` 可以 import 进那个目录——「换掉点阵只动那个目录与选用它的那一行」 | 同上 |
 | 代理几何的接口不变量（含球接触的密封条件） | `test/unit/proxyGeometry.test.js` |
 | 上面§二那张表 ↔ `src/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |

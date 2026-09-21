@@ -1,5 +1,8 @@
+import { meshBounds } from '../../../assets/objLoader.js';
+import { voxelizeCloud } from './cloudVolume.js';
 import { CUBE_CORNERS } from './corners.js';
-import { cellCoords, cellNodeIndices, surfaceNodes } from './lattice.js';
+import { buildLattice, cellCoords, cellNodeIndices, surfaceNodes } from './lattice.js';
+import { voxelizeMesh, voxelizeSdf } from './voxelize.js';
 import sampleWgsl from './sample.wgsl?raw';
 
 /**
@@ -190,4 +193,33 @@ export class VoxelLattice {
         }
         this.lattice.mass = this.lattice.volume * density;
     }
+}
+
+/**
+ * How each kind of rest geometry becomes an occupancy grid.
+ *
+ * A table rather than a chain of conditionals, because the number of entries is
+ * the thing that grows: every new way of describing an object arrives here, and
+ * arriving here should mean adding a line rather than editing a branch.
+ *
+ * @type {Record<string, (source: any, options: object) => import('./voxelize.js').OccupancyGrid>}
+ */
+const VOXELIZERS = {
+    mesh: (source, options) => voxelizeMesh(source.mesh, meshBounds(source.mesh.positions), options),
+    shape: (source, options) => voxelizeSdf(source.shape, options),
+    cloud: (source, options) => voxelizeCloud(source.cloud, options)
+};
+
+/**
+ * @param {import('../../../body/softBody.js').SoftBody} body - The body to discretise.
+ * @returns {VoxelLattice} Its lattice, cells `body.elementSize` across.
+ */
+export function discretizeBody(body) {
+    const { source, elementSize, material } = body;
+    const voxelize = VOXELIZERS[source.kind];
+    if (!voxelize) {
+        throw new Error(`no way to discretise rest geometry of kind "${source.kind}"`);
+    }
+
+    return new VoxelLattice(buildLattice(voxelize(source, { elementSize }), { density: material.density }));
 }

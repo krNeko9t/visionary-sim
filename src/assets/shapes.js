@@ -5,9 +5,10 @@ import { joinPatches, patch } from './tessellate.js';
  * Analytic shapes: a distance function for the simulator, a surface for the
  * renderer.
  *
- * Voxelising an SDF is exact and cannot leak, unlike ray-parity voxelisation of
- * a triangle soup, so the analytic bodies (torus, sphere, cube) are simulated
- * from the distance function and never from their triangles. The surface exists
+ * Filling a proxy geometry from an SDF is exact and cannot leak -- inside is
+ * the sign of one number, not a ray-parity count over a triangle soup -- so the
+ * analytic bodies (torus, sphere, cube) are simulated from the distance
+ * function and never from their triangles. The surface exists
  * only because something has to be drawn; it is the shape's own parametrisation
  * rather than an extraction from the SDF, so it lands exactly on the zero level
  * set at any resolution.

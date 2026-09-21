@@ -2,9 +2,9 @@
  * Throwing away the Gaussians that are not the object.
  *
  * This has to happen here, upstream of everything, and the reason is a rule
- * from the discretisation side: a rendered Gaussian whose cell has no material
- * reads a deformation gradient torn between nodes that moved and nodes that
- * have no mass, and shades as a black speck. So whatever the simulation refuses
+ * from the discretisation side: a rendered Gaussian that sits in a part of the
+ * proxy geometry with no material reads a deformation gradient torn between
+ * nodes that moved and nodes that have no mass, and shades as a black speck. So whatever the simulation refuses
  * to enclose must not be drawn either -- one cloud feeds both banks, and a
  * filter that ran on only one of them would break the invariant rather than
  * enforce it.

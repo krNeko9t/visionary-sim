@@ -1,52 +1,29 @@
-import { meshBounds } from '../../assets/objLoader.js';
-import { elasticConstraints as latticeElasticConstraints } from './lattice/elasticCells.js';
-import { buildLattice } from './lattice/lattice.js';
-import { VoxelLattice } from './lattice/voxelLattice.js';
-import { voxelizeCloud } from './lattice/cloudVolume.js';
-import { voxelizeMesh, voxelizeSdf } from './lattice/voxelize.js';
+import { elasticConstraints as elasticOfTheOnlyKind } from './lattice/elasticCells.js';
+import { discretizeBody as proxyOfTheOnlyKind } from './lattice/voxelLattice.js';
 
 /**
  * Turns a body the author described into degrees of freedom the solver can move.
  *
- * This is the one place that decides *how* an object is discretised, and it is
- * on the simulation side of the fence on purpose: swapping the voxel lattice
- * for something else is a change to this directory and nothing above it.
+ * This is the one place that decides *which* proxy geometry an object gets, and
+ * it is on the simulation side of the fence on purpose: adding a second kind is
+ * a change to this directory and nothing above it. How any one kind is built is
+ * that kind's business, in its own directory; this file only chooses, and today
+ * there is one kind to choose.
  */
-
-/**
- * How each kind of rest geometry becomes an occupancy grid.
- *
- * A table rather than a chain of conditionals, because the number of entries is
- * the thing that grows: every new way of describing an object arrives here, and
- * arriving here should mean adding a line rather than editing a branch.
- *
- * @type {Record<string, (source: any, options: object) => import('./lattice/voxelize.js').OccupancyGrid>}
- */
-const VOXELIZERS = {
-    mesh: (source, options) => voxelizeMesh(source.mesh, meshBounds(source.mesh.positions), options),
-    shape: (source, options) => voxelizeSdf(source.shape, options),
-    cloud: (source, options) => voxelizeCloud(source.cloud, options)
-};
 
 /**
  * @param {import('../../body/softBody.js').SoftBody} body - The body to discretise.
  * @returns {import('./proxyGeometry.js').ProxyGeometry} Its simulation geometry.
  */
 export function discretizeBody(body) {
-    const { source, elementSize, material } = body;
-    const voxelize = VOXELIZERS[source.kind];
-    if (!voxelize) {
-        throw new Error(`no way to discretise rest geometry of kind "${source.kind}"`);
-    }
-
-    return new VoxelLattice(buildLattice(voxelize(source, { elementSize }), { density: material.density }));
+    return proxyOfTheOnlyKind(body);
 }
 
 /**
  * Who builds the elastic constraints, one entry per implementation. Each picks
  * out the proxies that are its own and ignores the rest.
  */
-const ELASTIC = [latticeElasticConstraints];
+const ELASTIC = [elasticOfTheOnlyKind];
 
 /**
  * The elastic constraints of every body in the scene: what the proxy geometry
