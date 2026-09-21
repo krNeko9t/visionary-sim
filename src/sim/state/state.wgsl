@@ -10,8 +10,9 @@
 // second kind of constraint exist at all.
 
 // vec4f rather than vec3f: a storage buffer a compute shader writes wants
-// 16-byte alignment. The w component is unused. `deformation/sample.wgsl`
-// declares the same array read-only and depends on this layout.
+// 16-byte alignment. The w component is unused. Every deformation field a
+// discretisation hands out (`field()` in `sim/discretize/proxyGeometry.js`)
+// reads the same array read-only and depends on this layout.
 var<storage, read_write> nodePos: array<vec4f>;
 var<storage, read_write> nodePrev: array<vec4f>;
 var<storage, read_write> nodeVel: array<vec4f>;

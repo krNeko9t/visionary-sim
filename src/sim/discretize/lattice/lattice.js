@@ -1,4 +1,4 @@
-import { CUBE_CORNERS } from '../../../deformation/corners.js';
+import { CUBE_CORNERS } from './corners.js';
 
 /**
  * Turns an occupancy grid into the simulation's degrees of freedom.

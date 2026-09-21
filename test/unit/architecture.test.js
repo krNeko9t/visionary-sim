@@ -157,14 +157,8 @@ const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
  * part of that refactor pays each one.
  */
 const DISCRETISATION_DEBT = {
-    // Moves into the resident as it stands.
-    'deformation/sample.js': 'moves: the sampler is the lattice\'s, the channel keeps only the contract',
-    'deformation/sample.wgsl': 'moves with sample.js',
-    'deformation/corners.js': 'moves with sample.js',
-
     // Stays, and stops speaking the lattice once the neutral interface covers it.
     'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
-    'deformation/bind.js': '`latticeField()` moves out, the typedef and contract stay',
     'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
     'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
     'main.js': 'imports the wireframe view from `sim/debug/latticeView.js` until it is a render path',
@@ -308,11 +302,12 @@ describe('the layering the file tree claims', () => {
         // that is wrong is worse than one that was never offered, so the
         // knowledge edges are checked by name as well.
         //
-        // The scope is stated rather than overclaimed: `sample.wgsl` still
-        // writes PlayCanvas's WGSL dialect -- `uniform x: T;` read back as
-        // `uniform.x`, storage bindings left for the engine to assign. That
-        // coupling is real, this rule does not reach it, and it goes when the
-        // GPU resource seam does.
+        // The scope is stated rather than overclaimed: the lattice's sampler
+        // (`sim/discretize/lattice/sample.wgsl`, outside this rule since it
+        // left the channel) still writes PlayCanvas's WGSL dialect --
+        // `uniform x: T;` read back as `uniform.x`, storage bindings left for
+        // the engine to assign. That coupling is real, this rule does not reach
+        // it, and it goes when the GPU resource seam does.
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'deformation')
             .flatMap((file) => {

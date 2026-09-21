@@ -1,5 +1,6 @@
 import { Color, Entity, Mesh, MeshInstance, SHADERLANGUAGE_WGSL, StandardMaterial } from 'playcanvas';
 
+import { NORMAL_WGSL } from '../deformation/bind.js';
 import { restNormals } from './normals.js';
 import vertexHookWgsl from './mesh.wgsl?raw';
 
@@ -46,7 +47,7 @@ export function createMeshView(app, surface, field, { tint = [0.92, 0.45, 0.26],
 
     material.shaderChunksVersion = CHUNKS_VERSION;
     const chunks = material.getShaderChunks(SHADERLANGUAGE_WGSL);
-    chunks.set('litUserDeclarationVS', field.shader);
+    chunks.set('litUserDeclarationVS', `${field.shader}\n${NORMAL_WGSL}`);
     chunks.set('litUserMainEndVS', vertexHookWgsl);
     for (const [name, value] of Object.entries(field.parameters)) {
         material.setParameter(name, value);

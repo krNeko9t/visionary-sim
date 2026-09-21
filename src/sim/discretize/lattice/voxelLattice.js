@@ -1,6 +1,6 @@
-import { latticeField } from '../../../deformation/bind.js';
-import { CUBE_CORNERS } from '../../../deformation/corners.js';
+import { CUBE_CORNERS } from './corners.js';
 import { cellCoords, cellNodeIndices, surfaceNodes } from './lattice.js';
+import sampleWgsl from './sample.wgsl?raw';
 
 /**
  * A contact node's radius, as a fraction of the cell size.
@@ -74,13 +74,37 @@ export class VoxelLattice {
     }
 
     /**
-     * @param {object} nodePositions - Live node buffer for the whole scene.
+     * The body's deformation, sampled trilinearly from its nodes.
+     *
+     * The six names below are this sampler's, not the channel's, and they
+     * appear nowhere outside this directory. Every consumer forwards them
+     * unread (I5), so another implementation brings its own names and its own
+     * text and no consumer changes.
+     *
+     * Cheap enough to call every frame, but there is no reason to: the node
+     * buffer is written in place by the solver, so a field applied once stays
+     * live.
+     *
+     * @param {object} nodePositions - Live deformed node positions for the
+     *   whole scene, vec4f per node. An opaque storage-buffer handle: passed
+     *   along and never called, which is what lets the field stay ignorant of
+     *   whose renderer is on the other end.
      * @param {number} nodeOffset - Where this body's nodes start in it.
      * @returns {import('../../../deformation/bind.js').DeformationField} This body's deformation.
      */
     field(nodePositions, nodeOffset) {
         const { origin, h, cellDims, nodeDims } = this.lattice;
-        return latticeField({ nodePositions, origin, h, cellDims, nodeDims, nodeOffset });
+        return {
+            shader: sampleWgsl,
+            parameters: {
+                deformNodePos: nodePositions,
+                deformOrigin: origin,
+                deformH: h,
+                deformCellDims: cellDims,
+                deformNodeDims: nodeDims,
+                deformNodeOffset: nodeOffset
+            }
+        };
     }
 
     /**

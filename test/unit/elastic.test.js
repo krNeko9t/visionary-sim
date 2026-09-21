@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATERIAL, POISSON_RANGE, lameParameters } from '../../src/body/material.js';
-import { CUBE_CORNERS } from '../../src/deformation/corners.js';
+import { CUBE_CORNERS } from '../../src/sim/discretize/lattice/corners.js';
 import { KUHN_TETS, kuhnRestShapeInverses, tetRestVolume } from '../../src/sim/discretize/lattice/kuhn.js';
 import { mat3Determinant, mat3FromColumns, mat3Multiply } from '../../src/sim/discretize/mat3.js';
 import { collapseScale, elementCompliance } from '../../src/sim/constraints/compliance.js';

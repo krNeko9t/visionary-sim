@@ -6,7 +6,7 @@ import {
     locate,
     trilinearGradients,
     trilinearWeights
-} from '../../src/deformation/sample.js';
+} from '../../src/sim/discretize/lattice/sample.js';
 import { buildLattice, cellNodeIndices } from '../../src/sim/discretize/lattice/lattice.js';
 import { box } from '../../src/assets/shapes.js';
 import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';

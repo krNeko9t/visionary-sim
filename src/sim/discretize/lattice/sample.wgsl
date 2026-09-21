@@ -1,10 +1,12 @@
-// The deformation channel on the GPU: the same maths as `sample.js`, which is
-// the CPU reference the unit tests pin.
+// The lattice's deformation field on the GPU: the same maths as `sample.js`,
+// which is the CPU reference the unit tests pin.
 //
 // This text is pasted into somebody else's shader -- a render material's, a
-// debug view's -- so every name it introduces is prefixed `deform`. `bind.js`
-// supplies the data behind these declarations and is the only thing that does;
-// a shader that includes this file learns nothing about how the solver works.
+// debug view's -- so every name it introduces is prefixed `deform`.
+// `VoxelLattice.field()` supplies the data behind these declarations and is the
+// only thing that does. What a consumer may call is `deformationAt` and nothing
+// else: that and the `Deformation` struct are the contract (`deformation/bind.js`);
+// the rest of this file is the lattice's own.
 
 // Deformed node positions for the whole scene. The solver writes them as vec4f
 // because a storage buffer it writes wants 16-byte alignment; this body's nodes
@@ -27,8 +29,10 @@ struct Deformation {
     gradient: mat3x3f,
 }
 
-// A node's deformed position, for callers whose geometry already sits on the
-// lattice and needs no interpolation.
+// A node's deformed position by its index in the dense grid. Internal to this
+// sampler, not part of the contract: reading a node by index presumes node
+// indices form one dense range, which is the lattice's assumption to make and
+// nobody else's (I5 in `proxyGeometry.js`).
 fn deformedNode(node: u32) -> vec3f {
     return deformNodePos[uniform.deformNodeOffset + node].xyz;
 }
@@ -73,17 +77,4 @@ fn deformationAt(rest: vec3f) -> Deformation {
     }
 
     return Deformation(position, mat3x3f(col0, col1, col2));
-}
-
-// Normals transform by the cofactor matrix, not by F: only the cofactor keeps a
-// normal perpendicular to a surface that F has sheared. Its columns are the
-// cross products of the other two columns of F, so neither an inverse nor a
-// determinant is needed.
-fn deformedNormal(gradient: mat3x3f, restNormal: vec3f) -> vec3f {
-    let cofactor = mat3x3f(
-        cross(gradient[1], gradient[2]),
-        cross(gradient[2], gradient[0]),
-        cross(gradient[0], gradient[1])
-    );
-    return normalize(cofactor * restNormal);
 }

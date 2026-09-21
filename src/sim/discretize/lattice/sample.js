@@ -1,28 +1,23 @@
 import { CUBE_CORNERS } from './corners.js';
 
 /**
- * The channel between the simulation side and the render side.
+ * The lattice's deformation field, on the CPU.
  *
  * The simulation moves a small number of nodes. Any rest point -- a mesh
- * vertex today, a Gaussian centre at M6 -- asks this module where it ended up
- * and how the space around it was stretched. Nothing else crosses.
+ * vertex, a Gaussian centre -- asks the field where it ended up and how the
+ * space around it was stretched. On a lattice both answers come from one
+ * trilinear sampling of the cell the point sits in:
  *
- * Two answers, from one sampling:
  *   position  x(p) = sum_c N_c(u) x_c
  *   gradient  F(p) = sum_c x_c (x) grad N_c(u)
  *
  * The gradient is what lets the render side do more than move points: a mesh
  * turns it into a normal, a Gaussian turns it into a rotated covariance. It
- * falls out of the same shape functions for free, which is the reason this
- * channel can serve both.
+ * falls out of the same shape functions for free.
  *
- * This module depends on nothing. That is deliberate and enforced by
- * `test/unit/architecture.test.js`: a channel that reached into either side
- * would stop being a channel.
- *
- * `sample.wgsl` is the same maths on the GPU, and `bind.js` is how a material
- * gets at it; these functions are the CPU reference the unit tests pin that
- * behaviour against.
+ * `sample.wgsl` is the same maths on the GPU, and `VoxelLattice.field()` is how
+ * a material gets at it; these functions are the CPU reference the unit tests
+ * pin that behaviour against.
  *
  * @typedef {object} LatticeSpace
  * @property {number[]} origin - World position of the min corner of cell (0,0,0).

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { box, sphere } from '../../src/assets/shapes.js';
-import { buildLattice } from '../../src/sim/discretize/lattice/lattice.js';
+import { buildLattice, cellNodeIndices } from '../../src/sim/discretize/lattice/lattice.js';
+import {
+    evaluateDeformationGradient,
+    evaluatePosition,
+    locate,
+    trilinearGradients,
+    trilinearWeights
+} from '../../src/sim/discretize/lattice/sample.js';
 import { VoxelLattice } from '../../src/sim/discretize/lattice/voxelLattice.js';
 import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 
@@ -23,12 +30,60 @@ import { voxelizeSdf } from '../../src/sim/discretize/lattice/voxelize.js';
 const DENSITY = 1000;
 
 /**
- * Each implementation, as a way to make a proxy of a shape.
+ * What a field's `deformationAt` computes, run on the CPU.
  *
- * @type {Record<string, (shape: object) => import('../../src/sim/discretize/proxyGeometry.js').ProxyGeometry>}
+ * @callback Sampler
+ * @param {import('../../src/deformation/bind.js').DeformationField} field - A field
+ *   the implementation handed out.
+ * @param {Float32Array} nodePositions - The array behind the buffer handle the
+ *   field was made from, vec4 per node.
+ * @param {number[]} rest - A rest point.
+ * @returns {{ position: number[], gradient: Float32Array }} The deformed position
+ *   and the column-major deformation gradient there.
+ */
+
+/**
+ * The lattice's shader, run through its CPU reference (`sample.js`).
+ *
+ * This is the one place in the file that reads a field's parameters, and it is
+ * allowed to because it is not a caller: it is this implementation's own twin of
+ * its shader text, standing in for a GPU the tests do not have.
+ *
+ * @type {Sampler}
+ */
+function sampleLattice({ parameters }, nodePositions, rest) {
+    const { deformOrigin: origin, deformH: h, deformCellDims: cellDims, deformNodeDims: nodeDims } = parameters;
+    const { cell, local } = locate({ origin, h, cellDims }, rest[0], rest[1], rest[2]);
+    const corners = cellNodeIndices(nodeDims, cell[0], cell[1], cell[2]);
+
+    // Only the eight corners are read, so only they are copied out of the vec4
+    // buffer into the 3-float layout the reference takes.
+    const xyz = new Float32Array(8 * 3);
+    for (let c = 0; c < 8; c++) {
+        const node = parameters.deformNodeOffset + corners[c];
+        xyz.set(nodePositions.subarray(node * 4, node * 4 + 3), c * 3);
+    }
+    const identity = [0, 1, 2, 3, 4, 5, 6, 7];
+    return {
+        position: evaluatePosition(xyz, identity, trilinearWeights(local)),
+        gradient: evaluateDeformationGradient(xyz, identity, trilinearGradients(local, h))
+    };
+}
+
+/**
+ * Each implementation, as a way to make a proxy of a shape and a way to run the
+ * shader its fields carry.
+ *
+ * @type {Record<string, {
+ *   make: (shape: object) => import('../../src/sim/discretize/proxyGeometry.js').ProxyGeometry,
+ *   sample: Sampler
+ * }>}
  */
 const IMPLEMENTATIONS = {
-    VoxelLattice: shape => new VoxelLattice(buildLattice(voxelizeSdf(shape, { resolution: 6 }), { density: DENSITY }))
+    VoxelLattice: {
+        make: shape => new VoxelLattice(buildLattice(voxelizeSdf(shape, { resolution: 6 }), { density: DENSITY })),
+        sample: sampleLattice
+    }
 };
 
 /** Small shapes: the nearest-neighbour checks below are brute force. */
@@ -83,7 +138,7 @@ function materialNodes(proxy) {
     return Array.from({ length: nodeCount }, (_, n) => n).filter(n => invMass[n] > 0);
 }
 
-for (const [implementation, make] of Object.entries(IMPLEMENTATIONS)) {
+for (const [implementation, { make, sample }] of Object.entries(IMPLEMENTATIONS)) {
     for (const [shapeName, shape] of Object.entries(SHAPES)) {
         describe(`${implementation} of a ${shapeName} as a ProxyGeometry`, () => {
             const proxy = make(shape());
@@ -202,6 +257,45 @@ for (const [implementation, make] of Object.entries(IMPLEMENTATIONS)) {
                 }
                 expect(closest).toBeGreaterThanOrEqual(min * (1 - EPSILON));
                 expect(loneliest).toBeLessThanOrEqual(max * (1 + EPSILON));
+            });
+
+            it('declares the contract function in the shader its field carries (entry 3, I5)', () => {
+                const field = proxy.field({}, 0);
+                expect(typeof field.shader).toBe('string');
+                expect(field.shader).toMatch(/fn\s+deformationAt\s*\(\s*\w+\s*:\s*vec3f\s*\)\s*->\s*Deformation\b/);
+                expect(typeof field.parameters).toBe('object');
+            });
+
+            it('carries a known affine motion exactly at its rest nodes (entry 3, I5, I6)', () => {
+                // Any interpolation worth the name reproduces an affine map, so
+                // this pins the one thing every implementation must agree on
+                // without saying how it interpolates. The body sits at a
+                // non-zero offset in a larger buffer, as it does in a scene.
+                const A = [[1.2, 0.3, -0.1], [-0.2, 0.9, 0.4], [0.05, -0.3, 1.1]];
+                const b = [0.4, -0.7, 0.25];
+                const moved = p => [0, 1, 2].map(row => A[row][0] * p[0] + A[row][1] * p[1] + A[row][2] * p[2] + b[row]);
+
+                const { restPositions, nodeCount } = proxy.dof;
+                const offset = 5;
+                const buffer = new Float32Array((offset + nodeCount + 3) * 4).fill(Number.NaN);
+                for (let n = 0; n < nodeCount; n++) {
+                    buffer.set([...moved(pointAt(restPositions, n)), 0], (offset + n) * 4);
+                }
+
+                const field = proxy.field(buffer, offset);
+                for (const node of materialNodes(proxy)) {
+                    const rest = pointAt(restPositions, node);
+                    const { position, gradient } = sample(field, buffer, rest);
+                    const expected = moved(rest);
+                    for (let axis = 0; axis < 3; axis++) {
+                        expect(position[axis], `node ${node} axis ${axis}`).toBeCloseTo(expected[axis], 5);
+                    }
+                    for (let col = 0; col < 3; col++) {
+                        for (let row = 0; row < 3; row++) {
+                            expect(gradient[col * 3 + row], `node ${node} F[${row}][${col}]`).toBeCloseTo(A[row][col], 4);
+                        }
+                    }
+                }
             });
 
             it('reports its scale as a count and the word for what was counted (entry 5)', () => {

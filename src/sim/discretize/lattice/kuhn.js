@@ -1,4 +1,4 @@
-import { CUBE_CORNERS } from '../../../deformation/corners.js';
+import { CUBE_CORNERS } from './corners.js';
 import { mat3FromColumns, mat3Inverse } from '../mat3.js';
 
 /**
