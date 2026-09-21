@@ -1,3 +1,4 @@
+import { alocasiaScene } from './alocasia.js';
 import { bunnyScene, tankScene } from './tank.js';
 import { footballScene } from './football.js';
 import { mixedScene } from './mixed.js';
@@ -23,6 +24,11 @@ import { splatContactScene, splatScene } from './splats.js';
  * @property {{ min: number[], max: number[] }} bounds - The solver's walls, and
  *   what the camera frames. Plain numbers: the simulation must not depend on
  *   PlayCanvas, and the camera must not depend on the simulation.
+ * @property {() => Promise<unknown>} [prepare] - Finish asynchronous declarations,
+ *   including bounds, before the camera or simulation is constructed.
+ * @property {number[]} [gravity] - World acceleration; omitted keeps simulator defaults.
+ * @property {(stats: object) => void} [validateSimulation] - Reject invalid material
+ *   diagnostics before any drawing or stepping starts.
  * @property {(app: import('playcanvas').AppBase) => void} decorate - Everything
  *   drawn that is not a body.
  * @property {() => Promise<import('../body/softBody.js').SoftBody[]>} createBodies -
@@ -35,6 +41,7 @@ import { splatContactScene, splatScene } from './splats.js';
 
 /** @type {Record<string, Scene>} */
 export const SCENES = {
+    alocasia: alocasiaScene,
     tank: tankScene,
     bunny: bunnyScene,
     football: footballScene,

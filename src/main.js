@@ -1,4 +1,5 @@
 import { attachGrabber } from './ui/grab.js';
+import { showLoadError } from './ui/loadError.js';
 import { createPanel } from './ui/panel.js';
 import { createSplatView } from './render/splats.js';
 import { draw } from './render/draw.js';
@@ -11,18 +12,30 @@ const canvas = document.getElementById('app');
 
 async function boot() {
     const scene = sceneNamed(new URLSearchParams(window.location.search).get('scene'));
+    await scene.prepare?.();
+    const [bodies, scenery] = await Promise.all([
+        scene.createBodies(), scene.scenery?.() ?? []
+    ]);
     const app = await createApp(canvas);
-
-    const { camera } = createStage(app, scene.bounds);
-    scene.decorate(app);
-
-    // Drawn but not stepped: the parts of a capture that are only ever backdrop.
-    const scenery = await (scene.scenery?.() ?? []);
-    for (const capture of scenery) {
-        app.root.addChild(createSplatView(app, capture.name, capture.cloud));
+    let sim;
+    try {
+        sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
+        scene.validateSimulation?.(sim.stats());
+        if (scene.gravity !== undefined) sim.params.gravity = [...scene.gravity];
+    } catch (error) {
+        sim?.destroy();
+        app.destroy();
+        throw error;
     }
 
-    const bodies = await scene.createBodies();
+    // Nothing is displayed or stepped before scene-specific diagnostics pass.
+    const { camera } = createStage(app, scene.bounds);
+    scene.decorate(app);
+    for (const capture of scenery) {
+        if (capture.cloud.count) {
+            app.root.addChild(createSplatView(app, capture.name, capture.cloud));
+        }
+    }
 
     // Every capture says what it measured, simulated or not, because which way
     // up it is and how big it is were declared by hand and a declaration nobody
@@ -33,14 +46,14 @@ async function boot() {
         }
     }
 
-    const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
-
     // Two pieces of geometry carried by the same deformation: what the body
     // looks like, and the proxy's own wireframe. The second starts hidden -- it
     // is what you turn on when the first looks wrong.
     const wireframeViews = sim.simBodies.map(({ body, proxy }, index) => {
         const field = sim.deformationOf(index);
-        app.root.addChild(draw(app, body.render, field, { name: body.name, tint: body.tint }));
+        if (body.render && (body.render.kind !== 'gaussians' || body.render.cloud.count)) {
+            app.root.addChild(draw(app, body.render, field, { name: body.name, tint: body.tint }));
+        }
 
         const view = draw(app, proxy.wireframe(), field, { name: body.name });
         view.enabled = false;
@@ -101,12 +114,13 @@ function report(name, stats) {
     }
 }
 
-boot().catch((err) => {
+export const startup = boot().catch((err) => {
     if (err instanceof WebGpuUnavailableError) {
         canvas.style.display = 'none';
         document.getElementById('unsupported').style.display = 'flex';
         console.error(`[softbody] ${err.message}`);
         return;
     }
-    throw err;
+    showLoadError(canvas, err);
+    console.error(`[softbody] ${err.message}`);
 });

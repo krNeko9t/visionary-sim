@@ -1,0 +1,87 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { draw } from '../../src/render/draw.js';
+import { createSplatView } from '../../src/render/splats.js';
+
+const state = vi.hoisted(() => ({ scene: null, events: [], app: null, sim: null }));
+vi.mock('../../src/scene/scenes.js', () => ({ sceneNamed: () => state.scene }));
+vi.mock('../../src/scene/app.js', () => ({
+    WebGpuUnavailableError: class extends Error {},
+    createApp: async () => state.app
+}));
+vi.mock('../../src/scene/stage.js', () => ({ createStage: (_app, bounds) => {
+    state.events.push(['stage', bounds]); return { camera: {} };
+} }));
+vi.mock('../../src/render/draw.js', () => ({ draw: vi.fn(() => ({})) }));
+vi.mock('../../src/render/splats.js', () => ({ createSplatView: vi.fn(() => ({})) }));
+vi.mock('../../src/ui/panel.js', () => ({ createPanel: () => ({ element: {}, update() {} }) }));
+vi.mock('../../src/ui/grab.js', () => ({ attachGrabber() {} }));
+vi.mock('../../src/sim/simulator.js', () => ({ Simulator: class {
+    constructor(_device, _bodies, bounds) {
+        state.events.push(['sim', bounds]); state.sim = this;
+        this.params = { gravity: [0, -9.81, 0] }; this.simBodies = _bodies.map(body => ({ body, proxy: { wireframe: () => ({ kind: 'lines' }) } }));
+    }
+    deformationOf() { return {}; }
+    stats() { return { scale: [], stepDuration: 0.004, cfl: 0.5, perBody: [] }; }
+    step() { state.events.push(['step', this.params.gravity]); }
+    destroy() { state.events.push(['destroy']); }
+} }));
+
+beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    state.events = [];
+    const listeners = {};
+    state.app = { graphicsDevice: {}, root: { addChild: vi.fn() },
+        on: (event, cb) => listeners[event] = cb,
+        start: () => { state.events.push(['start']); listeners.update(1 / 60); },
+        destroy: vi.fn()
+    };
+    const canvas = { style: {} };
+    vi.stubGlobal('window', { location: { search: '' } });
+    vi.stubGlobal('document', { getElementById: () => canvas,
+        createElement: () => ({ setAttribute() {}, style: {} }), body: { append: vi.fn() } });
+    state.scene = { name: 'test', bounds: null, decorate: vi.fn(),
+        async prepare() { await Promise.resolve(); this.bounds = { min: [-1, 0, -1], max: [1, 1, 1] }; },
+        async createBodies() { return []; }, scenery: async () => [{ name: 'fixed', cloud: { count: 1 } }]
+    };
+});
+
+it.each([[undefined], [[0, 0, 0]]])('prepares final bounds and applies gravity %j before the first step', async gravity => {
+    state.scene.gravity = gravity;
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(state.events[0]).toEqual(['sim', state.scene.bounds]);
+    expect(state.events).toContainEqual(['stage', state.scene.bounds]);
+    expect(state.events).toContainEqual(['step', gravity ?? [0, -9.81, 0]]);
+});
+
+it('rejects material diagnostics before drawing, decorating or starting a frame', async () => {
+    state.scene.validateSimulation = () => { throw new Error('no fixed material support'); };
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(state.app.root.addChild).not.toHaveBeenCalled();
+    expect(state.scene.decorate).not.toHaveBeenCalled();
+    expect(state.events).not.toContainEqual(['start']);
+    expect(state.events).toContainEqual(['destroy']);
+    expect(state.app.destroy).toHaveBeenCalledOnce();
+    expect(document.body.append).toHaveBeenCalledWith(expect.objectContaining({ textContent: expect.stringContaining('no fixed material support') }));
+});
+
+it('keeps scenes without preparation or gravity declarations working', async () => {
+    delete state.scene.prepare;
+    state.scene.bounds = { min: [-1, 0, -1], max: [1, 1, 1] };
+    delete state.scene.scenery;
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(state.events).toContainEqual(['step', [0, -9.81, 0]]);
+});
+
+it.each([null, { kind: 'gaussians', cloud: { count: 0 } }])('skips empty body drawing %j but retains proxy wireframe', async render => {
+    state.scene.createBodies = async () => [{ name: 'empty drawing', source: {}, render }];
+    state.scene.scenery = async () => [{ name: 'empty fixed drawing', cloud: { count: 0 } }];
+    const { startup } = await import('../../src/main.js');
+    await startup;
+    expect(createSplatView).not.toHaveBeenCalled();
+    expect(draw).toHaveBeenCalledExactlyOnceWith(state.app, { kind: 'lines' }, {}, { name: 'empty drawing' });
+    expect(window.wireframeViews[0].enabled).toBe(false);
+});
