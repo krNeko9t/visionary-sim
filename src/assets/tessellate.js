@@ -3,9 +3,9 @@
  *
  * The analytic bodies are defined by distance functions, which the simulator
  * can build its proxy geometry from directly but the renderer has nothing to
- * draw. This turns them
- * into geometry, and only for that: the simulation still reads the distance
- * function, so the triangles carry no authority over the body's shape.
+ * draw. This turns them into geometry, and only for that: the simulation still
+ * reads the distance function, so the triangles carry no authority over the
+ * body's shape.
  *
  * Everything here triangulates a `(u, v)` grid, so each shape only has to say
  * where a point at `(u, v)` is. The one rule a shape must follow is that

@@ -199,8 +199,9 @@ export class VoxelLattice {
  * How each kind of rest geometry becomes an occupancy grid.
  *
  * A table rather than a chain of conditionals, because the number of entries is
- * the thing that grows: every new way of describing an object arrives here, and
- * arriving here should mean adding a line rather than editing a branch.
+ * the thing that grows: every new way of describing an object needs a way to
+ * fill a lattice from it, and that should mean adding a line rather than
+ * editing a branch.
  *
  * @type {Record<string, (source: any, options: object) => import('./voxelize.js').OccupancyGrid>}
  */
@@ -214,7 +215,7 @@ const VOXELIZERS = {
  * @param {import('../../../body/softBody.js').SoftBody} body - The body to discretise.
  * @returns {VoxelLattice} Its lattice, cells `body.elementSize` across.
  */
-export function discretizeBody(body) {
+export function proxyFor(body) {
     const { source, elementSize, material } = body;
     const voxelize = VOXELIZERS[source.kind];
     if (!voxelize) {

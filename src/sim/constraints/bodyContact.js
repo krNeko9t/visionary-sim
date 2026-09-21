@@ -106,7 +106,7 @@ export class BodyContact {
                     `up to ${worstCase} nodes into one ${this.grid.bucketSize.toFixed(4)}m contact ` +
                     `bucket, over the ${BUCKET_SLOTS}-slot capacity. Buckets that dense fall back ` +
                     'to an O(surfaceCount) scan every substep instead of staying rare -- narrow ' +
-                    'the resolution gap between bodies in this scene.'
+                    'the element size gap between bodies in this scene.'
                 );
             }
         }

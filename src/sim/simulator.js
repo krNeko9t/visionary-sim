@@ -437,7 +437,7 @@ export class Simulator {
     }
 
     /**
-     * Moves the grab target of the grab {@link grab} started to a world position.
+     * Moves the grab target of the current {@link grab} to a world position.
      *
      * @param {number[]} position - World position to move the grab target to.
      */

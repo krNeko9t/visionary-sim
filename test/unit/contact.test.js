@@ -106,7 +106,7 @@ describe('the broadphase grid', () => {
     const grid = broadphaseGrid(bounds, bucketSize);
 
     it('covers the bounds with a margin bucket on every side', () => {
-        expect(grid.origin).toEqual([bounds.min[0] - bucketSize, bounds.min[1] - bucketSize, bounds.min[2] - bucketSize]);
+        expect(grid.origin).toEqual(bounds.min.map(min => min - bucketSize));
         for (let axis = 0; axis < 3; axis++) {
             const span = grid.origin[axis] + grid.dims[axis] * bucketSize;
             expect(span).toBeGreaterThanOrEqual(bounds.max[axis]);

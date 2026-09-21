@@ -21,5 +21,5 @@ import 进去。
 ## Consequences
 
 - `discretize.js` 的绑定名必须中立：它能写路径，不能写 `VoxelLattice`、`voxelize`——那些是点阵的知识，
-  搬进了 `lattice/voxelLattice.js` 的 `discretizeBody()`。
+  搬进了 `lattice/voxelLattice.js` 的 `proxyFor()`。
 - JSDoc 里的 `import('./lattice/…')` 类型标注不算 import 语句，词表照样扫：类型标注是知识边。

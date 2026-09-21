@@ -4,10 +4,10 @@
  * This has to happen here, upstream of everything, and the reason is a rule
  * from the discretisation side: a rendered Gaussian that sits in a part of the
  * proxy geometry with no material reads a deformation gradient torn between
- * nodes that moved and nodes that have no mass, and shades as a black speck. So whatever the simulation refuses
- * to enclose must not be drawn either -- one cloud feeds both banks, and a
- * filter that ran on only one of them would break the invariant rather than
- * enforce it.
+ * nodes that moved and nodes that have no mass, and shades as a black speck.
+ * So whatever the simulation refuses to enclose must not be drawn either --
+ * one cloud feeds both banks, and a filter that ran on only one of them would
+ * break the invariant rather than enforce it.
  *
  * It also has to happen before the object can be measured at all. `bread.ply`
  * is 2.6 units across raw and 0.53 across once the near-transparent splats are

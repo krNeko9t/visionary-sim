@@ -1,5 +1,5 @@
 import { elasticConstraints as elasticOfTheOnlyKind } from './lattice/elasticCells.js';
-import { discretizeBody as proxyOfTheOnlyKind } from './lattice/voxelLattice.js';
+import { proxyFor } from './lattice/voxelLattice.js';
 
 /**
  * Turns a body the author described into degrees of freedom the solver can move.
@@ -16,7 +16,7 @@ import { discretizeBody as proxyOfTheOnlyKind } from './lattice/voxelLattice.js'
  * @returns {import('./proxyGeometry.js').ProxyGeometry} Its simulation geometry.
  */
 export function discretizeBody(body) {
-    return proxyOfTheOnlyKind(body);
+    return proxyFor(body);
 }
 
 /**
