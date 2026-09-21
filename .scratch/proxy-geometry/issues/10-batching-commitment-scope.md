@@ -2,7 +2,7 @@
 
 Status: open
 Type: grilling
-Blocked by: 03, 05
+Blocked by: 03, 05, 13
 
 ## Question
 
@@ -59,3 +59,12 @@ Blocked by: 03, 05
 - 不动 `src/`：这张票只改文档对既有代码的描述。
 
 ## Comments
+
+### 05 的结论对本票的影响（2026-09-21）
+
+- 第 1 问的第二个候选「挂到 05 拆出来的 4.2 上位层下面」**作废**：05 没有拆根，4.2 已从 §四
+  删除、转成 [ADR-0005](../../../docs/adr/0005-voxel-lattice-proxy-geometry.md)。
+- 本票改为挂在 [13 · §四 其余各根转成 ADR](13-remaining-roots-to-adr.md) 后面。13 按
+  [ADR-0004](../../../docs/adr/0004-architecture-roots-become-adrs.md) 的判据转 4.3 时，桶容量
+  硬界大概率被判为 `broadphase.js` 的模块内部事、从文档里消失，第 3、4 问会跟着缩小。等 13
+  落地再做，免得两张票同时改 4.3。

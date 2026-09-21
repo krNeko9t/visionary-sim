@@ -89,3 +89,10 @@ Blocked by: 03
   改名不是红转绿；单独为八处注释再开一次改动是白开。
 - **它不进 `CONTEXT.md`**：惰性节点是 4.2 的后果、不是领域概念，理由见
   [ADR-0003](../../../docs/adr/0003-material-inverse-mass-means-inactive-only.md) 末条。
+
+### 05 的结论对本票的影响（2026-09-21）
+
+4.2 那句代价声明被**删除**，不再写成文字（[ADR-0004](../../../docs/adr/0004-architecture-roots-become-adrs.md)）。
+它的真相现在**就是本票的词表测试**：「换掉点阵只动 `sim/discretize/lattice/`」要靠「只有那个目录
+可以说 lattice」来兑现。所以决定临时豁免哪个区域时，豁免注释要说清它是在掩盖一处**真实的**
+代价，而不是误伤。

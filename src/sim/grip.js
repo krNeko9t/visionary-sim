@@ -68,7 +68,7 @@ export function singleNode(positions, invMass, anchor, options) {
  * and translate rigidly with the hand, welding two bodies that otherwise
  * only relate to each other through `BodyContact`. It would also make
  * whether the ball crosses into a neighbour depend on the resting gap
- * between them, which ARCHITECTURE.md §四 4.2 records as "about one cell" --
+ * between them, which docs/adr/0005 records as "about one cell" --
  * a lattice-resolution quantity. Letting the ball cross it would smuggle
  * resolution dependence back in through the one door this module exists to
  * close.

@@ -31,3 +31,12 @@ Type: task
 - 不动 `ARCHITECTURE.md`、不动 `STATUS.md`。
 
 ## Comments
+
+### 05 的结论对本票的影响（2026-09-21）
+
+- 第 2 步要写进 ADR-0001 的「为什么不换 `ARCHITECTURE.md`§四」**不再成立**：05 把 §四 的根改成
+  逐条转 ADR，理由记在 [ADR-0004](../../../docs/adr/0004-architecture-roots-become-adrs.md)。
+  ADR-0001 只记 `DECISIONS.md` → `docs/adr/` 这一次切换，并指向 0004。
+- 编号：0001 仍留给本票；05 已用掉 0004、0005。
+- `CLAUDE.md` 的 `ARCHITECTURE.md` 一行已被 05 改过（加了「细节写在代码旁边、可换的选择写成
+  ADR」），改 `DECISIONS.md` 那一行时不要覆盖它。
