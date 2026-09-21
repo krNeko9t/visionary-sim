@@ -1,3 +1,4 @@
+import { materialCounts } from './materialCounts.js';
 import { BUFFERUSAGE_COPY_DST, BUFFERUSAGE_COPY_SRC, StorageBuffer } from 'playcanvas';
 
 import stateWgsl from './state.wgsl?raw';
@@ -126,18 +127,8 @@ export class Particles {
      * @returns {{ materialNodes: number, staticNodes: number, movableNodes: number }} Counts.
      */
     materialCounts(bodyIndex) {
-        let materialNodes = 0;
-        let staticNodes = 0;
-        const offset = this.offsets[bodyIndex];
-        for (let n = 0; n < this.bodies[bodyIndex].nodeCount; n++) {
-            if (this.invMass[offset + n] > 0) {
-                materialNodes++;
-                if (this.staticPrescribed.has(offset + n)) {
-                    staticNodes++;
-                }
-            }
-        }
-        return { materialNodes, staticNodes, movableNodes: materialNodes - staticNodes };
+        return materialCounts(this.invMass, this.staticPrescribed,
+            this.offsets[bodyIndex], this.bodies[bodyIndex].nodeCount);
     }
 
     /**

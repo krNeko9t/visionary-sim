@@ -1,9 +1,9 @@
 import { loadCloud } from '../assets/splats/cloud.js';
 import { readPly } from '../assets/splats/ply.js';
-import { cleanCloud } from '../assets/splats/clean.js';
+import { prepareAlocasiaData } from './alocasiaData.js';
 import { rawBounds } from '../assets/splats/measure.js';
 import { SoftBody } from '../body/softBody.js';
-import { createMetricRegion, splitCloudByRegion } from './metricRegion.js';
+import { createMetricRegion } from './metricRegion.js';
 
 /**
  * Already transformed offline: no capture placement or second normalisation.
@@ -27,13 +27,7 @@ export function createAlocasiaScene({ r } = {}) {
             loadCloud('/splats/alocasia/foreground.ply'),
             loadMovingPoints('/splats/alocasia/moving_part_points.ply')
         ]);
-        const region = createMetricRegion(samples, r);
-        // Validate centres before cleaning, so opacity cannot hide corrupt input.
-        if (!raw.positions.every(Number.isFinite)) {
-            throw failure('foreground positions must contain finite xyz coordinates');
-        }
-        const cloud = cleanCloud(raw);
-        const { movable, fixed } = splitCloudByRegion(cloud, region);
+        const { cloud, region, movable, fixed } = prepareAlocasiaData(raw, samples, r);
         counts = { movingSamples: samples.length / 3, foreground: cloud.count,
             movableGaussians: movable.count, fixedGaussians: fixed.count };
         if (!samples.length) throw failure('no moving samples');
