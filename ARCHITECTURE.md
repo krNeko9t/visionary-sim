@@ -27,11 +27,12 @@
 
 每个目录承担一个**关注点**，名字取自关注点而不是取自实现，所以更换算法时目录结构不变。
 
-这张表与 `src/` 的实际目录由 `test/unit/docs.test.js` 双向核对：表里写着的目录必须存在，
+这张表与 `src/` 及根目录 `tools/` 的实际目录由 `test/unit/docs.test.js` 双向核对：表里写着的目录必须存在，
 存在的目录必须在表里。读这张表因此等于读那棵树，不需要信任谁记得更新它。
 
 | 目录 | 承担 |
 |---|---|
+| `../tools/` | 离线资产准备；输出运行时可读资产，不被运行时代码引用 |
 | `main.js` | 组装：把各层接成一个可运行的程序 |
 | `assets/` | 几何进入系统的入口 |
 | `assets/splats/` | 3DGS 那道门：容器、解激活、清洗、量、摆 |
@@ -46,6 +47,8 @@
 | `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动。持有的是契约（`DeformationField` 与 WGSL 的 `deformationAt`），不是实现：采样器由离散化交出 |
 | `render/` | 把被形变带动的几何画出来；不知道它从哪来 |
 | `ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
+
+表中路径相对 `src/`；`../tools/` 是仓库根目录的离线工具。
 
 `wgsl/` 不在表内：那是所在目录的着色器文本，不是另一个关注点。
 
@@ -96,7 +99,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | `render/` 里不出现离散化的词汇（同上，反向。这条决定体素点阵能不能真的换掉） | 同上 |
 | 只有 `sim/discretize/lattice/` 可以说点阵的词，也只有 `sim/discretize/` 可以 import 进那个目录——「换掉点阵只动那个目录与选用它的那一行」 | 同上 |
 | 代理几何的接口不变量（含球接触的密封条件） | `test/unit/proxyGeometry.test.js` |
-| 上面§二那张表 ↔ `src/` 实际目录 | `test/unit/docs.test.js` |
+| 上面§二那张表 ↔ `src/` 与 `tools/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
 | 凡是会被交出来的几何都有画法 | `test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |

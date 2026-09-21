@@ -48,7 +48,7 @@ const NOT_AN_AREA = 'wgsl';
  * @returns {string[]} Directory paths relative to `src`, using forward slashes.
  */
 function directories(dir = SRC) {
-    return readdirSync(dir).flatMap((entry) => {
+    const dirs = readdirSync(dir).flatMap((entry) => {
         const full = join(dir, entry);
         if (!statSync(full).isDirectory()) {
             return [];
@@ -57,6 +57,7 @@ function directories(dir = SRC) {
         const nested = directories(full);
         return entry === NOT_AN_AREA ? [] : [here, ...nested];
     });
+    return dir === SRC ? [...dirs, '../tools', ...directories(join(ROOT, 'tools'))] : dirs;
 }
 
 /**

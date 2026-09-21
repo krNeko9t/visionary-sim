@@ -9,6 +9,7 @@ coverage/
 # than carried in history. The unit tests run on synthetic clouds for this
 # reason; what these two are for is looking at.
 public/splats/*.ply
+public/splats/alocasia/
 
 # Local environment files
 .env

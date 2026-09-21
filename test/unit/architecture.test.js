@@ -69,6 +69,7 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  *   opinion about the simulation's state in the interface.
  */
 const ALLOWED = {
+    '../tools': ['assets', 'scene'], // Offline consumers only; ADR-0017.
     'main.js': ['scene', 'sim', 'render', 'ui'],
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
@@ -86,7 +87,7 @@ const ALLOWED = {
 
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
 const REQUIRED = [
-    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/discretize/lattice',
+    '../tools', 'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/discretize/lattice',
     'sim/state', 'sim/constraints', 'sim/solver', 'scene', 'ui'
 ];
 
@@ -179,13 +180,14 @@ const INTERACTION = [/\bgrab/i, /\bpointer/i, /\bdrag/i, /\bgrip/i];
  * @returns {string[]} Source paths relative to `src`, using forward slashes.
  */
 function sourceFiles(dir = SRC) {
-    return readdirSync(dir).flatMap((entry) => {
+    const files = readdirSync(dir).flatMap((entry) => {
         const full = join(dir, entry);
         if (statSync(full).isDirectory()) {
             return sourceFiles(full);
         }
         return /\.(js|wgsl|css)$/.test(entry) ? [relative(SRC, full).replaceAll('\\', '/')] : [];
     });
+    return dir === SRC ? [...files, ...sourceFiles(join(SRC, '../tools'))] : files;
 }
 
 /**
@@ -348,6 +350,14 @@ describe('the layering the file tree claims', () => {
             });
 
         expect(leaks, `\n${leaks.join('\n')}\n`).toEqual([]);
+    });
+
+    it('keeps offline tools out of runtime and limits their shared scene dependency', () => {
+        expect(EDGES.filter(({ from, to }) => !from.startsWith('../tools/') && to.startsWith('../tools/'))).toEqual([]);
+        expect(EDGES.filter(({ from, to }) => from.startsWith('../tools/') && to.startsWith('scene/') && to !== 'scene/metricRegion.js')).toEqual([]);
+        for (const file of sourceFiles().filter(file => !file.startsWith('../tools/'))) {
+            expect(readFileSync(join(SRC, file), 'utf8')).not.toMatch(/(?:from\s*|import\s*\()(['"])node:/);
+        }
     });
 
     it('has no cycles', () => {
