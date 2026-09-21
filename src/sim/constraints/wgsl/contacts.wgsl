@@ -53,9 +53,10 @@ var<storage, read_write> contactGrid: array<atomic<u32>>;
 //
 // A bucket is one contact diameter across, so it can only be crowded where
 // material is dense. Thirty-two covers both bodies' lattice corners in an
-// ordinary overlap; past it the highest surface indices are dropped
-// only after the fixed capacity. This bounded local list avoids a prefix sum,
-// global sort and variable allocation.
+// ordinary overlap; past that fixed capacity the overflow is dropped, and
+// the sort order makes what is dropped exactly the highest surface indices.
+// This bounded local list avoids a prefix sum, global sort and variable
+// allocation.
 const BUCKET_SLOTS: u32 = 32u;
 
 uniform gridOrigin: vec3f;
