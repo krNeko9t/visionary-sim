@@ -74,3 +74,18 @@ Blocked by: 03
 - 跑一遍测试，红过再绿过——只加规则不验证，等于又一句会过期的承诺。
 
 ## Comments
+
+## 04 交来的一个词（2026-09-21）
+
+**`inert` → `inactive`**，随本票那一趟落盘。
+
+- **词已定**：`inactive node` 是共识词（MPM：arXiv:2605.28525 §2.1.1；fictitious domain FEM：
+  Court & Fournié, arXiv:1502.03953 §3），`inert` 是仓库自造的。出处见
+  [01](01-boundary-condition-vocabulary.md)。
+- **是一次纯注释替换**：`inert` 在 `src/` 里没有一个标识符叫这个名字，只出现在注释与 jsdoc——
+  `lattice.js:9,16,18,114`、`particles.js:27,28,66,81`、`pick.js:22`、`grip.js:86`、
+  `voxelize.js:190`。六个文件里有四个本来就在 02 的清单上。
+- **为什么归本票而不是 04**：本图 Notes 给 `src/` 的许可是「护栏红转绿所需的最小改动」，注释
+  改名不是红转绿；单独为八处注释再开一次改动是白开。
+- **它不进 `CONTEXT.md`**：惰性节点是 4.2 的后果、不是领域概念，理由见
+  [ADR-0003](../../../docs/adr/0003-material-inverse-mass-means-inactive-only.md) 末条。

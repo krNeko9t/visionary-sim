@@ -42,14 +42,13 @@ Label: wayfinder:map
 - [01 · 行业里怎么称呼「被规定的自由度」](issues/01-boundary-condition-vocabulary.md)：族名定为 `prescribed`，下分 static（永久，原「锚定」）与 kinematic（临时，KinematicDrive）；`anchor` 全行业指「约束的附着点」且仓库 `grip.js` 已占用，弃用；「惰性节点」共识词是 `inactive node`，但它属 4.2 后果、不入族。
 - [02 · 四面体反事实审计](issues/02-tetrahedral-counterfactual.md)：代价声明错两次——跟着走的是 `sim/constraints/` 四文件重写 + 四文件改证明、`simulator.js`、`deformation/`（含 channel 里的 `CUBE_CORNERS`）、`sim/debug/` 整份、以及 `body/`/`scene/`/`main.js`/`ui/`（`resolution` 的单位）；守住的只有 `sim/state/` 与 `render/`。漏网的承重假定：稠密索引寻址（惰性节点是它的后果）、静止形状全等、接触桶容量硬界依赖最小节点间距、点定位是一次除法。B/C 两档的分界线就是拆根的位置。
 - [03 · 代理几何的类型边界](issues/03-proxy-geometry-type-boundary.md)：`Lattice` 拆成中立 `ProxyGeometry` 与住在 `sim/discretize/lattice/` 的 `VoxelLattice`，11 个公开字段换成 9 条接口条目（含 6 条不变量）。中立的 `ElasticCells` 不再存在，离散化直接交出自己的弹性约束；接触收「边界节点 + 每节点密封半径」而非约束，判据是「约束是否跨物体耦合」；采样器三件搬出 `deformation/`，`deformedNode` 不进中立契约；线框调试视图升为一条渲染路径（`wireframe()`），`sim/debug/` 目录消失。`spacing` 与 `cflLength` 必须是两条——它们在点阵上都读作 `h` 纯属均匀网格的巧合。
+- [04 · 「被规定的自由度」这一族的名字](issues/04-prescribed-dof-family.md)：族名收伞为 `prescribed`，下分 static（属于物体）与 kinematic（属于一次交互）——分界轴是**归属**，「永久/临时」是它推出来的后果、不写进词汇表；族定义对方向性保持中立。规则：**材料数组里的零只表示惰性，被规定从不写进材料数组**，于是「共用一个编码」不是纠缠的根因、把不同归属的东西写进同一个数组才是。产出根目录 `CONTEXT.md`（9 条）与 ADR-0002/0003；连带收窄 03 的 I1，`inert`→`inactive` 交给 06。
 
 ## Not yet specified
 
-- **「只在某个方向上被规定」的自由度说不出来**。`invMass` 是标量，等于假定一个自由度要么整个
-  被规定、要么整个自由；Baraff-Witkin §5.1 用 3×3 质量矩阵表达「只在法向被约束」。01 带回来
-  的这条不在原图里。**线已经画完（03）**：新接口的 I1 把「`invMass[i] === 0` 表示该槽位此刻
-  不被解算」写成了一条不变量条款，于是这个问题变成「I1 要不要从标量换成 3×3」——但还差 04
-  定完族名（方向性是不是 prescribed 族的一个维度），才具备开票的锐度。
+- **`scene/` 一个目录装了两件事**：`scenes.js`（这一次跑什么）与 `stage.js`（周围画什么），
+  §二那一行已经把它们并列写着。「场景」与「环境」是不是两个词，04 判定够不上首批的收录门槛
+  （没有撞名），但也没有看清楚。比 12 更暗一档。
 - **自由度必须与被渲染的几何同源吗**。PhysDreamer 自己用的是降采样的无结构驱动子，不是与点云
   同源的网格。这个问题被排除在本轮试金石之外，等 PhysDreamer 场景真的回来再说。
 - **`STATUS.md` 与 issue tracker 的重叠**。11a 把它挡在本图之外，但重叠没有消失。
@@ -65,4 +64,9 @@ Label: wayfinder:map
 - **写给 agent 的 `CLAUDE.md` 防歪规则**。使用者明确不要。
 - **把 `ARCHITECTURE.md` §四拆成 ADR**。§四的「根→后果」结构是平铺 ADR 表达不了的，拆掉会毁掉
   本仓库少数做对了的地方。
+- **把标量 `invMass` 换成 3×3 质量矩阵**（「只在某个方向上被规定」，Baraff-Witkin §5.1）。
+  原本是本图的一块雾，04 把它挪出来：04 已定下方向性是 prescribed 族的一个**维度**，且
+  `CONTEXT.md` 的族定义对它保持中立，所以将来加它改的是实现、不是定义。而标量换 3×3 在点阵上
+  和在四面体网格上**是同一个问题**——它不被试金石撞出来，与「代理几何不再默认是体素点阵」正交。
+  性质同「真的实现第二个离散化后端」：那份 spec 的下游。
 - **迁移 `DECISIONS.md` 的 16 条旧决策**。过去时的记录，转格式除了行数什么都不产生。
