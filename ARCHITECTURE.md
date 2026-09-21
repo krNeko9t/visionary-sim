@@ -38,7 +38,8 @@
 | `body/` | 被模拟对象的自我描述：身份、材质、静止形状。要解算的那份几何与要画的那份分开写——网格物体两者重合，扫描物体不重合 |
 | `scene/` | 这一次跑什么、在什么环境里观察它：边界在哪、里面有什么、周围画什么 |
 | `sim/` | 模拟侧。`simulator.js` 是对外唯一入口，也是下面四段的装配处 |
-| `sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云 |
+| `sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云。对外只交出中立的 `ProxyGeometry`（条目与不变量写在 `proxyGeometry.js`） |
+| `sim/discretize/lattice/` | 代理几何的体素点阵实现。全仓库只有这里可以说点阵的词 |
 | `sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
 | `sim/constraints/` | 自由度要服从什么。一种约束自带它的数据、它的批次规则和它的投影核 |
 | `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
@@ -94,6 +95,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | `deformation/` 里不出现渲染器的词汇（**知识边**，import 表看不见） | 同上 |
 | `render/` 里不出现离散化的词汇（同上，反向。这条决定体素点阵能不能真的换掉） | 同上 |
 | 只有 `sim/discretize/lattice/` 可以说点阵的词；今天仍在说的文件逐个列进债单，债单只减不增——它就是「换掉点阵要动什么」 | 同上 |
+| 代理几何的接口不变量（含球接触的密封条件） | `test/unit/proxyGeometry.test.js` |
 | 上面§二那张表 ↔ `src/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
 | 凡是会被交出来的几何都有画法 | `test/unit/renderPaths.test.js` |

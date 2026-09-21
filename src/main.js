@@ -39,11 +39,11 @@ async function boot() {
     // Two ways of looking at the same deformation: the surface, and the solver's
     // own insides. The second starts hidden -- it is what you turn on when the
     // first looks wrong.
-    const latticeViews = sim.simBodies.map(({ body, lattice }, index) => {
+    const wireframeViews = sim.simBodies.map(({ body, proxy }, index) => {
         const field = sim.deformationOf(index);
         drawBody(app, body, field);
 
-        const view = createLatticeView(app, lattice, field);
+        const view = createLatticeView(app, proxy.wireframe(), field);
         view.enabled = false;
         app.root.addChild(view);
         return view;
@@ -51,7 +51,7 @@ async function boot() {
 
     const panel = createPanel(sim, {
         onProxyToggle: (visible) => {
-            for (const view of latticeViews) {
+            for (const view of wireframeViews) {
                 view.enabled = visible;
             }
         }
@@ -71,7 +71,7 @@ async function boot() {
     report(scene.name, sim.stats());
 
     // Handy from the console; the panel covers everything routine.
-    Object.assign(window, { app, sim, scene, bodies, latticeViews });
+    Object.assign(window, { app, sim, scene, bodies, wireframeViews });
     return app;
 }
 
@@ -117,14 +117,15 @@ function drawBody(app, body, field) {
 function report(name, stats) {
     console.info(
         `[softbody] scene=${name} device=${stats.deviceType} bodies=${stats.bodyCount} ` +
-        `cells=${stats.cells} tets=${stats.tets} nodes=${stats.nodes} ` +
+        `${stats.scale.map(({ label, value }) => `${label}=${value}`).join(' ')} nodes=${stats.nodes} ` +
         `step=${(stats.stepDuration * 1000).toFixed(3)}ms cfl=${stats.cfl.toFixed(2)} ` +
         `maxSteps/frame=${stats.maxStepsPerFrame} ` +
         `limited by "${stats.limitedBy}"`
     );
     for (const body of stats.perBody) {
         console.info(
-            `[softbody]   ${body.name}: h=${body.h.toFixed(4)}m cells=${body.cells} ` +
+            `[softbody]   ${body.name}: spacing=${body.spacing.min.toFixed(4)}m ` +
+            `${body.scale.label}=${body.scale.value} ` +
             `gamma=${body.gamma.toFixed(3)} collapses below ${(body.collapseScale * 100).toFixed(0)}%`
         );
     }

@@ -8,9 +8,9 @@
  * fixed and lets only the number of steps submitted in a frame vary.
  *
  * This module knows no constraint names and no GPU API. It receives one scalar
- * stability rate in cell-crossings per second and returns plain counts and
- * durations. The simulator is the seam that connects those numbers to the
- * dispatch sequence.
+ * stability rate -- how many times per second the fastest elastic wave crosses
+ * its body's `cflLength` -- and returns plain counts and durations. The
+ * simulator is the seam that connects those numbers to the dispatch sequence.
  */
 
 /** CFL kept below one so XPBD projections remain compliance-damped. */
@@ -32,7 +32,7 @@ export const MAX_STEPS_PER_FRAME = 24;
 /**
  * Fixed physical-step duration for a scene.
  *
- * @param {number} waveRate - Fastest elastic wave in cell crossings per second.
+ * @param {number} waveRate - Fastest elastic wave in `cflLength` crossings per second.
  * @returns {number} Seconds per physical step.
  */
 export function stableStepDuration(waveRate) {

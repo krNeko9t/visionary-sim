@@ -189,7 +189,7 @@ export function createPanel(sim, { onProxyToggle }) {
             body && body.collapseScale > COLLAPSE_LIMIT ? 'warn' : ''
         );
         readouts.size.set(body
-            ? `${body.cells} / ${stats.cells} 格 · ${stats.contactNodes} 触点`
+            ? `${scaleReadout(body.scale, stats.scale)} · ${stats.contactNodes} 触点`
             : '—');
         readouts.rate.set(`${fps.toFixed(0)} fps`);
 
@@ -239,6 +239,21 @@ export function timingReadouts(stats) {
             tone: stats.droppedTime > 0 ? 'bad' : ''
         }
     };
+}
+
+/**
+ * One body's scale against the scene's total of the same kind of thing.
+ *
+ * The word comes with the count, from whoever did the counting: the panel does
+ * not know what a body was cut into, and only adds like to like.
+ *
+ * @param {import('../sim/discretize/proxyGeometry.js').Scale} body - The selected body's scale.
+ * @param {import('../sim/discretize/proxyGeometry.js').Scale[]} scene - Scene totals, one per label.
+ * @returns {string} The readout.
+ */
+export function scaleReadout(body, scene) {
+    const total = scene.find(({ label }) => label === body.label)?.value ?? body.value;
+    return `${body.value} / ${total} ${body.label}`;
 }
 
 /**

@@ -39,6 +39,11 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  * - `sim/discretize` may not reach `sim/state`, `sim/constraints` or
  *   `sim/solver`. How an object is cut up must not depend on who solves it, so
  *   that either can be replaced alone.
+ * - `sim/discretize/lattice` reaches what `sim/discretize` does, plus the
+ *   neutral side of `sim/discretize` itself. It is a row of its own because it
+ *   is the one directory allowed to know the proxy is a lattice
+ *   ({@link DISCRETISATION_RESIDENT}), so what it may reach is worth saying
+ *   out loud rather than inheriting by prefix (ADR-0012).
  * - `sim/state` may reach nothing at all. It holds the degrees of freedom and
  *   must not know what any of them are for. This is the seam that lets a second
  *   kind of constraint exist: contact between bodies shares nothing with
@@ -63,6 +68,7 @@ const ALLOWED = {
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
     'sim/discretize': ['deformation', 'assets'],
+    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets'],
     'sim/state': [],
     'sim/constraints': ['sim/state', 'sim/discretize', 'body'],
     'sim/solver': ['sim/state'],
@@ -75,8 +81,8 @@ const ALLOWED = {
 
 /** Areas that must exist. Deleting one is a design change, not a refactor. */
 const REQUIRED = [
-    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/state',
-    'sim/constraints', 'sim/solver', 'scene', 'ui'
+    'assets', 'body', 'deformation', 'render', 'sim', 'sim/discretize', 'sim/discretize/lattice',
+    'sim/state', 'sim/constraints', 'sim/solver', 'scene', 'ui'
 ];
 
 /**
@@ -118,9 +124,10 @@ const DISCRETISATION = [
 
 /**
  * The one directory that may speak {@link DISCRETISATION}: it holds the
- * lattice, so it is the only place that has to know one exists. It does not
- * exist yet -- the move that fills it is the proxy-geometry refactor -- and the
- * rule is stated against it anyway, because the rule is what that move is for.
+ * lattice, so it is the only place that has to know one exists. Everything
+ * else sees a body's discretisation as a `ProxyGeometry`
+ * (`sim/discretize/proxyGeometry.js`). The proxy-geometry refactor is still
+ * moving the lattice's files in; {@link DISCRETISATION_DEBT} is what is left.
  */
 const DISCRETISATION_RESIDENT = 'sim/discretize/lattice';
 
@@ -155,22 +162,15 @@ const DISCRETISATION_DEBT = {
     'deformation/sample.js': 'moves: the sampler is the lattice\'s, the channel keeps only the contract',
     'deformation/sample.wgsl': 'moves with sample.js',
     'deformation/corners.js': 'moves with sample.js',
-    'sim/debug/latticeView.js': 'becomes `wireframe()` in the resident plus a path in render/',
 
-    // Stays, and stops reaching into the lattice once the neutral interface exists.
+    // Stays, and stops speaking the lattice once the neutral interface covers it.
     'sim/discretize/discretize.js': 'the dispatch table stays; its names go neutral',
     'deformation/bind.js': '`latticeField()` moves out, the typedef and contract stay',
-    'sim/simulator.js': 'reads lattice fields directly; goes through the interface',
-    'sim/grip.js': 'aims with `h`; reads `spacing` instead',
-    'sim/constraints/bodyContact.js': 'derives the seal radius from `h`; reads `contactSurface().radii`',
-    'sim/constraints/broadphase.js': 'bucket bound from `h`; reads the measured `spacing.min`',
-    'sim/constraints/compliance.js': 'rest volume and wave ratio from `h`; one moves in, one reads `cflLength`',
-    'sim/constraints/wgsl/collide.wgsl': 'explains contact by the lattice\'s approximation',
-    'sim/constraints/wgsl/contacts.wgsl': 'bucket capacity and colouring argued from lattice corners',
-    'sim/constraints/wgsl/sort.wgsl': 'bucket occupancy argued from lattice nodes',
-    'sim/solver/timestep.js': 'stability in cell crossings; becomes `cflLength`',
-    'main.js': 'builds the lattice debug view and logs `h`/cells',
-    'ui/panel.js': 'reads `cells` for the scale readout; becomes `scale()`',
+    'sim/simulator.js': 'hands `ElasticCells` the lattice behind each proxy until it moves in',
+    'sim/constraints/bodyContact.js': 'the broadphase bucket is still named a `cell`',
+    'sim/constraints/broadphase.js': 'the broadphase bucket is still named a `cell`',
+    'sim/constraints/compliance.js': 'rest volume from `h`; moves in with the elastic constraint',
+    'main.js': 'imports the wireframe view from `sim/debug/latticeView.js` until it is a render path',
     'body/material.js': 'the stability bound is argued per cell and cites `cells.wgsl`',
 
     // `resolution` is counted in cells along the longest axis; its unit changes.

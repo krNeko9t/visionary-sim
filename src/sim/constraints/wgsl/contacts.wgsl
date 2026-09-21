@@ -7,13 +7,13 @@
 // nothing of the elastic constraint's -- the two share the nodes and not one
 // line more.
 //
-// Why a grid and not the parity trick next door: that trick works because two
-// cells of one colour can never share a node, which holds across bodies only
-// because each body owns a disjoint range of nodes. A contact is a pair of
-// nodes from *different* bodies, so there is no parity to appeal to and no
-// colouring to be had -- the pairs are not even known until the substep runs.
-// This constraint is therefore Jacobi: every node gathers what the substep
-// wants to do to it, and the average is applied afterwards.
+// Why a grid and not the batching next door: the elastic constraint fixes its
+// batches before the simulation starts, and no two of its elements in one batch
+// share a node -- which holds across bodies because each body owns a disjoint
+// range of nodes. A contact is a pair of nodes from *different* bodies, and the
+// pairs are not even known until the substep runs, so there is nothing to batch
+// ahead of time. This constraint is therefore Jacobi: every node gathers what
+// the substep wants to do to it, and the average is applied afterwards.
 
 // One record per node that can take part in a contact -- the boundary nodes,
 // which are the only ones another body can reach.
@@ -52,9 +52,14 @@ var<storage, read_write> contactGrid: array<atomic<u32>>;
 // regardless of GPU thread order.
 //
 // A bucket is one contact diameter across, so it can only be crowded where
-// material is dense. Thirty-two covers both bodies' lattice corners in an
-// ordinary overlap; past that fixed capacity the overflow is dropped, and
-// the sort order makes what is dropped exactly the highest surface indices.
+// material is dense. A body whose own spheres set that diameter, and whose
+// spheres are no wider across than its nodes are apart (half-spacing radii,
+// just enough to seal), puts at most eight of its nodes in one bucket
+// (`worstCaseBucketOccupancy` in `broadphase.js`, from `spacing.min`); wider
+// spheres give more room per bucket and a larger bound. So
+// thirty-two covers two bodies in an ordinary overlap with room for a finer
+// one; past that fixed capacity the overflow is dropped, and the sort order
+// makes what is dropped exactly the highest surface indices.
 // This bounded local list avoids a prefix sum, global sort and variable
 // allocation.
 const BUCKET_SLOTS: u32 = 32u;
@@ -65,7 +70,7 @@ uniform gridCell: f32;
 uniform bucketCount: u32;
 uniform surfaceCount: u32;
 
-// Which cell of the grid a world point falls in.
+// Which bucket of the grid a world point falls in, by coordinates.
 //
 // Clamped rather than rejected, so a body dragged out of the tank still has
 // somewhere to go. That cannot invent a contact -- the narrow phase measures

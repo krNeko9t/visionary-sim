@@ -7,11 +7,11 @@
 // it: the only writes are `surface[s].delta`, and s is the thread. That is what
 // Jacobi buys, and `settle.wgsl` pays for it by having to average.
 //
-// A body is a union of spheres of radius `h/2` centred on its boundary nodes.
-// That is the same approximation the lattice already makes about the shape --
-// contact resolves at the proxy's resolution, not the render surface's, so two
-// bodies come to rest about a cell apart. Sharper contact means a different
-// representation of the surface, not a different solver.
+// A body is a union of spheres centred on the nodes its proxy offers for
+// contact, each as wide as the proxy chose to seal its surface (ADR-0008). So
+// contact resolves at the proxy's resolution, not the render surface's, and two
+// bodies come to rest about one node spacing apart. Sharper contact means a
+// different representation of the surface, not a different solver.
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {

@@ -202,11 +202,37 @@ describe('worst-case bucket occupancy', () => {
         expect(worstCaseBucketOccupancy(0.05, 0.005)).toBeGreaterThan(BUCKET_SLOTS);
     });
 
+    it('holds for nodes packed tighter than a grid', () => {
+        // Face-centred cubic: the densest arrangement nodes a given distance
+        // apart can have, and denser than a grid of that spacing by sqrt(2). A
+        // bound argued from a grid's rows would be exceeded here.
+        const spacing = 0.001;
+        const cell = 0.01;
+        const a = spacing * Math.SQRT2;
+        const basis = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
+        let inside = 0;
+        for (let i = 0; i * a < cell; i++) {
+            for (let j = 0; j * a < cell; j++) {
+                for (let k = 0; k * a < cell; k++) {
+                    for (const [u, v, w] of basis) {
+                        const p = [(i + u) * a, (j + v) * a, (k + w) * a];
+                        inside += p.every(x => x < cell) ? 1 : 0;
+                    }
+                }
+            }
+        }
+
+        expect(inside).toBeGreaterThan((Math.ceil(cell / spacing) + 1) ** 3);
+        expect(worstCaseBucketOccupancy(cell, spacing)).toBeGreaterThanOrEqual(inside);
+    });
+
     it('stays within capacity for every current scene\'s resolution spread', () => {
         // tank.js / splats.js keep every body in a scene within about a 1.3x
-        // resolution ratio of each other; that should never trip the check
+        // resolution ratio of each other, football.js within 1.63x (its
+        // capture against spot); that should never trip the check
         // bodyContact.js runs against BUCKET_SLOTS.
         expect(worstCaseBucketOccupancy(0.01417, 0.01111)).toBeLessThanOrEqual(BUCKET_SLOTS);
+        expect(worstCaseBucketOccupancy(0.01417, 0.00869)).toBeLessThanOrEqual(BUCKET_SLOTS);
     });
 });
 

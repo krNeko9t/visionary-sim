@@ -40,8 +40,22 @@ export function elementCompliance(material, lattice) {
     return {
         deviatoric: 1 / (mu * restVolume),
         hydrostatic: 1 / (lambda * restVolume),
-        gamma: 1 + mu / lambda
+        gamma: gammaOf(material)
     };
+}
+
+/**
+ * The hydrostatic constraint's rest offset, `1 + mu / lambda`.
+ *
+ * A property of the material alone: no element size enters it, so anything
+ * that only wants gamma asks here rather than going through a discretisation.
+ *
+ * @param {import('../../body/material.js').Material} material - The material.
+ * @returns {number} gamma.
+ */
+export function gammaOf(material) {
+    const { mu, lambda } = lameParameters(material);
+    return 1 + mu / lambda;
 }
 
 /**
@@ -84,20 +98,20 @@ export function collapseScale(gamma) {
 }
 
 /**
- * Cell crossings per second: how fast an elastic wave moves through a body
- * relative to its own cell size.
+ * How many times per second an elastic wave crosses a body's `cflLength`.
  *
  * Multiplying by a substep duration gives the CFL number, so this is the
  * quantity that decides how finely a body has to be stepped. It mixes material
- * and discretisation on purpose: a stiff material in coarse cells can be
- * cheaper to step than a soft one in fine cells, and pairing the scene's
- * fastest material with the scene's smallest cell -- usually different bodies
+ * and discretisation on purpose: a stiff material in coarse elements can be
+ * cheaper to step than a soft one in fine elements, and pairing the scene's
+ * fastest material with the scene's shortest length -- usually different bodies
  * -- overstates the requirement badly.
  *
  * @param {import('../../body/material.js').Material} material - The material.
- * @param {import('../discretize/lattice.js').Lattice} lattice - Simulation geometry.
- * @returns {number} Wave speed divided by cell size, in 1/s.
+ * @param {number} cflLength - The body's stability length, metres; see
+ *   `ProxyGeometry.cflLength`.
+ * @returns {number} Wave speed divided by that length, in 1/s.
  */
-export function waveRatio(material, lattice) {
-    return waveSpeed(material) / lattice.h;
+export function waveRatio(material, cflLength) {
+    return waveSpeed(material) / cflLength;
 }

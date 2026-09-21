@@ -1,14 +1,13 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { DEFAULT_GRAB_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
-import { latticeField } from '../deformation/bind.js';
-import { discretizeBody, relumpMasses } from './discretize/discretize.js';
+import { discretizeBody } from './discretize/discretize.js';
 import { BodyContact } from './constraints/bodyContact.js';
 import { ElasticCells } from './constraints/elasticCells.js';
 import { KinematicDrive } from './constraints/kinematicDrive.js';
 import { Particles } from './state/particles.js';
 import { Stepper } from './solver/stepper.js';
 import { FixedTimestep, stableStepDuration } from './solver/timestep.js';
-import { collapseScale, elementCompliance, waveRatio } from './constraints/compliance.js';
+import { collapseScale, gammaOf, waveRatio } from './constraints/compliance.js';
 
 /**
  * The simulation's only public surface.
@@ -20,8 +19,8 @@ import { collapseScale, elementCompliance, waveRatio } from './constraints/compl
  *
  * @typedef {object} SimBody
  * @property {import('../body/softBody.js').SoftBody} body - What the author described.
- * @property {import('./discretize/lattice.js').Lattice} lattice - How this simulator chose
- *   to discretise it. The seam between the two is exactly this pairing.
+ * @property {import('./discretize/proxyGeometry.js').ProxyGeometry} proxy - How this
+ *   simulator chose to discretise it. The seam between the two is exactly this pairing.
  */
 
 const DEFAULT_PARAMS = {
@@ -44,7 +43,7 @@ export class Simulator {
         this.params = { ...DEFAULT_PARAMS };
 
         /** @type {SimBody[]} */
-        this.simBodies = bodies.map(body => ({ body, lattice: discretizeBody(body) }));
+        this.simBodies = bodies.map(body => ({ body, proxy: discretizeBody(body) }));
 
         // The three pieces of the simulation side, assembled here and nowhere
         // else. They are listed in dependency order and each knows only the one
@@ -52,21 +51,17 @@ export class Simulator {
         // constraints. The stepper never learns what kind of constraint it is
         // running, which is what left room for a second kind, and now a third:
         // nodes that are not solved for, but told.
-        // Spelled out rather than handing the lattice over whole: these three
-        // arrays are the entire set of things the node storage is allowed to
-        // know, and writing them at the seam is what keeps that visible.
-        this.particles = new Particles(device, this.simBodies.map(({ lattice }) => ({
-            restPositions: lattice.restPositions,
-            invMass: lattice.invMass,
-            nodeCount: lattice.nodeCount
-        })));
+        // `dof` rather than the whole proxy: these three arrays are the entire
+        // set of things the node storage is allowed to know.
+        this.particles = new Particles(device, this.simBodies.map(({ proxy }) => proxy.dof));
         this.drive = new KinematicDrive(device, this.particles);
+        // The one place outside the discretisation that still sees the grid
+        // behind a proxy -- every proxy today is a `VoxelLattice` -- until the
+        // elastic constraint is handed out by the discretisation itself.
         this.elastic = new ElasticCells(device, this.particles, this.simBodies.map(
-            ({ body, lattice }) => ({ lattice, material: body.material })
+            ({ body, proxy }) => ({ lattice: proxy.lattice, material: body.material })
         ));
-        this.contact = new BodyContact(
-            device, this.particles, this.simBodies.map(({ lattice }) => ({ lattice })), tank
-        );
+        this.contact = new BodyContact(device, this.particles, this.simBodies.map(({ proxy }) => proxy), tank);
         // Order is solve order. Driven nodes go first: under the hard law
         // nothing else can move them anyway, and this is what lets the
         // compliant law's nudge still be shaped by elasticity and contact
@@ -111,29 +106,22 @@ export class Simulator {
      *
      * This is the whole of the simulation's output. It says where the solver's
      * degrees of freedom currently are and how to read them, and nothing about
-     * cells, colours, tetrahedra or constraints -- so a render path can consume
-     * it without ever learning that a lattice exists. Everything that draws
-     * something goes through here, including the debug view of the lattice
-     * itself.
+     * how the body was cut up or what constrains it -- so a render path can
+     * consume it without ever learning what the proxy geometry is. Everything
+     * that draws something goes through here, including the wireframe of the
+     * proxy itself.
      *
      * @param {number} bodyIndex - Index into the body list.
      * @returns {import('../deformation/bind.js').DeformationField} Its deformation.
      */
     deformationOf(bodyIndex) {
-        const { lattice } = this.simBodies[bodyIndex];
-        return latticeField({
-            nodePositions: this.particles.nodePos,
-            origin: lattice.origin,
-            h: lattice.h,
-            cellDims: lattice.cellDims,
-            nodeDims: lattice.nodeDims,
-            nodeOffset: this.particles.offsetOf(bodyIndex)
-        });
+        const { proxy } = this.simBodies[bodyIndex];
+        return proxy.field(this.particles.nodePos, this.particles.offsetOf(bodyIndex));
     }
 
     /**
-     * How far an elastic wave travels in one substep, as a fraction of a cell,
-     * for whichever body has the tightest ratio.
+     * How far an elastic wave travels in one substep, as a fraction of its
+     * body's `cflLength`, for whichever body has the tightest ratio.
      *
      * This is the number that decides whether the solver is stable, and it is
      * not merely an accuracy heuristic. XPBD only damps a projection while the
@@ -149,7 +137,7 @@ export class Simulator {
     }
 
     /**
-     * The body whose wave-speed-to-cell-size ratio is setting the substep
+     * The body whose ratio of wave speed to `cflLength` is setting the substep
      * requirement for the whole scene.
      *
      * Every stability query goes through this one reduction, so there is a
@@ -166,12 +154,12 @@ export class Simulator {
             return null;
         }
         return this.simBodies.reduce((worst, entry) =>
-            (waveRatio(entry.body.material, entry.lattice) >
-             waveRatio(worst.body.material, worst.lattice) ? entry : worst));
+            (waveRatio(entry.body.material, entry.proxy.cflLength) >
+             waveRatio(worst.body.material, worst.proxy.cflLength) ? entry : worst));
     }
 
     /**
-     * Fastest elastic wave in cell crossings per second.
+     * Fastest elastic wave, in `cflLength` crossings per second.
      *
      * Kept next to {@link worst} so the material/discretisation reduction has
      * one definition whether the clock is configured or the UI is reporting it.
@@ -180,12 +168,12 @@ export class Simulator {
      */
     waveRate() {
         const limiting = this.worst();
-        return limiting ? waveRatio(limiting.body.material, limiting.lattice) : 0;
+        return limiting ? waveRatio(limiting.body.material, limiting.proxy.cflLength) : 0;
     }
 
     /**
      * Everything worth reporting about the current setup, so that callers can
-     * print or display it without reaching into the arena or the lattices.
+     * print or display it without reaching into the arena or the proxies.
      *
      * @returns {object} A flat report.
      */
@@ -194,8 +182,7 @@ export class Simulator {
         return {
             deviceType: this.device.deviceType,
             bodyCount: this.simBodies.length,
-            cells: this.elastic.cellCount,
-            tets: this.elastic.cellCount * 6,
+            scale: totalScale(this.simBodies.map(({ proxy }) => proxy.scale())),
             nodes: this.particles.nodeCount,
             contactNodes: this.contact.surfaceCount,
             contact: this.contact.enabled,
@@ -212,15 +199,15 @@ export class Simulator {
             grip: {
                 strategy: this.grip.strategy,
                 radius: this.grip.radius,
-                worstCase: worstCaseHeldNodes(this.grip.radius, this.finestCell()),
+                worstCase: worstCaseHeldNodes(this.grip.radius, this.finestSpacing()),
                 capacity: this.drive.capacity
             },
-            perBody: this.simBodies.map(({ body, lattice }) => {
-                const { gamma } = elementCompliance(body.material, lattice);
+            perBody: this.simBodies.map(({ body, proxy }) => {
+                const gamma = gammaOf(body.material);
                 return {
                     name: body.name,
-                    h: lattice.h,
-                    cells: lattice.cells.length,
+                    spacing: proxy.spacing,
+                    scale: proxy.scale(),
                     gamma,
                     collapseScale: collapseScale(gamma)
                 };
@@ -322,7 +309,7 @@ export class Simulator {
 
     /**
      * Applies a material change. Everything except density is a handful of
-     * uniforms; density also has to re-lump the node masses, because those are
+     * uniforms; density also has to rescale the node masses, because those are
      * a property of the discretisation rather than of the material.
      *
      * One material now lands in two places, and the split is the honest one: a
@@ -333,12 +320,12 @@ export class Simulator {
      * @param {Partial<import('../body/material.js').Material>} changes - Fields to change.
      */
     setMaterial(bodyIndex, changes) {
-        const { body, lattice } = this.simBodies[bodyIndex];
+        const { body, proxy } = this.simBodies[bodyIndex];
         const { density, ...rest } = changes;
 
         Object.assign(body.material, rest);
         if (density > 0 && density !== body.material.density) {
-            relumpMasses(lattice, body.material.density, density);
+            proxy.setDensity(body.material.density, density);
             body.material.density = density;
             this.particles.uploadMasses();
         }
@@ -382,10 +369,10 @@ export class Simulator {
      */
     async grab(origin, direction) {
         const nodes = await this.particles.readPositions();
-        // A little over the coarsest cell, so that anything visibly over a
-        // body has a node within reach. This is aim tolerance, not hand size:
-        // it stays a lattice property on purpose, see `sim/grip.js`.
-        const aimRadius = this.coarsestCell() * 1.2;
+        // A little over the widest node spacing, so that anything visibly over
+        // a body has a node within reach. This is aim tolerance, not hand size:
+        // it stays a property of the discretisation on purpose, see `sim/grip.js`.
+        const aimRadius = this.coarsestSpacing() * 1.2;
         const anchor = nearestNodeToRay(nodes, this.particles.invMass, origin, direction, aimRadius);
         if (anchor < 0) {
             return null;
@@ -411,19 +398,19 @@ export class Simulator {
         return { bodyIndex: bodyOfNode(this.particles.offsets, anchor), position, held: grip.nodes.length };
     }
 
-    /** @returns {number} Cell edge length of the coarsest body in the scene, widest aim tolerance. */
-    coarsestCell() {
-        return this.simBodies.reduce((coarsest, { lattice }) => Math.max(coarsest, lattice.h), 0);
+    /** @returns {number} Widest node spacing of any body in the scene, the aim tolerance's scale. */
+    coarsestSpacing() {
+        return this.simBodies.reduce((coarsest, { proxy }) => Math.max(coarsest, proxy.spacing.max), 0);
     }
 
     /**
-     * @returns {number} Cell edge length of the finest body in the scene --
-     *   the one a fixed-radius hand can hold the most nodes of, used to warn
+     * @returns {number} Closest node spacing of any body in the scene -- the
+     *   one a fixed-radius hand can hold the most nodes of, used to warn
      *   before {@link grab} might need to truncate a hold.
      */
-    finestCell() {
+    finestSpacing() {
         return this.simBodies.reduce(
-            (finest, { lattice }) => Math.min(finest, lattice.h), Infinity
+            (finest, { proxy }) => Math.min(finest, proxy.spacing.min), Infinity
         );
     }
 
@@ -484,4 +471,19 @@ export class Simulator {
         this.drive.destroy();
         this.particles.destroy();
     }
+}
+
+/**
+ * Adds up the bodies' scales, keeping what was counted apart: a count of one
+ * thing plus a count of another is not a number anyone can read.
+ *
+ * @param {import('./discretize/proxyGeometry.js').Scale[]} scales - One per body.
+ * @returns {import('./discretize/proxyGeometry.js').Scale[]} One per distinct label, in first-seen order.
+ */
+function totalScale(scales) {
+    const totals = new Map();
+    for (const { label, value } of scales) {
+        totals.set(label, (totals.get(label) ?? 0) + value);
+    }
+    return [...totals].map(([label, value]) => ({ label, value }));
 }

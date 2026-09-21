@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATERIAL, POISSON_RANGE, waveSpeed } from '../../src/body/material.js';
-import { collapseScale, elementCompliance, waveRatio } from '../../src/sim/constraints/compliance.js';
+import { collapseScale, elementCompliance, gammaOf, waveRatio } from '../../src/sim/constraints/compliance.js';
 
 /** A stand-in lattice: only the cell size reaches the compliance maths. */
 const cell = h => ({ h });
@@ -49,9 +49,19 @@ describe('element compliance', () => {
     });
 });
 
+describe('gammaOf', () => {
+    it('is what every element of that material gets, however fine', () => {
+        // Why the scene report can ask the material for gamma directly rather
+        // than going through any body's discretisation.
+        const material = { ...DEFAULT_MATERIAL, poissonRatio: 0.4 };
+        expect(gammaOf(material)).toBe(elementCompliance(material, cell(0.005)).gamma);
+        expect(gammaOf(material)).toBe(elementCompliance(material, cell(0.04)).gamma);
+    });
+});
+
 describe('waveRatio', () => {
-    it('is the wave speed measured in cells per second', () => {
-        expect(waveRatio(DEFAULT_MATERIAL, cell(0.02)))
+    it('is the wave speed measured in stability lengths per second', () => {
+        expect(waveRatio(DEFAULT_MATERIAL, 0.02))
             .toBeCloseTo(waveSpeed(DEFAULT_MATERIAL) / 0.02, 6);
     });
 
@@ -65,6 +75,6 @@ describe('waveRatio', () => {
         const soft = { ...DEFAULT_MATERIAL, youngsModulus: 4e4 };
 
         expect(waveSpeed(stiff)).toBeGreaterThan(waveSpeed(soft));
-        expect(waveRatio(stiff, cell(0.04))).toBeLessThan(waveRatio(soft, cell(0.005)));
+        expect(waveRatio(stiff, 0.04)).toBeLessThan(waveRatio(soft, 0.005));
     });
 });

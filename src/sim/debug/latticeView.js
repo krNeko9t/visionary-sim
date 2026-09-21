@@ -4,43 +4,35 @@ import {
     Mesh,
     MeshInstance,
     PRIMITIVE_LINES,
-    SEMANTIC_ATTR13,
     SEMANTIC_POSITION,
     ShaderMaterial
 } from 'playcanvas';
 
-import { COLOR_COUNT, cellCoords, cellNodeIndices } from '../discretize/lattice.js';
-import { CUBE_CORNERS } from '../../deformation/corners.js';
-
 /**
- * A picture of the solver's own insides: one shrunken wireframe cube per
- * occupied cell, tinted by its parallel-solve colour, driven live off the node
- * buffer.
+ * A picture of the solver's own insides: the proxy geometry's wireframe, each
+ * group in its own tint, carried live by the body's deformation.
  *
- * This lives under `sim/` rather than with the render paths because it is not
- * a way of drawing an object -- it draws cells, colour groups and nodes, none
- * of which the render side is allowed to know about. Anything that has to
- * mention a lattice to do its job belongs on this side of the fence.
+ * What the lines are and what the groups mean is the proxy's business; this
+ * view only draws segments between rest points and moves them through the
+ * same deformation channel as the render paths. That is not tidiness: this
+ * view is the picture people trust when the render looks wrong, and it is only
+ * worth trusting if it is looking at the same data through the same binding.
  *
- * Showing occupancy and colouring in one picture is deliberate. Occupancy tells
- * you whether voxelisation leaked or missed a limb; the colouring is what the
- * GPU solver's correctness rests on, and eight interleaved tints make a broken
- * parity rule obvious.
- *
- * It reads the node positions through the same deformation channel as the
- * render paths, using the one accessor whose geometry already sits on the
- * lattice. That is not tidiness: this view is the picture people trust when the
- * render looks wrong, and it is only worth trusting if it is looking at the
- * same data through the same binding.
+ * Each vertex is pulled a fraction of the way along its offset before it is
+ * handed to the field, so it is sampled strictly inside the body rather than
+ * on a node, and neighbouring groups' lines do not draw over each other.
  */
 
 /**
- * One tint per colour group, spread evenly around the hue circle. Adjacent
- * cells always differ in at least one parity bit, so evenly spaced hues make a
- * broken parity rule show up as a flat patch of one colour.
+ * Evenly spaced hues around the colour circle, one per group, so groups that
+ * sit next to each other are told apart at a glance.
+ *
+ * @param {number} index - Which group.
+ * @param {number} count - How many there are.
+ * @returns {Color} Its tint.
  */
-const GROUP_TINTS = Array.from({ length: COLOR_COUNT }, (_, index) => {
-    const hue = (index / COLOR_COUNT) * 6;
+function groupTint(index, count) {
+    const hue = (index / count) * 6;
     const sector = Math.floor(hue) % 6;
     const f = hue - Math.floor(hue);
     const ramp = [
@@ -48,20 +40,11 @@ const GROUP_TINTS = Array.from({ length: COLOR_COUNT }, (_, index) => {
         [0, 1 - f, 1], [f, 0, 1], [1, 0, 1 - f]
     ][sector];
     return new Color(ramp[0], ramp[1], ramp[2]);
-});
-
-/** The 12 edges of a cube, as pairs of {@link CUBE_CORNERS} indices. */
-const CUBE_EDGES = [
-    [0, 1], [2, 3], [4, 5], [6, 7],
-    [0, 2], [1, 3], [4, 6], [5, 7],
-    [0, 4], [1, 5], [2, 6], [3, 7]
-];
+}
 
 /**
  * Built per field rather than once, because the field brings its own sampler
- * text. `deformedNode` is the lattice sampler's own entry point, not part of what
- * every field promises -- and asking a lattice field for it is exactly this
- * view's job.
+ * text.
  *
  * @param {import('../../deformation/bind.js').DeformationField} field - Field to read.
  * @returns {string} The vertex shader.
@@ -69,17 +52,16 @@ const CUBE_EDGES = [
 const vertexWgsl = field => /* wgsl */ `
     ${field.shader}
 
+    // A rest-space point; the field says where it is now.
     attribute vertex_position: vec3f;
-    // xyz: rest-space offset towards the cell centre. w: this body's node index.
-    attribute vertex_nodeData: vec4f;
 
     uniform matrix_viewProjection: mat4x4f;
 
     @vertex
     fn vertexMain(input: VertexInput) -> VertexOutput {
         var output: VertexOutput;
-        let node = deformedNode(u32(input.vertex_nodeData.w));
-        output.position = uniform.matrix_viewProjection * vec4f(node + input.vertex_nodeData.xyz, 1.0);
+        let now = deformationAt(input.vertex_position).position;
+        output.position = uniform.matrix_viewProjection * vec4f(now, 1.0);
         return output;
     }
 `;
@@ -96,83 +78,67 @@ const FRAGMENT_WGSL = /* wgsl */ `
 `;
 
 /**
- * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
- * @param {{ start: number, count: number }} range - Cells of one colour.
- * @param {number} inset - How far to pull each corner towards the cell centre.
- * @returns {{ positions: Float32Array, nodeData: Float32Array, indices: Uint32Array }} Mesh streams.
+ * One group's segments as a mesh of their own, holding only the vertices they
+ * use, each pulled along its offset.
+ *
+ * @param {import('../discretize/proxyGeometry.js').Wireframe} wireframe - The whole wireframe.
+ * @param {{ start: number, count: number }} group - Which of its segments.
+ * @param {number} pull - Fraction of each offset to move the vertex by.
+ * @returns {{ positions: Float32Array, indices: Uint32Array }} Mesh streams.
  */
-function buildGroupGeometry(lattice, range, inset) {
-    const { cells, cellDims, nodeDims, restPositions } = lattice;
-    const { start, count } = range;
-
-    const positions = new Float32Array(count * 8 * 3);
-    const nodeData = new Float32Array(count * 8 * 4);
-    const indices = new Uint32Array(count * CUBE_EDGES.length * 2);
-    const corners = new Uint32Array(8);
-    const coord = [0, 0, 0];
-    let vertex = 0;
-    let index = 0;
-
-    for (let n = 0; n < count; n++) {
-        cellCoords(cellDims, cells[start + n], coord);
-        cellNodeIndices(nodeDims, coord[0], coord[1], coord[2], corners);
-        const base = vertex;
-
-        for (let c = 0; c < 8; c++) {
-            const node = corners[c];
-            const offset = CUBE_CORNERS[c];
-            for (let axis = 0; axis < 3; axis++) {
-                const shift = offset[axis] ? -inset : inset;
-                // Rest position keeps the mesh bounds meaningful; the shader
-                // replaces it with the live node position.
-                positions[vertex * 3 + axis] = restPositions[node * 3 + axis] + shift;
-                nodeData[vertex * 4 + axis] = shift;
-            }
-            nodeData[vertex * 4 + 3] = node;
-            vertex++;
+function buildGroupGeometry({ positions, offsets, indices }, { start, count }, pull) {
+    /** @type {Map<number, number>} */
+    const local = new Map();
+    const groupIndices = new Uint32Array(count);
+    for (let i = 0; i < count; i++) {
+        const vertex = indices[start + i];
+        if (!local.has(vertex)) {
+            local.set(vertex, local.size);
         }
+        groupIndices[i] = local.get(vertex);
+    }
 
-        for (const [a, b] of CUBE_EDGES) {
-            indices[index++] = base + a;
-            indices[index++] = base + b;
+    const groupPositions = new Float32Array(local.size * 3);
+    for (const [vertex, at] of local) {
+        for (let axis = 0; axis < 3; axis++) {
+            groupPositions[at * 3 + axis] = positions[vertex * 3 + axis] + pull * offsets[vertex * 3 + axis];
         }
     }
 
-    return { positions, nodeData, indices };
+    return { positions: groupPositions, indices: groupIndices };
 }
 
 /**
  * @param {import('playcanvas').AppBase} app - The application.
- * @param {import('../discretize/lattice.js').Lattice} lattice - Lattice to visualise.
+ * @param {import('../discretize/proxyGeometry.js').Wireframe} wireframe - What to draw.
  * @param {import('../../deformation/bind.js').DeformationField} field - Deformation to follow.
  * @param {object} [options] - Display options.
- * @param {number} [options.shrink] - Cell size as a fraction of the real cell.
- * @returns {Entity} An entity holding one mesh instance per colour group.
+ * @param {number} [options.shrink] - How much of each offset to leave undone: 1
+ *   draws the wireframe as it is, smaller pulls every vertex further in.
+ * @returns {Entity} An entity holding one mesh instance per group.
  */
-export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
+export function createLatticeView(app, wireframe, field, { shrink = 0.78 } = {}) {
     const device = app.graphicsDevice;
-    const entity = new Entity('lattice-debug');
+    const entity = new Entity('proxy-wireframe');
     const instances = [];
-    const inset = (lattice.h * (1 - shrink)) / 2;
+    const { groups } = wireframe;
 
-    for (let group = 0; group < lattice.colorRanges.length; group++) {
-        const range = lattice.colorRanges[group];
-        if (range.count === 0) {
+    for (let group = 0; group < groups.length; group++) {
+        if (groups[group].count === 0) {
             continue;
         }
 
-        const { positions, nodeData, indices } = buildGroupGeometry(lattice, range, inset);
+        const { positions, indices } = buildGroupGeometry(wireframe, groups[group], 1 - shrink);
 
         const material = new ShaderMaterial({
-            uniqueName: 'lattice-view',
+            uniqueName: 'proxy-wireframe',
             vertexWGSL: vertexWgsl(field),
             fragmentWGSL: FRAGMENT_WGSL,
             attributes: {
-                vertex_position: SEMANTIC_POSITION,
-                vertex_nodeData: SEMANTIC_ATTR13
+                vertex_position: SEMANTIC_POSITION
             }
         });
-        const tint = GROUP_TINTS[group];
+        const tint = groupTint(group, groups.length);
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
         for (const [name, value] of Object.entries(field.parameters)) {
             material.setParameter(name, value);
@@ -181,13 +147,12 @@ export function createLatticeView(app, lattice, field, { shrink = 0.78 } = {}) {
 
         const mesh = new Mesh(device);
         mesh.setPositions(positions);
-        mesh.setVertexStream(SEMANTIC_ATTR13, nodeData, 4);
         mesh.setIndices(indices);
         mesh.update(PRIMITIVE_LINES);
 
         const instance = new MeshInstance(mesh, material, entity);
-        // Positions come from the storage buffer, so the CPU-side bounds are
-        // only ever the rest pose and cannot be used for culling.
+        // The shader moves every vertex, so the CPU-side bounds are only ever
+        // the rest pose and cannot be used for culling.
         instance.cull = false;
         instances.push(instance);
     }

@@ -59,22 +59,28 @@ export function broadphaseGrid(bounds, cell) {
 
 /**
  * Upper bound on how many of one body's own nodes could ever land in a
- * single bucket, given its own node spacing.
+ * single bucket, given the smallest gap between its nodes.
  *
- * A hard bound, not a probabilistic guess: nodes on a lattice are never
- * closer together than `h`, so an axis-aligned cube of edge `cell` can never
- * contain more than `ceil(cell / h) + 1` of them along any one axis. The cell
- * size is set from the coarsest body in the scene (`bodyContact.js`), so a
- * much finer body sharing it can pack far more than a coarse body's own ~1
- * node per bucket -- this is what lets `bodyContact.js` warn about that
- * before the resulting bucket overflow becomes routine instead of rare.
+ * A hard bound, not a probabilistic guess, and it asks nothing of how the
+ * nodes are arranged beyond that gap. Cut the bucket into small cubes of edge
+ * `spacing / sqrt(3)`: each is less than `spacing` across its diagonal, so it
+ * can hold at most one node, and there are `ceil(sqrt(3) * cell / spacing)`
+ * of them along each axis. The bucket size is set from the coarsest body in
+ * the scene (`bodyContact.js`), so a much finer body sharing it can pack far
+ * more than a coarse body's own ~1 node per bucket -- this is what lets
+ * `bodyContact.js` warn about that before the resulting bucket overflow
+ * becomes routine instead of rare.
+ *
+ * `spacing` is a proxy's measured `spacing.min`, and nothing depends on this
+ * being right except that warning: an overflowing bucket is still handled
+ * deterministically by `wgsl/sort.wgsl`.
  *
  * @param {number} cell - Bucket edge length.
- * @param {number} h - The body's own node spacing.
+ * @param {number} spacing - Smallest distance between two of the body's nodes.
  * @returns {number} Worst-case node count in one bucket.
  */
-export function worstCaseBucketOccupancy(cell, h) {
-    const perAxis = Math.ceil(cell / h) + 1;
+export function worstCaseBucketOccupancy(cell, spacing) {
+    const perAxis = Math.ceil((Math.sqrt(3) * cell) / spacing);
     return perAxis ** 3;
 }
 

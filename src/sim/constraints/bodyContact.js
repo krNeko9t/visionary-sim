@@ -9,7 +9,6 @@ import {
 
 import { STATE_WGSL } from '../state/particles.js';
 import { broadphaseGrid, worstCaseBucketOccupancy } from './broadphase.js';
-import { surfaceNodes } from '../discretize/lattice.js';
 import binWgsl from './wgsl/bin.wgsl?raw';
 import collideWgsl from './wgsl/collide.wgsl?raw';
 import contactsWgsl from './wgsl/contacts.wgsl?raw';
@@ -22,19 +21,16 @@ import sortWgsl from './wgsl/sort.wgsl?raw';
  * It shares the nodes with the elastic constraint and agrees with it on nothing
  * else, which is the whole reason the seam under both of them is drawn where it
  * is. Elasticity knows its constraints before the simulation starts and can
- * batch them by parity; contact does not know a single one of its own until the
- * substep is under way, and could not colour them if it did, because a contact
- * couples two bodies and parity is only disjoint within one. So this one is
- * Jacobi -- bin, canonicalise, gather, apply -- in four dispatches that the stepper
- * dispatches without knowing what any of them do.
+ * batch them ahead of time; contact does not know a single one of its own until
+ * the substep is under way, so it could not batch them without working out,
+ * every substep, which of them share a node. So this one is Jacobi -- bin,
+ * canonicalise, gather, apply -- in four dispatches that the stepper dispatches
+ * without knowing what any of them do.
  *
  * The tank's walls are deliberately not here. They are five fixed planes known
  * in advance, they belong to the world rather than to any body, and they are
  * already resolved per node in the stepper's closing pass. Nothing about this
  * file would be shared with them.
- *
- * @typedef {object} ContactBody
- * @property {import('../discretize/lattice.js').Lattice} lattice - Its discretisation.
  */
 
 /** Threads per workgroup; must match `@workgroup_size` in the kernels. */
@@ -53,16 +49,6 @@ const SURFACE_FIELDS = {
     radius: 2 //  f32
 };
 
-/**
- * A contact node's radius, as a fraction of its body's cell size.
- *
- * Half a cell is the smallest value that still makes a surface. The boundary
- * nodes sit a cell apart, so spheres any smaller leave gaps between them along
- * the axes and another body's nodes slip through. Larger only inflates the
- * body: contact would resolve further out than the material actually reaches.
- */
-const RADIUS_CELLS = 0.5;
-
 /** How much of a node's averaged correction to apply; see `wgsl/settle.wgsl`. */
 const GAIN = 1;
 
@@ -70,10 +56,11 @@ export class BodyContact {
     /**
      * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
      * @param {import('../state/particles.js').Particles} particles - Nodes to move.
-     * @param {ContactBody[]} bodies - The bodies that can touch, in scene order.
+     * @param {import('../discretize/proxyGeometry.js').ProxyGeometry[]} proxies - The
+     *   bodies that can touch, in scene order.
      * @param {{ min: number[], max: number[] }} bounds - Where they can do it.
      */
-    constructor(device, particles, bodies, bounds) {
+    constructor(device, particles, proxies, bounds) {
         this.device = device;
         this.particles = particles;
 
@@ -84,38 +71,38 @@ export class BodyContact {
          */
         this.enabled = true;
 
-        // Only boundary nodes take part: an interior node is behind a layer of
-        // its own body's boundary, so nothing can reach it without going
-        // through material that has already been pushed away.
+        // Only the nodes each proxy offers for contact take part, each with the
+        // radius it chose to seal its own surface; how either was worked out is
+        // the proxy's business (ADR-0008).
         /** @type {{ node: number, body: number, radius: number }[]} */
         const records = [];
         let widest = 0;
-        let finestH = Infinity;
-        for (let b = 0; b < bodies.length; b++) {
-            const { lattice } = bodies[b];
+        let finest = Infinity;
+        for (let b = 0; b < proxies.length; b++) {
+            const { nodes, radii } = proxies[b].contactSurface();
             const offset = particles.offsetOf(b);
-            const radius = lattice.h * RADIUS_CELLS;
-            widest = Math.max(widest, radius);
-            finestH = Math.min(finestH, lattice.h);
-            for (const node of surfaceNodes(lattice)) {
-                records.push({ node: offset + node, body: b, radius });
+            for (let s = 0; s < nodes.length; s++) {
+                widest = Math.max(widest, radii[s]);
+                records.push({ node: offset + nodes[s], body: b, radius: radii[s] });
             }
+            finest = Math.min(finest, proxies[b].spacing.min);
         }
 
         this.surfaceCount = records.length;
         this.grid = broadphaseGrid(bounds, widest * 2);
 
-        // The bucket is sized from the coarsest body (`widest`), so a much
-        // finer body sharing the scene can pack far more than the coarse
-        // body's own ~1 node per bucket. Past `BUCKET_SLOTS` that turns
-        // `wgsl/sort.wgsl`'s rare overflow scan into a routine one -- worth
-        // catching here, at scene setup, rather than as an unexplained frame
-        // time regression later.
-        if (Number.isFinite(finestH)) {
-            const worstCase = worstCaseBucketOccupancy(this.grid.cell, finestH);
+        // The bucket is sized from the widest contact sphere, so a much finer
+        // body sharing the scene can pack far more than the coarse body's own
+        // ~1 node per bucket. Past `BUCKET_SLOTS` that turns `wgsl/sort.wgsl`'s
+        // rare overflow scan into a routine one -- worth catching here, at
+        // scene setup, rather than as an unexplained frame time regression
+        // later. Only a warning reads the spacing, which is all a measured
+        // spacing is allowed to carry.
+        if (Number.isFinite(finest)) {
+            const worstCase = worstCaseBucketOccupancy(this.grid.cell, finest);
             if (worstCase > BUCKET_SLOTS) {
                 console.warn(
-                    `[contact] the finest body's node spacing (${finestH.toFixed(4)}m) can pack ` +
+                    `[contact] the finest body's node spacing (${finest.toFixed(4)}m) can pack ` +
                     `up to ${worstCase} nodes into one ${this.grid.cell.toFixed(4)}m contact ` +
                     `bucket, over the ${BUCKET_SLOTS}-slot capacity. Buckets that dense fall back ` +
                     'to an O(surfaceCount) scan every substep instead of staying rare -- narrow ' +

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MATERIAL } from '../../src/body/material.js';
 import { SoftBody } from '../../src/body/softBody.js';
 import { box, sphere } from '../../src/assets/shapes.js';
-import { discretizeBody, relumpMasses } from '../../src/sim/discretize/discretize.js';
+import { discretizeBody } from '../../src/sim/discretize/discretize.js';
 
 /**
  * Gaussians scattered over the faces of a cube, standing in for a capture.
@@ -43,28 +43,28 @@ function cloudOnCube(half) {
 /**
  * @param {Partial<import('../../src/body/material.js').Material>} [material] - Overrides.
  * @param {number} [resolution] - Requested detail.
- * @returns {import('../../src/sim/discretize/lattice.js').Lattice} Its lattice.
+ * @returns {import('../../src/sim/discretize/lattice/voxelLattice.js').VoxelLattice} Its proxy.
  */
-function latticeOf(material = {}, resolution = 8) {
+function proxyOf(material = {}, resolution = 8) {
     const body = new SoftBody({
         name: 'test',
         source: { kind: 'shape', shape: sphere({ radius: 0.05 }) },
         material,
         resolution
     });
-    return discretizeBody(body);
+    return /** @type {any} */ (discretizeBody(body));
 }
 
 describe('discretizeBody', () => {
     it('builds a lattice from a body without the body knowing how', () => {
-        const lattice = latticeOf();
+        const { lattice } = proxyOf();
         expect(lattice.cells.length).toBeGreaterThan(0);
         expect(lattice.nodeCount).toBeGreaterThan(lattice.cells.length);
         expect(lattice.mass).toBeCloseTo(DEFAULT_MATERIAL.density * lattice.volume, 6);
     });
 
     it('gives a finer request smaller cells', () => {
-        expect(latticeOf({}, 16).h).toBeLessThan(latticeOf({}, 6).h);
+        expect(proxyOf({}, 16).spacing.min).toBeLessThan(proxyOf({}, 6).spacing.min);
     });
 
     it('takes every kind of rest geometry there is', () => {
@@ -80,7 +80,7 @@ describe('discretizeBody', () => {
         ];
 
         for (const source of sources) {
-            const lattice = discretizeBody(new SoftBody({ name: source.kind, source, resolution: 8 }));
+            const { lattice } = discretizeBody(new SoftBody({ name: source.kind, source, resolution: 8 }));
             expect(lattice.cells.length, source.kind).toBeGreaterThan(0);
             expect(lattice.volume, source.kind).toBeGreaterThan(0);
         }
@@ -92,12 +92,13 @@ describe('discretizeBody', () => {
     });
 });
 
-describe('relumpMasses', () => {
+describe('setDensity', () => {
     it('keeps node masses consistent with density times volume', () => {
-        const lattice = latticeOf({ density: 1000 });
+        const proxy = proxyOf({ density: 1000 });
+        const { lattice } = proxy;
         const before = lattice.mass;
 
-        relumpMasses(lattice, 1000, 2000);
+        proxy.setDensity(1000, 2000);
         expect(lattice.mass).toBeCloseTo(before * 2, 6);
 
         let lumped = 0;
@@ -111,28 +112,30 @@ describe('relumpMasses', () => {
     });
 
     it('leaves nodes with no material inert at any density', () => {
-        const lattice = latticeOf();
-        const inertBefore = [...lattice.invMass].filter(m => m === 0).length;
+        const proxy = proxyOf();
+        const { invMass } = proxy.dof;
+        const inertBefore = [...invMass].filter(m => m === 0).length;
 
-        relumpMasses(lattice, DEFAULT_MATERIAL.density, 500);
-        expect([...lattice.invMass].filter(m => m === 0).length).toBe(inertBefore);
+        proxy.setDensity(DEFAULT_MATERIAL.density, 500);
+        expect([...invMass].filter(m => m === 0).length).toBe(inertBefore);
     });
 
     it('round-trips back to the original masses', () => {
         // Density is applied as a ratio against the previous value, so a
         // sequence of edits must not accumulate drift -- the UI slider will
         // produce hundreds of them.
-        const lattice = latticeOf({ density: 1000 });
-        const snapshot = Float32Array.from(lattice.invMass);
+        const proxy = proxyOf({ density: 1000 });
+        const { invMass } = proxy.dof;
+        const snapshot = Float32Array.from(invMass);
 
         let previous = 1000;
         for (const density of [1500, 700, 2400, 1000]) {
-            relumpMasses(lattice, previous, density);
+            proxy.setDensity(previous, density);
             previous = density;
         }
 
         for (let n = 0; n < snapshot.length; n++) {
-            expect(lattice.invMass[n]).toBeCloseTo(snapshot[n], 3);
+            expect(invMass[n]).toBeCloseTo(snapshot[n], 3);
         }
     });
 });

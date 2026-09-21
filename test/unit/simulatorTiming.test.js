@@ -128,12 +128,12 @@ describe('Simulator owns the timing seam', () => {
             friction: 0.5,
             relaxation: 0.012
         };
-        const lattice = { h: 0.015, invMass: new Float32Array([1]) };
+        const proxy = { cflLength: 0.015, setDensity: vi.fn() };
         const sim = {
-            simBodies: [{ body: { material }, lattice }],
+            simBodies: [{ body: { material }, proxy }],
             particles: { setParams: vi.fn(), uploadMasses: vi.fn() },
             elastic: { uploadParams: vi.fn() },
-            clock: new FixedTimestep(stableStepDuration(waveRatio(material, lattice))),
+            clock: new FixedTimestep(stableStepDuration(waveRatio(material, proxy.cflLength))),
             worst: Simulator.prototype.worst,
             waveRate: Simulator.prototype.waveRate
         };

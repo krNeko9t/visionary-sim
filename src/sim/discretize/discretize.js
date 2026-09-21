@@ -1,5 +1,6 @@
 import { meshBounds } from '../../assets/objLoader.js';
 import { buildLattice } from './lattice.js';
+import { VoxelLattice } from './lattice/voxelLattice.js';
 import { voxelizeCloud } from './cloudVolume.js';
 import { voxelizeMesh, voxelizeSdf } from './voxelize.js';
 
@@ -28,7 +29,7 @@ const VOXELIZERS = {
 
 /**
  * @param {import('../../body/softBody.js').SoftBody} body - The body to discretise.
- * @returns {import('./lattice.js').Lattice} Its simulation geometry.
+ * @returns {import('./proxyGeometry.js').ProxyGeometry} Its simulation geometry.
  */
 export function discretizeBody(body) {
     const { source, resolution, material } = body;
@@ -37,25 +38,5 @@ export function discretizeBody(body) {
         throw new Error(`no way to discretise rest geometry of kind "${source.kind}"`);
     }
 
-    return buildLattice(voxelize(source, { resolution }), { density: material.density });
-}
-
-/**
- * Re-spreads node masses after a density change.
- *
- * Node masses are a discretisation artefact -- they exist because the lattice
- * lumps a cell's mass onto its corners -- so keeping them consistent with
- * `density * volume` is this module's job, not the body's.
- *
- * @param {import('./lattice.js').Lattice} lattice - Lattice to update in place.
- * @param {number} previousDensity - Density the masses were built from.
- * @param {number} density - New density in kg/m^3.
- */
-export function relumpMasses(lattice, previousDensity, density) {
-    const ratio = previousDensity / density;
-    const { invMass, nodeCount } = lattice;
-    for (let n = 0; n < nodeCount; n++) {
-        invMass[n] *= ratio;
-    }
-    lattice.mass = lattice.volume * density;
+    return new VoxelLattice(buildLattice(voxelize(source, { resolution }), { density: material.density }));
 }

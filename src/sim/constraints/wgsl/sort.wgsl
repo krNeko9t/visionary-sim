@@ -7,7 +7,7 @@
 // it: identical one-second runs used to diverge by tenths of a millimetre.
 //
 // One thread owns one bucket here, so a local insertion sort needs no barrier
-// and no second buffer. Occupancy is normally a handful of lattice nodes; empty
+// and no second buffer. Occupancy is normally a handful of nodes; empty
 // buckets return immediately. This is a bounded local canonicalisation, not the
 // global GPU sort that a variable-length contact-pair table would require.
 

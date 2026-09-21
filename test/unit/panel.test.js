@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { timingReadouts } from '../../src/ui/panel.js';
+import { scaleReadout, timingReadouts } from '../../src/ui/panel.js';
 
 describe('the simulation timing readout', () => {
     it('shows the actual fixed work performed this frame', () => {
@@ -27,5 +27,13 @@ describe('the simulation timing readout', () => {
 
         expect(shown.steps.tone).toBe('');
         expect(shown.clock).toEqual({ text: '积 1.0 ms · 丢 152 ms', tone: 'bad' });
+    });
+});
+
+describe('the size readout', () => {
+    it('shows the body against the scene total of the same thing', () => {
+        const scene = [{ label: 'a', value: 900 }, { label: 'b', value: 40 }];
+        expect(scaleReadout({ label: 'a', value: 300 }, scene)).toBe('300 / 900 a');
+        expect(scaleReadout({ label: 'b', value: 40 }, scene)).toBe('40 / 40 b');
     });
 });
