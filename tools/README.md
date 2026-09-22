@@ -171,3 +171,30 @@ Intel UHD770 完整负载短 smoke 约 10.80 fps，有丢时；静态 GPU 变换
 当前体积代理不等同于针织薄壳，夹持边界有接缝风险，默认视角较侧、扫描背景存在模糊缺口。
 参数对照、哈希、命令及本机 ignored 证据路径见
 [02 实施记录](../.scratch/physdreamer-factory/issues/02-hat.md)。
+
+# Carnations 真实场景
+
+```sh
+node tools/prepare-physdreamer.js --scene carnations \
+  --input /home/liaowanjun/Datas/physDreamer/physics_dreamer/physics_dreamer/carnations \
+  --camera-convention opengl-c2w
+node tools/calibrate-physdreamer.js --scene carnations --input public/splats/carnations \
+  --input-kind real --r=0.003,0.006,0.009 --element-sizes=0.016,0.012 \
+  --output public/splats/carnations/calibration-03
+npm run dev -- --host 127.0.0.1 --port 5190
+```
+
+校准输出需是新目录，复跑时换名。打开 `http://127.0.0.1:5190/?scene=carnations`，
+左键抓取花或茎并松手，右键旋转，勾选“显示代理几何”检查线框。缺资产错误包含场景及 URL；
+先执行准备命令。三层共用变换与清洗，完整背景不参与材料、接触和抓取。
+
+clean 高度 0.30 m 是人工模拟尺度，比例 .621493461752 m/源单位。场景声明 r=.006 m、
+elementSize=.016 m；maxStretch=1.05、damping=2 /s、柔抓 .003 s 为初始交互参数，非植物材料标定。
+清洗后动态/固定前景/背景为 75956/5493/305792；固定材料来自真实 clean 距离区域中未匹配 moving
+的部分，盆体其余部分仅绘制。细茎体积代理明显比扫描茎粗，不代表植物薄结构已标定。
+
+采用 projected-world-up 55°：209 帧矩阵合法，202 帧可观测、最大投影角50.888°；7 帧投影长度
+小于 .5 为不确定，全部原角和不确定理由保留。frame_00052 原角91.699°为强俯拍，不能把原角
+阈值改成92°，也不能宣称相机证明世界重力。Intel UHD770 短 smoke 约12.11 fps、有丢时，
+固定节点及静态GPU层不变，抓取松手位置有限。60 fps/零丢时目标未过，按本轮契约不阻止交付。
+完整参数对照、哈希、截图及命令见 [03 实施记录](../.scratch/physdreamer-factory/issues/03-carnations.md)。

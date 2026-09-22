@@ -291,17 +291,17 @@ it('isolates multiple factory declarations, snapshots settings, and makes fixed 
 });
 
 
-describe('hat shared factory registration', () => {
-    it('loads its isolated assets and preserves complete foreground physics and static background', async () => {
-        const scene = sceneNamed('hat');
+describe('PhysDreamer shared factory registration', () => {
+    it.each(['hat', 'carnations'])('%s loads isolated assets and preserves complete foreground physics and static background', async (name) => {
+        const scene = sceneNamed(name);
         const [body] = await scene.createBodies();
         const scenery = await scene.scenery();
-        expect(loadCloud).toHaveBeenCalledWith('/splats/hat/foreground.ply');
-        expect(loadCloud).toHaveBeenCalledWith('/splats/hat/background.ply');
-        expect(fetch).toHaveBeenCalledWith('/splats/hat/moving_part_points.ply');
+        expect(loadCloud).toHaveBeenCalledWith(`/splats/${name}/foreground.ply`);
+        expect(loadCloud).toHaveBeenCalledWith(`/splats/${name}/background.ply`);
+        expect(fetch).toHaveBeenCalledWith(`/splats/${name}/moving_part_points.ply`);
         expect(body.source.cloud.count).toBe(2);
         expect(body.render.cloud.count).toBe(1);
-        expect(scenery.map(view => view.name)).toEqual(['hat-fixed', 'hat-background']);
+        expect(scenery.map(view => view.name)).toEqual([`${name}-fixed`, `${name}-background`]);
         expect(body.staticRegion(0, 0, 0)).toBe(true);
         expect(body.staticRegion(0, 0.25, 0)).toBe(false);
         expect(scene.gravity).toEqual([0, 0, 0]);

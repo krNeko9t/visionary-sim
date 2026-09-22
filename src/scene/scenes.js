@@ -1,5 +1,5 @@
 import { createPhysDreamerScene } from './physdreamer.js';
-import { HAT } from './physdreamerDeclarations.js';
+import { HAT, CARNATIONS } from './physdreamerDeclarations.js';
 import { alocasiaScene } from './alocasia.js';
 import { bunnyScene, tankScene } from './tank.js';
 import { footballScene } from './football.js';
@@ -47,6 +47,7 @@ import { splatContactScene, splatScene } from './splats.js';
 export const SCENES = {
     alocasia: alocasiaScene,
     hat: createPhysDreamerScene(HAT),
+    carnations: createPhysDreamerScene(CARNATIONS),
     tank: tankScene,
     bunny: bunnyScene,
     football: footballScene,
