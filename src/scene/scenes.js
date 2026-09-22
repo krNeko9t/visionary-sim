@@ -1,3 +1,5 @@
+import { createPhysDreamerScene } from './physdreamer.js';
+import { HAT } from './physdreamerDeclarations.js';
 import { alocasiaScene } from './alocasia.js';
 import { bunnyScene, tankScene } from './tank.js';
 import { footballScene } from './football.js';
@@ -44,6 +46,7 @@ import { splatContactScene, splatScene } from './splats.js';
 /** @type {Record<string, Scene>} */
 export const SCENES = {
     alocasia: alocasiaScene,
+    hat: createPhysDreamerScene(HAT),
     tank: tankScene,
     bunny: bunnyScene,
     football: footballScene,

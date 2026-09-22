@@ -9,8 +9,18 @@ export const ALOCASIA = Object.freeze({
         upReason: 'Accepted alocasia camera-up observation envelope; not a measurement of gravity.' })
 });
 
+export const HAT = Object.freeze({
+    name: 'hat', assetRoot: '/splats/hat', r: 0.006, elementSize: 0.016,
+    material: Object.freeze({ maxStretch: 1.05, damping: 2 }),
+    grab: Object.freeze({ law: 'compliant', responseTime: 0.003 }),
+    requireFixedMaterial: true,
+    preparation: Object.freeze({ heightMetres: 0.30, foregroundDistanceSource: 0.01,
+        upMode: 'projected-world-up', upThresholdDegrees: 25,
+        upReason: 'Hat: all 207 frames provide projected world-up evidence (maximum 22.904 degrees); 25 degrees allows capture roll, while raw camera-up reaches 38.500 degrees with pitch. Not measured gravity.' })
+});
+
 // Only ready scenes belong here. Subsequent tickets add their reviewed declarations.
-const declarations = { alocasia: ALOCASIA };
+const declarations = { alocasia: ALOCASIA, hat: HAT };
 export function physdreamerDeclaration(name) {
     if (!Object.hasOwn(declarations, name)) throw new Error(`PhysDreamer scene ${name ?? '(missing)'} is not declared; known: ${Object.keys(declarations).join(', ')}`);
     return declarations[name];

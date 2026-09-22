@@ -289,3 +289,25 @@ it('isolates multiple factory declarations, snapshots settings, and makes fixed 
     expect(() => b.validateSimulation({ perBody: [{ materialNodes: 4, staticNodes: 4, movableNodes: 0 }] })).toThrow(/all material nodes are static/);
     expect(ALOCASIA).toMatchObject({ r: 0.016, elementSize: 0.016, material: { damping: 2, maxStretch: 1.05 }, grab: { responseTime: 0.003 } });
 });
+
+
+describe('hat shared factory registration', () => {
+    it('loads its isolated assets and preserves complete foreground physics and static background', async () => {
+        const scene = sceneNamed('hat');
+        const [body] = await scene.createBodies();
+        const scenery = await scene.scenery();
+        expect(loadCloud).toHaveBeenCalledWith('/splats/hat/foreground.ply');
+        expect(loadCloud).toHaveBeenCalledWith('/splats/hat/background.ply');
+        expect(fetch).toHaveBeenCalledWith('/splats/hat/moving_part_points.ply');
+        expect(body.source.cloud.count).toBe(2);
+        expect(body.render.cloud.count).toBe(1);
+        expect(scenery.map(view => view.name)).toEqual(['hat-fixed', 'hat-background']);
+        expect(body.staticRegion(0, 0, 0)).toBe(true);
+        expect(body.staticRegion(0, 0.25, 0)).toBe(false);
+        expect(scene.gravity).toEqual([0, 0, 0]);
+        expect(scene.grab).toEqual({ law: 'compliant', responseTime: 0.003 });
+        const sim = new Simulator({ supportsCompute: true, deviceType: 'test' }, [body], scene.bounds);
+        try { expect(() => scene.validateSimulation(sim.stats())).not.toThrow(); }
+        finally { sim.destroy(); }
+    });
+});

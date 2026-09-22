@@ -12,7 +12,7 @@ node tools/calibrate-physdreamer.js --scene alocasia --input public/splats/aloca
 
 第二条仅示范独立候选参数，不批准这些 r，也无需重新校准已接受的 alocasia。
 旧 `prepare-alocasia.js` / `calibrate-alocasia.js` 薄转发同一实现，显式参数和默认准备输出路径
-保持兼容。通用命令必须提供已声明的 `--scene`；当前仅 alocasia 已就绪，后三个入口归后续票。
+保持兼容。通用命令必须提供已声明的 `--scene`；当前 alocasia、hat 已就绪；carnations、telephone 归后续票。
 输出默认为 `public` 加声明的资产根；输入始终只读，衍生产物目录被 git 忽略。
 
 声明集中在 `src/scene/physdreamerDeclarations.js`。运行时 `createPhysDreamerScene(declaration)`
@@ -144,3 +144,30 @@ alocasia 资产的相机位姿相容阈值，不是重力精度或其他资产�
 实现已完成；当前 Intel UHD Graphics 770 的完整负载实测 16.0381 fps、丢时 14.1748948 s，
 60 fps / 零丢时未通过，薄结构质量尚未完全确认。设备条件、资产哈希和证据限制见
 [08](../physdreamer-alocasia-impl/08-real-gpu-acceptance.md)，不以可运行代替验收通过。
+
+
+# Hat 真实场景
+
+```sh
+node tools/prepare-physdreamer.js --scene hat \
+  --input /home/liaowanjun/Datas/physDreamer/physics_dreamer/physics_dreamer/hat \
+  --camera-convention opengl-c2w
+node tools/calibrate-physdreamer.js --scene hat --input public/splats/hat \
+  --input-kind real --r=0.003,0.006,0.009 --element-sizes=0.016,0.012 \
+  --output public/splats/hat/calibration-02
+npm run dev -- --host 127.0.0.1 --port 5189
+```
+
+校准输出必须是不存在的新目录；复跑时换名。浏览器打开
+`http://127.0.0.1:5189/?scene=hat`，右键旋转查看帽子正面，勾选“显示代理几何”查看线框，
+左键拖动帽体再松手。缺资产会报告 `hat`、具体 URL/HTTP 状态；先运行准备命令。
+
+hat 声明 projected-world-up 25°，207/207 帧有效、投影最大 22.904°、原角最大 38.500°；
+原始 frame_00179 为仰视，frame_00001 为常规侧前视。相机观察不能当作重力测量。
+clean 高度人为定为 0.30 m，比例 0.572579048559 m/源单位。采用 r=.006 m、elementSize=.016 m，
+上方夹持区保留固定材料；maxStretch=1.05、damping=2 /s、柔抓 .003 s 是交互起点声明，
+不是针织材料标定。真实清洗后动态/固定前景/背景为 239961/13370/113120。
+Intel UHD770 完整负载短 smoke 约 10.80 fps，有丢时；静态 GPU 变换不变，抓取松手均有证据。
+当前体积代理不等同于针织薄壳，夹持边界有接缝风险，默认视角较侧、扫描背景存在模糊缺口。
+参数对照、哈希、命令及本机 ignored 证据路径见
+[02 实施记录](../.scratch/physdreamer-factory/issues/02-hat.md)。
