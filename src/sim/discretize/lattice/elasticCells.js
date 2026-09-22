@@ -8,10 +8,12 @@ import {
 } from 'playcanvas';
 
 import { elementCompliance } from '../../constraints/compliance.js';
+import { validateMaxStretch } from '../../../body/material.js';
 import xpbdCoupleWgsl from '../../constraints/wgsl/xpbdCouple.wgsl?raw';
 import { STATE_WGSL } from '../../state/particles.js';
 import { COLOR_COUNT } from './lattice.js';
 import { KUHN_TETS, kuhnRestShapeInverses, tetRestVolume } from './kuhn.js';
+import { STRETCH_EDGES } from './stretch.js';
 import { VoxelLattice } from './voxelLattice.js';
 import cellsWgsl from './wgsl/cells.wgsl?raw';
 import projectWgsl from './wgsl/project.wgsl?raw';
@@ -58,7 +60,8 @@ const PARAMS_FIELDS = {
     alphaDev: 9, //   f32
     alphaHyd: 10, //  f32
     gamma: 11, //     f32
-    relaxation: 12 // f32
+    relaxation: 12, // f32
+    maxStretch: 13 // f32
 };
 
 const PARAMS_WORDS = PARAMS_STRIDE / 4;
@@ -102,6 +105,9 @@ function kuhnConstants() {
         `var<private> KUHN_TETS: array<vec4u, 6> = array<vec4u, 6>(\n${tets}\n);`,
         '// Rest shape inverses for a unit cube; scaled by 1/h per body.',
         `var<private> KUHN_REST_INV: array<mat3x3f, 6> = array<mat3x3f, 6>(\n${inverses}\n);`,
+        `var<private> STRETCH_EDGES: array<vec3f, 28> = array<vec3f, 28>(\n${
+            STRETCH_EDGES.map(edge => `    vec3f(${edge.map(f32Literal).join(', ')})`).join(',\n')
+        }\n);`,
         ''
     ].join('\n');
 }
@@ -184,13 +190,14 @@ export class ElasticCells {
         // One instance per colour: same shader, but each carries its own range
         // in its own uniform buffer, so all eight can be queued at once. Empty
         // colours are dropped rather than dispatched to do nothing.
-        this.batches = this.colorRanges
+        const batches = limitOnly => this.colorRanges
             .map((range, color) => ({ range, color }))
             .filter(({ range }) => range.count > 0)
             .map(({ range, color }) => {
                 const compute = new Compute(device, this.shader, `sim-elastic-${color}`);
                 compute.setParameter('colorStart', range.start);
                 compute.setParameter('colorCount', range.count);
+                compute.setParameter('limitOnly', limitOnly);
                 compute.setParameter('cells', this.cells);
                 compute.setParameter('cellParams', this.cellParams);
                 for (const [name, buffer] of Object.entries(particles.bindings)) {
@@ -199,6 +206,12 @@ export class ElasticCells {
                 compute.setupDispatch(Math.ceil(range.count / WORKGROUP_SIZE), 1, 1);
                 return compute;
             });
+        this.batches = batches(0);
+        this.stretchBatches = batches(1);
+        // Neighbouring colour updates can violate an earlier colour's bound.
+        // Three further sweeps reduce that residual without re-applying the
+        // elastic energy (which would silently change the material stiffness).
+        this.limitedPasses = [...this.batches, ...this.stretchBatches, ...this.stretchBatches, ...this.stretchBatches];
     }
 
     /**
@@ -207,7 +220,9 @@ export class ElasticCells {
      * @returns {Compute[]} The passes.
      */
     get passes() {
-        return this.batches;
+        return this.bodies.some(({ material }) => material.maxStretch > 1)
+            ? this.limitedPasses
+            : this.batches;
     }
 
     /**
@@ -239,6 +254,7 @@ export class ElasticCells {
             paramFloats[base + PARAMS_FIELDS.alphaHyd] = hydrostatic;
             paramFloats[base + PARAMS_FIELDS.gamma] = gamma;
             paramFloats[base + PARAMS_FIELDS.relaxation] = material.relaxation;
+            paramFloats[base + PARAMS_FIELDS.maxStretch] = validateMaxStretch(material.maxStretch);
         }
 
         this.cellParams.write(0, new Uint8Array(this.paramWords));
@@ -248,13 +264,13 @@ export class ElasticCells {
      * @param {number} dt - Substep duration in seconds.
      */
     setSubstepDt(dt) {
-        for (const compute of this.batches) {
+        for (const compute of [...this.batches, ...this.stretchBatches]) {
             compute.setParameter('dt', dt);
         }
     }
 
     destroy() {
-        for (const compute of this.batches) {
+        for (const compute of [...this.batches, ...this.stretchBatches]) {
             compute.destroy();
         }
         this.shader.destroy();

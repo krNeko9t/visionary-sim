@@ -1,8 +1,42 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMetricRegion, splitCloudByRegion } from '../../src/scene/metricRegion.js';
+import { createMetricRegion, extendMaterialRegion, splitCloudByRegion } from '../../src/scene/metricRegion.js';
 import { cleanCloud } from '../../src/assets/splats/clean.js';
 import { staticNodesInRegion } from '../../src/sim/staticPrescription.js';
+
+describe('measured material labels extended to an inferred volume', () => {
+    it('keeps thin movable material free beyond the sample radius while retaining support', () => {
+        const measured = createMetricRegion([0, 0.25, 0], 0.016);
+        const region = extendMaterialRegion([0, 0, 0, 0, 0.25, 0], measured);
+        expect(measured.movable(0.02, 0.25, 0)).toBe(false);
+        expect(region.movable(0.02, 0.25, 0)).toBe(true);
+        expect(region.staticRegion(0.02, 0, 0)).toBe(true);
+        for (const p of [[0, 0, 0], [0, 0.25, 0]]) {
+            expect(region.movable(...p)).toBe(measured.movable(...p));
+        }
+    });
+    it('agrees with nearest measured material, with deterministic source-order ties', () => {
+        const points = [[-1, 0, 0], [1, 0, 0], [0, 2, 1], [-2, 2, -1]];
+        const measured = { movable: x => x > 0 };
+        const region = extendMaterialRegion(points.flat(), measured);
+        for (let i = -10; i <= 10; i++) for (let j = -10; j <= 10; j++) {
+            const q = [i / 4, j / 4, 0.1];
+            const nearest = points.map((p, id) => ({ p, id, d: Math.hypot(...p.map((v, a) => v - q[a])) }))
+                .sort((a, b) => a.d - b.d || a.id - b.id)[0].p;
+            expect(region.movable(...q)).toBe(measured.movable(...nearest));
+        }
+        expect(region.movable(0, 0, 0)).toBe(false);
+    });
+    it('owns samples and labels and handles missing or invalid material', () => {
+        const positions = [0, 1, 0];
+        const region = extendMaterialRegion(positions, { movable: () => true });
+        positions.fill(99);
+        expect(region.movable(0, 1, 0)).toBe(true);
+        expect(extendMaterialRegion([], { movable: () => true }).movable(0, 0, 0)).toBe(false);
+        expect(() => extendMaterialRegion([0, NaN, 0], { movable: () => true })).toThrow(/material samples/);
+        expect(() => region.movable(NaN, 0, 0)).toThrow(/query/);
+    });
+});
 
 describe('a movable region in rest-world metres', () => {
     it('includes the Euclidean boundary and exposes its static complement', () => {

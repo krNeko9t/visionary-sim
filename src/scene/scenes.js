@@ -28,6 +28,7 @@ import { splatContactScene, splatScene } from './splats.js';
  * @property {() => Promise<unknown>} [prepare] - Finish asynchronous declarations,
  *   including bounds, before the camera or simulation is constructed.
  * @property {number[]} [gravity] - World acceleration; omitted keeps simulator defaults.
+ * @property {{law: 'hard'|'compliant', responseTime: number}} [grab] - Initial interaction settings.
  * @property {(stats: object) => void} [validateSimulation] - Reject invalid material
  *   diagnostics before any drawing or stepping starts.
  * @property {(app: import('playcanvas').AppBase) => void} decorate - Everything

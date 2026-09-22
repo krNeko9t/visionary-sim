@@ -1,11 +1,12 @@
 import { cleanCloud } from '../assets/splats/clean.js';
-import { createMetricRegion, splitCloudByRegion } from './metricRegion.js';
+import { createMetricRegion, extendMaterialRegion, splitCloudByRegion } from './metricRegion.js';
 
 /** Shared runtime/offline preparation; no placement or resolution-dependent rule. */
 export function prepareAlocasiaData(raw, samples, r) {
-    const region = createMetricRegion(samples, r);
+    const measured = createMetricRegion(samples, r);
     const cloud = cleanAlocasiaCloud(raw, 'foreground');
-    const { movable, fixed } = splitCloudByRegion(cloud, region);
+    const { movable, fixed } = splitCloudByRegion(cloud, measured);
+    const region = extendMaterialRegion(cloud.positions, measured);
     return { cloud, region, movable, fixed };
 }
 

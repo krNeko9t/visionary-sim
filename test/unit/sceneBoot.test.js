@@ -23,6 +23,8 @@ vi.mock('../../src/sim/simulator.js', () => ({ Simulator: class {
     deformationOf() { return {}; }
     stats() { return { scale: [], stepDuration: 0.004, cfl: 0.5, perBody: [] }; }
     step() { state.events.push(['step', this.params.gravity]); }
+    setDriveLaw(law) { state.events.push(['driveLaw', law]); }
+    setDriveResponseTime(seconds) { state.events.push(['responseTime', seconds]); }
     destroy() { state.events.push(['destroy']); }
 } }));
 
@@ -65,6 +67,15 @@ it('rejects material diagnostics before drawing, decorating or starting a frame'
     expect(state.events).toContainEqual(['destroy']);
     expect(state.app.destroy).toHaveBeenCalledOnce();
     expect(document.body.append).toHaveBeenCalledWith(expect.objectContaining({ textContent: expect.stringContaining('no fixed material support') }));
+});
+
+it('applies scene interaction settings before starting the application', async () => {
+    state.scene.grab = { law: 'compliant', responseTime: 0.003 };
+    await (await import('../../src/main.js')).startup;
+    expect(state.events).toContainEqual(['driveLaw', 'compliant']);
+    expect(state.events).toContainEqual(['responseTime', 0.003]);
+    expect(state.events.findIndex(([type]) => type === 'responseTime'))
+        .toBeLessThan(state.events.findIndex(([type]) => type === 'start'));
 });
 
 it('keeps scenes without preparation or gravity declarations working', async () => {

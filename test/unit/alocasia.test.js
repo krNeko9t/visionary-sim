@@ -103,6 +103,19 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
             expect(stats.cfl).toBeLessThan(1);
         } finally { sim.destroy(); }
     });
+    it('does not attach the outside of a movable thin leaf to the world', async () => {
+        const scene = createAlocasiaScene({ r: 0.016 });
+        const bodies = await scene.createBodies();
+        const sim = new Simulator({ supportsCompute: true, deviceType: 'test' }, bodies, scene.bounds);
+        try {
+            const { particles } = sim;
+            const leafNodes = Array.from({ length: particles.nodeCount }, (_, i) => i)
+                .filter(i => particles.invMass[i] > 0 && particles.restPositions[i * 4 + 1] > 0.2);
+            expect(leafNodes.length).toBeGreaterThan(0);
+            expect(leafNodes.filter(i => particles.staticPrescribed.has(i))).toEqual([]);
+            expect(sim.stats().perBody[0].staticNodes).toBeGreaterThan(0);
+        } finally { sim.destroy(); }
+    });
     it('binds only movable Gaussians and keeps fixed centre, rotation and scale at asset values', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
         const [body] = await scene.createBodies();
@@ -170,7 +183,12 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         const [body] = await scene.createBodies();
         expect(body.source.report).toContain('alocasia r=0.016 m;');
         expect(body.staticRegion(0.0159, 0.25, 0)).toBe(false);
-        expect(body.staticRegion(0.0161, 0.25, 0)).toBe(true);
+        // Extra proxy thickness inherits the nearest measured material; it
+        // must not become an attachment just outside the measurement radius.
+        expect(body.staticRegion(0.0161, 0.25, 0)).toBe(false);
+        expect(body.material.maxStretch).toBe(1.05);
+        expect(body.material.damping).toBe(2);
+        expect(scene.grab).toEqual({ law: 'compliant', responseTime: 0.003 });
         expect(scene.counts).toMatchObject({ movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
         expect((await scene.scenery()).map(item => item.name)).toEqual(['alocasia-fixed', 'alocasia-background']);
     });

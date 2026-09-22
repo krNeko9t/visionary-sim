@@ -12,7 +12,9 @@ registerHooks({ load(url, context, nextLoad) {
     return nextLoad(url, context);
 } });
 
-const report = { arguments: process.argv.slice(2), schemaVersion: 1, semanticCalibration: 'not performed', candidates: [], errors: [] };
+const report = { arguments: process.argv.slice(2), schemaVersion: 2,
+    materialBoundary: 'nearest-clean-foreground-label',
+    semanticCalibration: 'not performed', candidates: [], errors: [] };
 let output;
 try {
     const { values } = parseArgs({ options: {
@@ -67,7 +69,7 @@ try {
     report.notes = [
         'All coordinates and r are metres in the supplied common transformed world; no transform is reapplied.',
         'Fixed ratio increasing can mean r is too small. Counts alone cannot establish semantic separation.',
-        'Nodes are different samples of the same world region, not equal node sets or equal counts.',
+        'Foreground centres are labelled by distance to moving samples. Proxy nodes inherit the nearest clean foreground label; empty proxy thickness is not fixed material.',
         'Inspect pot, soil, leaves and petioles for every candidate; if none separates them, reopen the region decision. No second radius or semantic patch.',
         'CSV red = static, green = movable. Gaussian IDs index the cleaned foreground; node IDs are local to each resolution.'
     ];

@@ -144,7 +144,7 @@ export function createPanel(sim, { onProxyToggle }) {
             toggle({ label: '物体互碰', value: true, onChange: on => sim.setContact(on) }).element,
             toggle({
                 label: '刚性抓取',
-                value: true,
+                value: sim.driveLaw === 'hard',
                 onChange: on => sim.setDriveLaw(on ? 'hard' : 'compliant')
             }).element,
             toggle({

@@ -5,8 +5,15 @@ import {
     POISSON_RANGE,
     engineeringConstants,
     lameParameters,
-    waveSpeed
+    waveSpeed,
+    validateMaxStretch
 } from '../../src/body/material.js';
+
+it('accepts only a disabled or positive tensile allowance', () => {
+    expect(validateMaxStretch()).toBe(0);
+    expect(validateMaxStretch(1.05)).toBe(1.05);
+    for (const value of [NaN, Infinity, -1, 0.5, 1, '1.05']) expect(() => validateMaxStretch(value)).toThrow(/maxStretch/);
+});
 
 describe('material conversion', () => {
     it('round-trips E and nu through the Lame parameters', () => {

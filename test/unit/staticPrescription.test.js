@@ -104,6 +104,22 @@ const body = (staticRegion, elementSize = 0.02) => new SoftBody({
 });
 
 describe('public grabbing respects body-owned static material', () => {
+    it('configures finite grip strength without changing prescription and rejects invalid updates atomically', () => {
+        const sim = new Simulator(device, [body((x, y, z) => z < 0)], bounds);
+        try {
+            const staticNodes = [...sim.particles.staticPrescribed];
+            expect(sim.driveLaw).toBe('hard');
+            sim.setDriveLaw('compliant');
+            sim.setDriveResponseTime(0.003);
+            expect(sim.driveLaw).toBe('compliant');
+            expect(sim.drive.responseTime).toBe(0.003);
+            expect([...sim.particles.staticPrescribed]).toEqual(staticNodes);
+            for (const value of [0, -1, NaN, Infinity]) expect(() => sim.setDriveResponseTime(value)).toThrow(/responseTime/);
+            expect(sim.drive.responseTime).toBe(0.003);
+            expect(() => sim.setMaterial(0, { maxStretch: 0.5 })).toThrow(/maxStretch/);
+            expect(sim.simBodies[0].body.material.maxStretch).toBe(0);
+        } finally { sim.destroy(); }
+    });
     it.each(['hard', 'compliant'])('rejects a direct %s hold containing static nodes before changing the active hold', law => {
         const sim = new Simulator(device, [body((x, y, z) => z < 0)], bounds);
         sim.setDriveLaw(law);

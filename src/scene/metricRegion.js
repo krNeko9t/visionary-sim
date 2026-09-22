@@ -62,6 +62,57 @@ function finitePosition(x, y, z, label) {
 }
 
 /**
+ * Extend measured material labels into the volume inferred around a scan.
+ * A sample retains its original label. Between samples, the nearest foreground
+ * sample owns the label (ties use source order). Otherwise the outside corners
+ * of a thin leaf become world attachments merely because the proxy has a
+ * thickness and the scan does not. Background must never enter these samples.
+ *
+ * @param {ArrayLike<number>} positions - Clean foreground xyz measurements.
+ * @param {{movable: (x: number, y: number, z: number) => boolean}} measured - Labels at measured positions.
+ * @returns {{movable: (x: number, y: number, z: number) => boolean, staticRegion: (x: number, y: number, z: number) => boolean}}
+ */
+export function extendMaterialRegion(positions, measured) {
+    if (!positions || typeof positions !== 'object' || !Number.isSafeInteger(positions.length) ||
+        positions.length < 0 || positions.length % 3 !== 0) {
+        throw new TypeError('material samples must be flat xyz coordinates');
+    }
+    const points = [];
+    for (let i = 0; i < positions.length; i += 3) {
+        const p = [positions[i], positions[i + 1], positions[i + 2]];
+        finitePosition(...p, 'material samples');
+        points.push({ p, id: i / 3, movable: measured.movable(...p) });
+    }
+    const build = (items, depth = 0) => {
+        if (!items.length) return null;
+        const axis = depth % 3;
+        items.sort((a, b) => a.p[axis] - b.p[axis] || a.id - b.id);
+        const middle = items.length >> 1;
+        return { ...items[middle], axis, left: build(items.slice(0, middle), depth + 1),
+            right: build(items.slice(middle + 1), depth + 1) };
+    };
+    const root = build(points);
+    const movable = (x, y, z) => {
+        finitePosition(x, y, z, 'query');
+        const q = [x, y, z];
+        let best = Infinity, nearest = null;
+        const visit = node => {
+            if (!node) return;
+            const d = Math.hypot(node.p[0] - x, node.p[1] - y, node.p[2] - z);
+            if (d < best || (d === best && (!nearest || node.id < nearest.id))) {
+                best = d; nearest = node;
+            }
+            const delta = q[node.axis] - node.p[node.axis];
+            visit(delta < 0 ? node.left : node.right);
+            if (Math.abs(delta) <= best) visit(delta < 0 ? node.right : node.left);
+        };
+        visit(root);
+        return nearest?.movable ?? false;
+    };
+    return { movable, staticRegion: (x, y, z) => !movable(x, y, z) };
+}
+
+/**
  * Partition a foreground that has already been cleaned once as a whole.
  * Each Gaussian is classified exactly once by its centre, regardless of scale
  * or rotation. Both outputs preserve source order and all cloud attributes;

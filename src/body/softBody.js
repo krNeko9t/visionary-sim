@@ -1,4 +1,4 @@
-import { DEFAULT_MATERIAL } from './material.js';
+import { DEFAULT_MATERIAL, validateMaxStretch } from './material.js';
 
 /**
  * One object the author put in the scene: what it is called, what it is made
@@ -53,6 +53,7 @@ export class SoftBody {
         this.name = name;
         this.source = source;
         this.material = { ...DEFAULT_MATERIAL, ...material };
+        validateMaxStretch(this.material.maxStretch);
         this.render = render;
         this.staticRegion = staticRegion;
         this.elementSize = elementSize;

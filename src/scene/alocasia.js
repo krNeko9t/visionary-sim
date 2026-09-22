@@ -52,7 +52,8 @@ export function createAlocasiaScene({ r } = {}) {
         return {
             bodies: [new SoftBody({ name: 'alocasia', source: { kind: 'cloud', cloud, report },
                 render: movable.count ? { kind: 'gaussians', cloud: movable } : null,
-                staticRegion: region.staticRegion, elementSize: 0.016 })],
+                staticRegion: region.staticRegion, elementSize: 0.016,
+                material: { maxStretch: 1.05, damping: 2 } })],
             scenery: [
                 ...(fixed.count ? [{ name: 'alocasia-fixed', cloud: fixed }] : []),
                 ...(background.count ? [{ name: 'alocasia-background', cloud: background }] : [])
@@ -63,6 +64,7 @@ export function createAlocasiaScene({ r } = {}) {
         name: 'alocasia',
         bounds: null, // Available only after prepare; never frame a placeholder.
         gravity: [0, 0, 0],
+        grab: { law: 'compliant', responseTime: 0.003 },
         decorate() {},
         prepare,
         createBodies: async () => (await prepare()).bodies,

@@ -21,6 +21,10 @@
  *   free fall and spin alone; see `xpbdCouple` in `sim/constraints/wgsl/xpbdCouple.wgsl`.
  *   Zero is a perfectly elastic material, which rings until something else takes
  *   the energy.
+ * @property {number} maxStretch - Optional tensile length ratio, greater than
+ *   one; zero disables the limit. Elasticity still governs smaller strains
+ *   and recovery. Iterative projection approaches this bound; it is not a
+ *   guarantee when externally prescribed positions are incompatible.
  */
 
 /**
@@ -68,8 +72,17 @@ export const DEFAULT_MATERIAL = Object.freeze({
     density: 1000,
     friction: 0.4,
     damping: 0.6,
-    relaxation: 0.012
+    relaxation: 0.012,
+    maxStretch: 0
 });
+
+/** Validate before allocating resources or mutating an existing material. */
+export function validateMaxStretch(value = 0) {
+    if (!Number.isFinite(value) || (value !== 0 && value <= 1)) {
+        throw new RangeError('maxStretch must be zero (disabled) or a finite ratio greater than one');
+    }
+    return value;
+}
 
 /**
  * @param {number} value - Value to clamp.

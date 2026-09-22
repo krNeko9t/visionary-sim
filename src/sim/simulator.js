@@ -1,4 +1,5 @@
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
+import { validateMaxStretch } from '../body/material.js';
 import { staticNodesInRegion } from './staticPrescription.js';
 import { DEFAULT_GRIPPED_PART_RADIUS, GRIPS, worstCaseHeldNodes } from './grip.js';
 import { discretizeBody, elasticConstraints } from './discretize/discretize.js';
@@ -326,6 +327,7 @@ export class Simulator {
      * @param {Partial<import('../body/material.js').Material>} changes - Fields to change.
      */
     setMaterial(bodyIndex, changes) {
+        if ('maxStretch' in changes) validateMaxStretch(changes.maxStretch);
         const { body, proxy } = this.simBodies[bodyIndex];
         const { density, ...rest } = changes;
 
@@ -464,6 +466,14 @@ export class Simulator {
      */
     setDriveLaw(law) {
         this.drive.law = law;
+    }
+
+    /** The currently selected interaction law, also used to initialise the UI. */
+    get driveLaw() { return this.drive.law; }
+
+    /** Set the compliant grip's response time in seconds. */
+    setDriveResponseTime(seconds) {
+        this.drive.responseTime = seconds;
     }
 
     /** Returns every body to its rest state, at rest. */

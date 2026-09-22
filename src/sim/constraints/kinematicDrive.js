@@ -101,12 +101,23 @@ export class KinematicDrive {
             compliant: this.pass('compliant', groups)
         };
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('responseTime', RESPONSE_TIME);
             compute.setParameter('drivenCount', 0);
             compute.setParameter('grabTarget', [0, 0, 0]);
             compute.setParameter('grabTargetVelocity', [0, 0, 0]);
         }
+        this.responseTime = RESPONSE_TIME;
     }
+
+    /** Compliance response time in seconds; smaller means a stronger grip. */
+    set responseTime(seconds) {
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+            throw new RangeError('drive responseTime must be a finite positive number of seconds');
+        }
+        this._responseTime = seconds;
+        for (const compute of Object.values(this.computes)) compute.setParameter('responseTime', seconds);
+    }
+
+    get responseTime() { return this._responseTime; }
 
     /**
      * @param {string} name - Shader name, for debugging.

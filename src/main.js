@@ -29,6 +29,10 @@ async function boot() {
         sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
         scene.validateSimulation?.(sim.stats());
         if (scene.gravity !== undefined) sim.params.gravity = [...scene.gravity];
+        if (scene.grab) {
+            sim.setDriveLaw(scene.grab.law);
+            sim.setDriveResponseTime(scene.grab.responseTime);
+        }
         // Nothing is displayed or stepped before scene-specific diagnostics pass.
         const { camera } = createStage(app, scene.viewBounds ?? scene.bounds, { focusBounds: scene.bounds });
         scene.decorate(app);

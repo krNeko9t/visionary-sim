@@ -52,8 +52,10 @@ it('reports synthetic metric classifications, real proxy samples and reproducibl
             expect(evidence.length).toBe(row.materialNodes + 1);
             for (const line of evidence.slice(1)) {
                 const [, x, y, z, isStatic] = line.split(',').map(Number);
-                // Independent brute-force reference for the fixture's single sample.
-                expect(isStatic).toBe(Math.hypot(x - Math.fround(0.1), y - Math.fround(0.05), z) > candidate.r ? 1 : 0);
+                // Independent nearest-foreground material ownership reference.
+                const nearest = [-0.1, 0.1, 0.11].map(Math.fround)
+                    .sort((a, b) => Math.abs(x - a) - Math.abs(x - b))[0];
+                expect(isStatic).toBe(Math.abs(nearest - Math.fround(0.1)) > candidate.r ? 1 : 0);
             }
         }
         const evidence = readFileSync(join(dir, 'out', candidate.evidence), 'utf8');
@@ -73,7 +75,9 @@ it('keeps empty samples, all-static and unsupported candidates as failed evidenc
     expect(result.status, result.stderr).toBe(2);
     const report = JSON.parse(result.stdout);
     expect(report.candidates.map(c => c.r)).toEqual([0, 10]);
-    expect(report.candidates[0].resolutions.every(row => row.errors.includes('all material nodes are static'))).toBe(true);
+    // An exactly coincident movable measurement owns surrounding material
+    // even at r=0; the proxy's corners need not coincide with the sample.
+    expect(report.candidates[0].resolutions.every(row => row.movableNodes > 0)).toBe(true);
     expect(report.candidates[1].resolutions.every(row => row.errors.includes('no fixed material support'))).toBe(true);
     ply(join(dir, 'moving_part_points.ply'), [], ['x', 'y', 'z']);
     const empty = run(dir, 'empty');

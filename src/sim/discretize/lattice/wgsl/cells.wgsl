@@ -25,7 +25,7 @@ struct CellParams {
     alphaHyd: f32,
     gamma: f32,
     relaxation: f32,
-    pad1: f32,
+    maxStretch: f32,
     pad2: f32,
     pad3: f32,
 }
