@@ -261,3 +261,31 @@ it('releases a resource when attaching its drawing component fails', () => {
     expect(gpu.resources[0].destroy).toHaveBeenCalledOnce();
     vi.restoreAllMocks();
 });
+
+it('isolates multiple factory declarations, snapshots settings, and makes fixed support explicit', async () => {
+    const { createPhysDreamerScene } = await import('../../src/scene/physdreamer.js');
+    const { ALOCASIA } = await import('../../src/scene/physdreamerDeclarations.js');
+    const declaration = { ...ALOCASIA, name: 'synthetic-a', assetRoot: '/synthetic/a', r: 0.05,
+        material: { damping: 3 }, grab: { law: 'compliant', responseTime: 0.01 } };
+    const a = createPhysDreamerScene(declaration);
+    const b = createPhysDreamerScene({ ...ALOCASIA, name: 'synthetic-b', assetRoot: '/synthetic/b', r: 1,
+        elementSize: 0.03, requireFixedMaterial: false });
+    declaration.r = 1; declaration.material.damping = 9; declaration.grab.responseTime = 9;
+    const [[bodyA], [bodyB]] = await Promise.all([a.createBodies(), b.createBodies()]);
+    expect(loadCloud).toHaveBeenCalledWith('/synthetic/a/foreground.ply');
+    expect(loadCloud).toHaveBeenCalledWith('/synthetic/b/background.ply');
+    expect(a.counts).toMatchObject({ movableGaussians: 1, fixedGaussians: 1 });
+    expect(b.counts).toMatchObject({ movableGaussians: 2, fixedGaussians: 0 });
+    expect(bodyA.material.damping).toBe(3);
+    expect(a.grab.responseTime).toBe(0.01);
+    expect(bodyB.elementSize).toBe(0.03);
+    expect(bodyA.staticRegion(0.03, 0.25, 0)).toBe(false);
+    expect(bodyA.source.cloud).not.toBe(bodyB.source.cloud);
+    expect((await b.scenery()).map(item => item.name)).toEqual(['synthetic-b-background']);
+    const allMoving = { perBody: [{ materialNodes: 4, staticNodes: 0, movableNodes: 4 }] };
+    expect(() => b.validateSimulation(allMoving)).not.toThrow();
+    expect(() => a.validateSimulation(allMoving)).toThrow(/synthetic-a.*no fixed material support/);
+    expect(() => b.validateSimulation({ perBody: [] })).toThrow(/synthetic-b.*no material nodes/);
+    expect(() => b.validateSimulation({ perBody: [{ materialNodes: 4, staticNodes: 4, movableNodes: 0 }] })).toThrow(/all material nodes are static/);
+    expect(ALOCASIA).toMatchObject({ r: 0.016, elementSize: 0.016, material: { damping: 2, maxStretch: 1.05 }, grab: { responseTime: 0.003 } });
+});

@@ -147,3 +147,26 @@ it('loads all prepared partitions through the real runtime loader without a seco
         expect(scene.viewBounds.max[0]).toBeCloseTo(13.2);
     } finally { vi.unstubAllGlobals(); }
 });
+
+it('uses the same generic CLI for alocasia and isolates synthetic preparation declarations', async () => {
+    const { preparePhysDreamer } = await import('../../tools/preparePhysDreamer.js');
+    const { ALOCASIA } = await import('../../src/scene/physdreamerDeclarations.js');
+    const dir = fixture();
+    const legacy = run(dir);
+    expect(legacy.status, legacy.stderr).toBe(0);
+    const generic = spawnSync(process.execPath, [resolve('tools/prepare-physdreamer.js'), '--scene', 'alocasia', '--input', dir,
+        '--output', join(dir, 'generic'), '--camera-convention', 'opengl-c2w', '--up-threshold-deg', '15'], { encoding: 'utf8' });
+    expect(generic.status, generic.stderr).toBe(0);
+    expect(JSON.parse(generic.stdout)).toEqual(JSON.parse(legacy.stdout));
+    const a = preparePhysDreamer({ input: dir, output: join(dir, 'a'), 'camera-convention': 'opengl-c2w' }, { ...ALOCASIA, name: 'synthetic-a' });
+    const b = preparePhysDreamer({ input: dir, output: join(dir, 'b'), 'camera-convention': 'opengl-c2w' },
+        { ...ALOCASIA, name: 'synthetic-b', preparation: { ...ALOCASIA.preparation, heightMetres: 0.6 } });
+    expect(a.transform.scaleMetresPerSourceUnit).toBe(0.15);
+    expect(b.transform.scaleMetresPerSourceUnit).toBe(0.3);
+    expect(JSON.parse(readFileSync(join(dir, 'a/report.json'))).scene).toBe('synthetic-a');
+    expect(a.inputs['point_cloud.ply']).toMatchObject({ path: join(dir, 'point_cloud.ply'), sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(a.scaleStatus).toContain('not a measured');
+    const original = readFileSync(join(dir, 'moving_part_points.ply'));
+    expect(() => preparePhysDreamer({ input: dir, output: dir }, ALOCASIA)).toThrow(/must differ/);
+    expect(readFileSync(join(dir, 'moving_part_points.ply'))).toEqual(original);
+});

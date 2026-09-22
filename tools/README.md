@@ -1,3 +1,38 @@
+# PhysDreamer 共享工厂
+
+正式命令（Node 24）：
+
+```sh
+node tools/prepare-physdreamer.js --scene alocasia --input /path/to/originals \
+  --camera-convention opengl-c2w
+node tools/calibrate-physdreamer.js --scene alocasia --input public/splats/alocasia \
+  --input-kind real --r=0.003,0.006,0.009 --element-sizes=0.016,0.008 \
+  --output /tmp/alocasia-new-review
+```
+
+第二条仅示范独立候选参数，不批准这些 r，也无需重新校准已接受的 alocasia。
+旧 `prepare-alocasia.js` / `calibrate-alocasia.js` 薄转发同一实现，显式参数和默认准备输出路径
+保持兼容。通用命令必须提供已声明的 `--scene`；当前仅 alocasia 已就绪，后三个入口归后续票。
+输出默认为 `public` 加声明的资产根；输入始终只读，衍生产物目录被 git 忽略。
+
+声明集中在 `src/scene/physdreamerDeclarations.js`。运行时 `createPhysDreamerScene(declaration)`
+接收 name/assetRoot、米制 r/elementSize、material/grab、显式 requireFixedMaterial；一个场景实例
+共享一次 preparation promise，实例之间参数、分类、结果独立。完整清洗前景是唯一模拟源，
+动态与固定高斯互斥，背景只绘制；代理标签复用最近前景标签延拓。全动仅在明确声明允许时
+通过材料诊断，空材料与无可动材料仍失败。校准共用这些判据和同一公开代理入口。
+
+离线 preparation 声明 heightMetres、foregroundDistanceSource、upMode/upThresholdDegrees/upReason。
+0.30 m 是人工模拟尺度，不是数据集真实尺寸。`report.json` schemaVersion=2 记录场景声明、
+四原输入的真实路径/SHA-256/字节数、源/米制包围盒、共同变换与相机逐帧证据；最后发布。
+运行时仍对三层统一清洗并报告前后计数，prepare PLY 保留原始高斯属性，不做第二次摆放。
+
+相机模式详见 ADR-0021：`camera-up` 保持旧 camera +Y 与源世界 +Z 的原角检查，alocasia 默认
+55°不变；`projected-world-up` 检查世界 +Z 在图像平面的投影方向，长度 <0.5 的帧记录为不确定，
+不因角度超标排除帧。所有帧必须是合法右手矩阵；至少一帧提供证据，有效帧全部通过阈值。
+两模式阈值均为 [0,90)，均不能测得重力或保证未提供证据的俯拍帧竖直。必要时通过
+`--up-mode`、`--up-threshold-deg`、`--up-reason` 显式覆盖并在报告记录理由；新场景采用值须经
+其原图与有效/不确定帧复核，不仅把 carnations 原始 91.699°放宽为 92°。
+
 # alocasia 离线准备
 
 ```sh
@@ -11,8 +46,8 @@ PLY 使用现有读取器支持的 binary little-endian 1.0、首元素为标量
 样本仅读取 xyz，不需要高斯字段。ASCII/list 属性不支持且会报错。
 
 相机约定必须显式提供：OpenGL/Blender camera-to-world，右手坐标，局部 +Y 是 up，
-所以 `transform_matrix` 第二列是世界 up。逐帧核对其与源 +Z 的夹角，以最大值判定；
-矩阵必须为有限、正交、右手刚体变换。阈值须显式声明，示例 15° 不是实测校准。
+所以 `transform_matrix` 第二列是相机图像 up 在世界中的方向。逐帧核对其与源 +Z 的夹角，以最大值判定；
+矩阵必须为有限、正交、右手刚体变换。省略阈值采用场景声明，示例 15° 不是实测校准。
 这是对声明方向的相机证据核对，不是从相机推断真实重力。
 
 clean 全部 xyz 的转正后高度定义 0.30 m（不裁剪、不按最长轴）。应用

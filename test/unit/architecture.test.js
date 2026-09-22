@@ -69,7 +69,7 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
  *   opinion about the simulation's state in the interface.
  */
 const ALLOWED = {
-    '../tools': ['assets', 'scene', 'body', 'sim'], // Exact entry points below; ADR-0017/0018.
+    '../tools': ['assets', 'scene', 'body', 'sim'], // Exact entry points below; ADR-0017/0018/0021.
     'main.js': ['scene', 'sim', 'render', 'ui'],
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
@@ -354,7 +354,7 @@ describe('the layering the file tree claims', () => {
 
     it('keeps offline tools out of runtime and limits their shared scene dependency', () => {
         expect(EDGES.filter(({ from, to }) => !from.startsWith('../tools/') && to.startsWith('../tools/'))).toEqual([]);
-        const shared = new Set(['scene/metricRegion.js', 'scene/alocasiaData.js', 'body/softBody.js',
+        const shared = new Set(['scene/metricRegion.js', 'scene/physdreamerData.js', 'scene/physdreamerDeclarations.js', 'body/softBody.js',
             'sim/discretize/discretize.js', 'sim/staticPrescription.js', 'sim/state/materialCounts.js']);
         expect(EDGES.filter(({ from, to }) => from.startsWith('../tools/') &&
             !to.startsWith('../tools/') && !to.startsWith('assets/') && !shared.has(to))).toEqual([]);

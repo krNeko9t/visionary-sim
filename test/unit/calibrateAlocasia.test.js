@@ -117,3 +117,26 @@ it.each(['negative r', 'nonfinite r', 'one size', 'nonfinite position', 'missing
     expect(report.errors.length).toBeGreaterThan(0);
     expect(JSON.parse(readFileSync(join(dir, 'out/calibration.json'), 'utf8'))).toEqual(report);
 });
+
+it('shares generic CLI behavior and accepts all-moving only for an explicit declaration', () => {
+    const dir = fixture();
+    const legacy = run(dir);
+    const generic = spawnSync(process.execPath, [resolve('tools/calibrate-physdreamer.js'), '--scene', 'alocasia', '--input', dir,
+        '--output', join(dir, 'generic'), '--input-kind', 'synthetic', '--r=0.04,0.08', '--element-sizes=0.04,0.02'], { encoding: 'utf8' });
+    expect(generic.status, generic.stderr).toBe(0);
+    const genericReport = JSON.parse(generic.stdout), legacyReport = JSON.parse(legacy.stdout);
+    delete genericReport.request.scene;
+    expect(genericReport).toEqual(legacyReport);
+    const script = `
+        import { calibratePhysDreamer } from ${JSON.stringify(resolve('tools/calibratePhysDreamer.js'))};
+        import { ALOCASIA } from ${JSON.stringify(resolve('src/scene/physdreamerDeclarations.js'))};
+        const report = await calibratePhysDreamer(${JSON.stringify({ input: dir, output: join(dir, 'all-moving'), 'input-kind': 'synthetic', r: '10', 'element-sizes': '0.04,0.02' })},
+            { ...ALOCASIA, name: 'synthetic-free', requireFixedMaterial: false });
+        console.log(JSON.stringify(report));`;
+    const free = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+    expect(free.status, free.stderr).toBe(0);
+    const report = JSON.parse(free.stdout);
+    expect(report.status).toBe('numerical-report-only');
+    expect(report.scene).toBe('synthetic-free');
+    expect(report.candidates[0].resolutions.every(row => row.staticNodes === 0 && row.movableNodes > 0 && !row.errors.length)).toBe(true);
+});
