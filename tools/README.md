@@ -25,7 +25,8 @@ clean 全部 xyz 的转正后高度定义 0.30 m（不裁剪、不按最长轴�
 
 输出 `foreground.ply`、`background.ply` 均可由 `readPly` + `cloudFromPly` 读取，
 `moving_part_points.ply` 由 `readPly(..., {properties: ['x','y','z']})` 读取。
-这些坐标已是世界米制，运行时不能再次 place/normalize。背景仅留档，不加载。
+这些坐标已是世界米制，运行时不能再次 place/normalize。运行时加载背景并仅静态绘制，
+不将背景加入模拟源、抓取或接触。
 `report.json` 与 stdout 同内容，记录共同变换、逐帧角度、阈值、包围盒和数量。
 报告 room 是完整场景中心包围盒，background 是切分后的背景中心包围盒；均不含椭球外沿。
 
@@ -36,7 +37,7 @@ clean 全部 xyz 的转正后高度定义 0.30 m（不裁剪、不按最长轴�
 意外进程终止可能留下临时目录或不完整文件，只有 report 存在才代表完整发布。
 输入文件应在命令运行期间保持不变。产物全部被 git 忽略。
 
-所有本轮测试均为临时合成数据。真实相机约定、尺度、前景阈值和可动 r 的复核留给第 07 票。
+工具测试使用临时合成数据；真实资产校准与证据限制见 [07](../physdreamer-alocasia-impl/07-real-asset-calibration.md)。
 
 # alocasia 米制容差对照报告
 
@@ -89,3 +90,22 @@ npm test -- --run test/unit/calibrateAlocasia.test.js
 
 测试在临时目录创建已声明共同坐标的合成高斯、样本与准备报告，覆盖数值、清洗、精度、逐点
 证据、重跑确定性、退化和输入错误；明确标记 synthetic，不声称完成真实准备或校准。
+
+# 运行已校准的 alocasia 场景
+
+在仓库根执行；资产已存在时直接启动即可。新 checkout 需先安装依赖（`npm ci`），
+再用真实四输入准备资产（产物不入 git）：
+
+```sh
+node tools/prepare-alocasia.js --input /path/to/originals \
+  --camera-convention opengl-c2w --up-threshold-deg 55
+npm run dev -- --host 127.0.0.1 --port 5188
+```
+
+支持 WebGPU 的浏览器打开 `http://127.0.0.1:5188/?scene=alocasia`。55° 是 07 中该份
+alocasia 资产的相机位姿相容阈值，不是重力精度或其他资产的默认阈值；clean 高度为 0.30 m，
+生产 r 已声明为 0.016 m。前景可动部分随物理变形、固定前景和完整背景静态显示。
+
+实现已完成；当前 Intel UHD Graphics 770 的完整负载实测 16.0381 fps、丢时 14.1748948 s，
+60 fps / 零丢时未通过，薄结构质量尚未完全确认。设备条件、资产哈希和证据限制见
+[08](../physdreamer-alocasia-impl/08-real-gpu-acceptance.md)，不以可运行代替验收通过。
