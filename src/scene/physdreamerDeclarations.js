@@ -29,8 +29,18 @@ export const CARNATIONS = Object.freeze({
         upReason: 'Carnations: 202/209 frames provide projected world-up evidence (maximum 50.888 degrees); 55 degrees allows capture roll. Seven near-axis frames are indeterminate, including strong overhead views; raw camera-up reaches 91.699 degrees. Not measured gravity.' })
 });
 
+export const TELEPHONE = Object.freeze({
+    name: 'telephone', assetRoot: '/splats/telephone', r: 0.003, elementSize: 0.016,
+    material: Object.freeze({ maxStretch: 1.05, damping: 2 }),
+    grab: Object.freeze({ law: 'compliant', responseTime: 0.003 }),
+    requireFixedMaterial: true,
+    preparation: Object.freeze({ heightMetres: 0.30, foregroundDistanceSource: 0.01,
+        upMode: 'projected-world-up', upThresholdDegrees: 20,
+        upReason: 'Telephone: all 181 frames provide projected world-up evidence (maximum 15.814 degrees); 20 degrees allows capture roll, while raw camera-up reaches 23.266 degrees with pitch. Not measured gravity.' })
+});
+
 // Only ready scenes belong here. Subsequent tickets add their reviewed declarations.
-const declarations = { alocasia: ALOCASIA, hat: HAT, carnations: CARNATIONS };
+const declarations = { alocasia: ALOCASIA, hat: HAT, carnations: CARNATIONS, telephone: TELEPHONE };
 export function physdreamerDeclaration(name) {
     if (!Object.hasOwn(declarations, name)) throw new Error(`PhysDreamer scene ${name ?? '(missing)'} is not declared; known: ${Object.keys(declarations).join(', ')}`);
     return declarations[name];

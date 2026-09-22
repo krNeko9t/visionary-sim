@@ -292,7 +292,7 @@ it('isolates multiple factory declarations, snapshots settings, and makes fixed 
 
 
 describe('PhysDreamer shared factory registration', () => {
-    it.each(['hat', 'carnations'])('%s loads isolated assets and preserves complete foreground physics and static background', async (name) => {
+    it.each(['hat', 'carnations', 'telephone'])('%s loads isolated assets and preserves complete foreground physics and static background', async (name) => {
         const scene = sceneNamed(name);
         const [body] = await scene.createBodies();
         const scenery = await scene.scenery();

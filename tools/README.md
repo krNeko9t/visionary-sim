@@ -12,7 +12,7 @@ node tools/calibrate-physdreamer.js --scene alocasia --input public/splats/aloca
 
 第二条仅示范独立候选参数，不批准这些 r，也无需重新校准已接受的 alocasia。
 旧 `prepare-alocasia.js` / `calibrate-alocasia.js` 薄转发同一实现，显式参数和默认准备输出路径
-保持兼容。通用命令必须提供已声明的 `--scene`；当前 alocasia、hat 已就绪；carnations、telephone 归后续票。
+保持兼容。通用命令必须提供已声明的 `--scene`；当前 alocasia、hat、carnations、telephone 四场景均已接入。
 输出默认为 `public` 加声明的资产根；输入始终只读，衍生产物目录被 git 忽略。
 
 声明集中在 `src/scene/physdreamerDeclarations.js`。运行时 `createPhysDreamerScene(declaration)`
@@ -198,3 +198,42 @@ elementSize=.016 m；maxStretch=1.05、damping=2 /s、柔抓 .003 s 为初始交
 阈值改成92°，也不能宣称相机证明世界重力。Intel UHD770 短 smoke 约12.11 fps、有丢时，
 固定节点及静态GPU层不变，抓取松手位置有限。60 fps/零丢时目标未过，按本轮契约不阻止交付。
 完整参数对照、哈希、截图及命令见 [03 实施记录](../.scratch/physdreamer-factory/issues/03-carnations.md)。
+
+# Telephone 真实场景
+
+```sh
+node tools/prepare-physdreamer.js --scene telephone \
+  --input /home/liaowanjun/Datas/physDreamer/physics_dreamer/physics_dreamer/telephone \
+  --camera-convention opengl-c2w
+node tools/calibrate-physdreamer.js --scene telephone --input public/splats/telephone \
+  --input-kind real --r=0.003,0.006,0.009 --element-sizes=0.016,0.012 \
+  --output public/splats/telephone/calibration-04
+npm run dev -- --host 127.0.0.1 --port 5191
+```
+
+校准输出需是新目录，复跑时换名。打开 `http://127.0.0.1:5191/?scene=telephone`，
+左键抓取电话线并松手，右键旋转，勾选“显示代理几何”检查线框。缺资产错误包含场景及 URL；
+先执行准备命令。电话机和房间完整绘制，只有 clean 前景提供物理材料，背景不提供支撑或抓取。
+
+clean 高度 0.30 m 是人工模拟尺度，比例 .548393672095 m/源单位。选 r=.003 m、
+elementSize=.016 m；三个小半径和两档精度对照后保留顶部小固定区，未增加人为固定节点。
+清洗后动态/固定前景/背景为 35767/1860/271861；材料节点468（固定101、可动367）。
+maxStretch=1.05、damping=2 /s、柔抓 .003 s 是初始交互声明，非电话线材料标定。
+体积代理明显比螺旋线粗，不能声称已模拟真实弹簧线圈或线圈自接触。
+
+采用 projected-world-up 20°：181/181帧有效，最大投影角15.814°、原角23.266°；
+全部原角及零不确定帧统计保留，图像方向证据不等于重力测量。
+Intel UHD770 短 smoke 约8.55 fps、丢时2.261s/30帧；抓取松手位置有限、固定节点位移零，
+静态GPU层不变。60 fps/零丢时目标未过，按本轮契约不阻止交付。
+完整参数、哈希、截图与限制见 [04 实施记录](../.scratch/physdreamer-factory/issues/04-telephone.md)。
+
+四个正式入口为 `?scene=alocasia`、`?scene=hat`、`?scene=carnations`、`?scene=telephone`。
+上面的旧 alocasia 准备命令继续兼容；也可使用统一入口：
+
+```sh
+node tools/prepare-physdreamer.js --scene alocasia --input /path/to/originals \
+  --camera-convention opengl-c2w
+```
+
+alocasia 已接受的 r=.016 m、elementSize=.016 m、maxStretch=1.05、damping=2 /s、柔抓 .003 s
+及 camera-up 55° 保持不变。所有场景产物和本机证据均位于 ignored 的 `public/splats/NAME`。
