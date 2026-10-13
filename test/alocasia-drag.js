@@ -35,27 +35,31 @@ function maximumStretch(f) {
     return largest;
 }
 const app = await createApp(document.getElementById('app'));
-app.start();
-window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4, hold = 0.2, gripRadius, legacy = false } = {}) => {
+const computeOnly = new URLSearchParams(location.search).has('computeOnly');
+if (!computeOnly) app.start();
+window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4, hold = 0.2,
+    gripRadius, legacy = false, legacyRegion = legacy, law, responseTime } = {}) => {
     const scene = createAlocasiaScene({ r: 0.016 });
     const [body] = await scene.createBodies();
     if (h !== undefined) body.elementSize = h;
-    Object.assign(body.material, material);
-    if (legacy) {
+    if (legacyRegion) {
         const response = await fetch('/splats/alocasia/moving_part_points.ply');
         const { count, properties: p } = readPly(await response.arrayBuffer(), { properties: ['x', 'y', 'z'] });
         const samples = new Float32Array(count * 3);
         for (let i = 0; i < count; i++) samples.set([p.x[i], p.y[i], p.z[i]], i * 3);
         body.staticRegion = createMetricRegion(samples, 0.016).staticRegion;
-        body.material.maxStretch = 0;
-        body.material.damping = 0.6;
     }
+    if (legacy) Object.assign(body.material, { maxStretch: 0, damping: 0.6 });
+    // Independent overrides allow one-factor comparisons against either baseline.
+    Object.assign(body.material, material);
     const sim = new Simulator(app.graphicsDevice, [body], scene.bounds);
     if (gripRadius !== undefined) sim.setGripRadius(gripRadius);
     if (!legacy) {
         sim.setDriveLaw(scene.grab.law);
         sim.setDriveResponseTime(scene.grab.responseTime);
     }
+    if (law !== undefined) sim.setDriveLaw(law);
+    if (responseTime !== undefined) sim.setDriveResponseTime(responseTime);
     sim.params.gravity = [0, 0, 0];
     const l = sim.simBodies[0].proxy.lattice;
     const bindings = refs.map(point => {
@@ -73,7 +77,12 @@ window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4
         leafBindings.push({ nodes: cellNodeIndices(l.nodeDims, ...cell), gradients: trilinearGradients(local, l.h) });
     }
     const dt = sim.clock.stepDuration;
-    const batch = steps => new Promise(resolve => app.once('update', () => {
+    const batch = computeOnly ? async steps => {
+        // Same production dispatch, without acquiring a canvas swap-chain texture.
+        sim.dispatch(steps);
+        app.graphicsDevice.submit();
+        await app.graphicsDevice.wgpu.queue.onSubmittedWorkDone();
+    } : steps => new Promise(resolve => app.once('update', () => {
         sim.dispatch(steps);
         app.once('postrender', resolve);
     }));
@@ -125,7 +134,9 @@ window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4
         const release500ms = await capture();
         await advance(1.5);
         const release2000ms = await capture();
-        return { h: body.elementSize, legacy, material: body.material, dt, hit, delta, rest, held, releaseStep, release100ms, release500ms, release2000ms };
+        return { h: body.elementSize, computeOnly, legacy, legacyRegion, law: sim.driveLaw,
+            responseTime: sim.drive.responseTime, material: body.material, dt, hit, delta,
+            rest, held, releaseStep, release100ms, release500ms, release2000ms };
     } finally { sim.destroy(); }
 };
 window.ready = true;

@@ -7,8 +7,25 @@ import { parseArgs } from 'node:util';
 const { values } = parseArgs({ options: {
     cdp: { type: 'string', default: 'http://127.0.0.1:9351' },
     base: { type: 'string', default: 'http://127.0.0.1:5188' },
-    output: { type: 'string', default: '/tmp/alocasia-drag-results.json' }
+    output: { type: 'string', default: '/tmp/alocasia-drag-results.json' },
+    ablation: { type: 'boolean', default: false },
+    'compute-only': { type: 'boolean', default: false },
+    cases: { type: 'string' }
 } });
+const scenarios = values.ablation ? {
+    before: { legacy: true },
+    labelsOnly: { legacy: true, legacyRegion: false },
+    labelsAndSoftGrip: { legacy: true, legacyRegion: false, law: 'compliant', responseTime: 0.003 },
+    noLimit: { material: { maxStretch: 0 } },
+    after: {},
+    limit102: { material: { maxStretch: 1.02 } },
+    limit110: { material: { maxStretch: 1.10 } },
+    noLimitLarge: { material: { maxStretch: 0 }, delta: [0.1, 0, 0] },
+    noLimitSideways: { material: { maxStretch: 0 }, delta: [0, 0, -0.04] }
+} : { before: { legacy: true }, after: {}, large: { delta: [0.1, 0, 0] }, sideways: { delta: [0, 0, -0.04] } };
+if (values.cases && !values.ablation) throw new Error('--cases requires --ablation');
+const selected = values.cases ? values.cases.split(',') : Object.keys(scenarios);
+for (const name of selected) assert(Object.hasOwn(scenarios, name), `unknown case: ${name}`);
 const version = await (await fetch(`${values.cdp}/json/version`)).json();
 const socket = new WebSocket(version.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
@@ -29,7 +46,9 @@ const send = (method, params = {}, sessionId) => new Promise((resolve, reject) =
     pending.set(id, { resolve, reject, timeout });
     socket.send(JSON.stringify({ id, method, params, sessionId }));
 });
-const { targetId } = await send('Target.createTarget', { url: `${values.base}/test/alocasia-drag.html` });
+const { targetId } = await send('Target.createTarget', {
+    url: `${values.base}/test/alocasia-drag.html${values['compute-only'] ? '?computeOnly' : ''}`
+});
 try {
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const evaluate = async expression => {
@@ -44,32 +63,47 @@ try {
     }
     assert(ready, 'WebGPU test page did not initialise');
     const gpu = await send('SystemInfo.getInfo');
-    const results = { browser: version.Browser, gpu: gpu.gpu.devices };
-    for (const [name, options] of Object.entries({ before: { legacy: true }, after: {}, large: { delta: [0.1, 0, 0] }, sideways: { delta: [0, 0, -0.04] } })) {
+    const results = { browser: version.Browser, gpu: gpu.gpu.devices, ablation: values.ablation };
+    for (const name of selected) {
+        const options = scenarios[name];
         results[name] = await evaluate(`runDrag(${JSON.stringify(options)})`);
         const r = results[name];
         console.log(`${name}: petiole=${r.held.mm[2].toFixed(3)} mm, leaf=${r.held.mm[6].toFixed(3)} mm, p95 stretch=${r.held.stretch.p95.toFixed(3)}`);
+        // Retain completed cases even if a later run or assertion fails.
+        writeFileSync(values.output, JSON.stringify(results, null, 2) + '\n');
     }
-    writeFileSync(values.output, JSON.stringify(results, null, 2) + '\n');
-    // Both gates rejected the shipped behaviour before any production edit.
-    assert(results.before.held.mm[2] < 1, 'Legacy control no longer reproduces local-only motion');
-    assert(results.before.held.stretch.p95 > 1.15, 'Legacy control no longer reproduces rubber-like stretching');
-    for (const name of ['after', 'large', 'sideways']) {
-        const r = results[name];
-        assert(r.held.mm[2] > 3, `${name}: the petiole must visibly respond`);
-        assert(r.held.mm[6] > 15, `${name}: do not pass by making the leaf ungrabbable`);
-        assert(r.held.stretch.samples > 500, 'Measure the leaf surface, not just a selected point');
-        assert(r.held.stretch.p95 < 1.12 && r.held.stretch.max < 1.25, `${name}: excessive local stretching`);
-        const jump = Math.hypot(...r.held.xyz[6].map((v, i) => v - r.releaseStep.xyz[6][i]));
-        assert(jump < 0.001, `${name}: release must not teleport the leaf`);
-        assert(r.release100ms.mm[6] > 1, `${name}: release must retain visible motion`);
-        assert(r.release2000ms.mm[6] < r.held.mm[6] * 0.65, `${name}: motion must decay`);
-        for (const state of ['rest', 'held', 'releaseStep', 'release100ms', 'release500ms', 'release2000ms']) {
-            assert.equal(r[state].bad, 0, `${name}/${state}: non-finite nodes`);
-            assert.equal(r[state].staticMax, 0, `${name}/${state}: support moved`);
+    if (values.ablation) {
+        for (const name of selected) {
+            const r = results[name];
+            assert(r.held.stretch.samples > 500, `${name}: leaf surface was not sampled`);
+            for (const state of ['rest', 'held', 'releaseStep', 'release100ms', 'release500ms', 'release2000ms']) {
+                assert.equal(r[state].bad, 0, `${name}/${state}: non-finite nodes`);
+                assert.equal(r[state].staticMax, 0, `${name}/${state}: support moved`);
+            }
         }
+        // Do not turn subjective deformation thresholds into a material validation.
+        console.log(`MEASURED: ablation completed; evidence: ${values.output}`);
+    } else {
+        // Both gates rejected the shipped behaviour before any production edit.
+        assert(results.before.held.mm[2] < 1, 'Legacy control no longer reproduces local-only motion');
+        assert(results.before.held.stretch.p95 > 1.15, 'Legacy control no longer reproduces rubber-like stretching');
+        for (const name of ['after', 'large', 'sideways']) {
+            const r = results[name];
+            assert(r.held.mm[2] > 3, `${name}: the petiole must visibly respond`);
+            assert(r.held.mm[6] > 15, `${name}: do not pass by making the leaf ungrabbable`);
+            assert(r.held.stretch.samples > 500, 'Measure the leaf surface, not just a selected point');
+            assert(r.held.stretch.p95 < 1.12 && r.held.stretch.max < 1.25, `${name}: excessive local stretching`);
+            const jump = Math.hypot(...r.held.xyz[6].map((v, i) => v - r.releaseStep.xyz[6][i]));
+            assert(jump < 0.001, `${name}: release must not teleport the leaf`);
+            assert(r.release100ms.mm[6] > 1, `${name}: release must retain visible motion`);
+            assert(r.release2000ms.mm[6] < r.held.mm[6] * 0.65, `${name}: motion must decay`);
+            for (const state of ['rest', 'held', 'releaseStep', 'release100ms', 'release500ms', 'release2000ms']) {
+                assert.equal(r[state].bad, 0, `${name}/${state}: non-finite nodes`);
+                assert.equal(r[state].staticMax, 0, `${name}/${state}: support moved`);
+            }
+        }
+        console.log(`PASS: GPU drag, strain and release regression; evidence: ${values.output}`);
     }
-    console.log(`PASS: GPU drag, strain and release regression; evidence: ${values.output}`);
 } finally {
     await send('Target.closeTarget', { targetId });
     socket.close();
