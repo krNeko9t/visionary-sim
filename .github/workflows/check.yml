@@ -1,0 +1,21 @@
+# Everything that needs no browser: unit tests, the structural tests
+# (architecture, docs, kernel boundary) and the application build.
+# Real-WebGPU gates run locally on the Windows RTX 4090; see
+# test/motion-reference/README.md.
+name: check
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check

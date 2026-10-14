@@ -1,8 +1,10 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { RENDERER_API } from '../kernel-boundary/rules.js';
+import { SRC, sourceFiles } from '../sourceTree.js';
 
 /**
  * The repository's shape, as a rule rather than as a promise.
@@ -16,8 +18,6 @@ import { describe, expect, it } from 'vitest';
  * Read `ARCHITECTURE.md` for what each area is and why. This file only says
  * who may reach whom.
  */
-
-const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 
 /**
  * Which areas each area is allowed to import from. An entry permits that area
@@ -92,22 +92,6 @@ const REQUIRED = [
 ];
 
 /**
- * Names that belong to whoever is doing the rendering.
- *
- * The table above is a table of *imports*, and a module can know something
- * without importing it: calling a method on an object it did not make, or
- * naming a foreign type in an annotation, are both dependencies that no import
- * check will ever see. Wherever the tree makes a claim, this list is how that
- * claim is kept true rather than merely displayed.
- *
- * Matched case-sensitively, and that is load-bearing rather than sloppy:
- * `playcanvas` in lower case is how the package is named in an import or a type
- * annotation, while prose that discusses the engine writes PlayCanvas. The
- * first is a dependency and the second is a sentence.
- */
-const RENDERER_API = ['playcanvas', 'setParameter', 'getShaderChunks', 'StorageBuffer'];
-
-/**
  * How the proxy geometry happens to be cut up today. A word list rather than an
  * import rule, for the same reason {@link RENDERER_API} is one: a render path
  * that started reasoning about cells would not import anything to do it -- it
@@ -174,21 +158,6 @@ function discretisationIn(file) {
  * read-after-write hazards").
  */
 const INTERACTION = [/\bgrab/i, /\bpointer/i, /\bdrag/i, /\bgrip/i];
-
-/**
- * @param {string} dir - Directory to walk.
- * @returns {string[]} Source paths relative to `src`, using forward slashes.
- */
-function sourceFiles(dir = SRC) {
-    const files = readdirSync(dir).flatMap((entry) => {
-        const full = join(dir, entry);
-        if (statSync(full).isDirectory()) {
-            return sourceFiles(full);
-        }
-        return /\.(js|wgsl|css)$/.test(entry) ? [relative(SRC, full).replaceAll('\\', '/')] : [];
-    });
-    return dir === SRC ? [...files, ...sourceFiles(join(SRC, '../tools'))] : files;
-}
 
 /**
  * The area a file belongs to: the most specific key of {@link ALLOWED} that
@@ -271,8 +240,9 @@ describe('the layering the file tree claims', () => {
         // (`sim/discretize/lattice/sample.wgsl`, outside this rule since it
         // left the channel) still writes PlayCanvas's WGSL dialect --
         // `uniform x: T;` read back as `uniform.x`, storage bindings left for
-        // the engine to assign. That coupling is real, this rule does not reach
-        // it, and it goes when the GPU resource seam does.
+        // the engine to assign. That coupling is real and this rule does not
+        // reach it; the kernel boundary (`kernelBoundary.test.js`) does, and
+        // carries it as an exemption until the GPU resource seam removes it.
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'deformation')
             .flatMap((file) => {

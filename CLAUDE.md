@@ -15,6 +15,8 @@
 - `render/` 增加新表示法走 `deformation/bind.js`，不新写一份绑定。
 - 新增目录：同时更新 `ARCHITECTURE.md` §二的表和 `test/unit/architecture.test.js` 的依赖表。
 - 依赖表在architecture.test.js，改依赖表把理由写成 `docs/adr/` 的一条 ADR。
+- `test/kernel-boundary/exemptions.js` 只删不加：修掉内核违规的同一个变更里删掉或调低对应行；新代码不靠加豁免通过。
+- 改写计算后端、着色器绑定这类不该改变物理行为的改动，提交前在 4090 上跑 `test/motion-reference/` 比对；有意改变物理行为时按它的 README 重录。
 
 ## Agent skills
 

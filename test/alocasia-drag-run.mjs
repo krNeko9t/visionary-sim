@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
+import { connect } from './cdp.mjs';
+
 // Run against an isolated Chrome --remote-debugging-port and a local Vite
 // server. This runner owns only the tab it creates and always closes that tab.
 const { values } = parseArgs({ options: {
@@ -9,42 +11,14 @@ const { values } = parseArgs({ options: {
     base: { type: 'string', default: 'http://127.0.0.1:5188' },
     output: { type: 'string', default: '/tmp/alocasia-drag-results.json' }
 } });
-const version = await (await fetch(`${values.cdp}/json/version`)).json();
-const socket = new WebSocket(version.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
-const pending = new Map();
-let serial = 0;
-socket.onmessage = event => {
-    const message = JSON.parse(event.data);
-    const entry = pending.get(message.id);
-    if (!entry) return;
-    clearTimeout(entry.timeout);
-    pending.delete(message.id);
-    if (message.error) entry.reject(new Error(JSON.stringify(message.error)));
-    else entry.resolve(message.result);
-};
-const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
-    const id = ++serial;
-    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(`${method} timed out`)); }, 120000);
-    pending.set(id, { resolve, reject, timeout });
-    socket.send(JSON.stringify({ id, method, params, sessionId }));
-});
-const { targetId } = await send('Target.createTarget', { url: `${values.base}/test/alocasia-drag.html` });
+const browser = await connect(values.cdp);
+const page = await browser.openPage(`${values.base}/test/alocasia-drag.html`);
 try {
-    const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
-    const evaluate = async expression => {
-        const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
-        if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
-        return result.result.value;
-    };
-    let ready = false;
-    for (let i = 0; i < 120 && !ready; i++) {
-        ready = await evaluate('window.ready === true');
-        if (!ready) await new Promise(resolve => setTimeout(resolve, 250));
-    }
+    const { evaluate } = page;
+    const ready = await page.waitFor('window.ready === true');
     assert(ready, 'WebGPU test page did not initialise');
-    const gpu = await send('SystemInfo.getInfo');
-    const results = { browser: version.Browser, gpu: gpu.gpu.devices };
+    const gpu = await browser.send('SystemInfo.getInfo');
+    const results = { browser: browser.version.Browser, gpu: gpu.gpu.devices };
     for (const [name, options] of Object.entries({ before: { legacy: true }, after: {}, large: { delta: [0.1, 0, 0] }, sideways: { delta: [0, 0, -0.04] } })) {
         results[name] = await evaluate(`runDrag(${JSON.stringify(options)})`);
         const r = results[name];
@@ -71,6 +45,6 @@ try {
     }
     console.log(`PASS: GPU drag, strain and release regression; evidence: ${values.output}`);
 } finally {
-    await send('Target.closeTarget', { targetId });
-    socket.close();
+    await page.close();
+    browser.close();
 }

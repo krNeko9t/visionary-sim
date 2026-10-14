@@ -108,6 +108,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 两种驱动律各自的位移/修正公式；被规定节点在弹性投影里不再分走修正 | `test/unit/kinematicDrive.test.js`、`elastic.test.js` |
 | `sim/state`、`sim/solver` 不出现抓取/指针/拖拽一类的交互词汇（知识边） | `test/unit/architecture.test.js` |
 | 抓取集合握住的材料量不随点阵分辨率变化 | `test/unit/grip.test.js` |
+| 将进入 visionary-sim 包的内核源码（`test/kernel-boundary/rules.js` 的 `KERNEL`）只依赖 WebGPU：不 import 包或内核外的文件，不用渲染器 API 和 I/O、页面一类的全局名，WGSL 不写 PlayCanvas 方言；现存违规列在只减不增的 `test/kernel-boundary/exemptions.js` | `test/unit/kernelBoundary.test.js` |
 
 这些约束的**推导写在它约束的那段代码旁边**，不在这里：泊松比下限在 `body/material.js`，
 封口宽度在 `sim/discretize/lattice/cloudVolume.js`，填充在 `sim/discretize/lattice/voxelize.js`。文档复述
