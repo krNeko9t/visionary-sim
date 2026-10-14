@@ -1,59 +1,65 @@
 {
-  "commit": "4cf21fddec4dbffc094418ea209849ee46a3cece",
-  "recorded": "2026-10-14T02:36:42.585Z",
-  "repeats": 5,
-  "tolerance": "twice the furthest any repeat strayed from the first, per checkpoint",
-  "browser": "Chrome/155.0.8059.39",
-  "gpu": [
-    {
-      "vendorId": 4318,
-      "deviceId": 9860,
-      "subSysId": 1086264408,
-      "revision": 161,
-      "vendorString": "",
-      "deviceString": "NVIDIA GeForce RTX 4090",
-      "driverVendor": "NVIDIA",
-      "driverVersion": "32.0.16.1047"
-    },
-    {
-      "vendorId": 32902,
-      "deviceId": 42880,
-      "subSysId": 3489666136,
-      "revision": 4,
-      "vendorString": "",
-      "deviceString": "Intel(R) UHD Graphics 770",
-      "driverVendor": "",
-      "driverVersion": "32.0.101.6129"
-    },
-    {
-      "vendorId": 4318,
-      "deviceId": 9860,
-      "subSysId": 1086264408,
-      "revision": 161,
-      "vendorString": "",
-      "deviceString": "NVIDIA GeForce RTX 4090",
-      "driverVendor": "",
-      "driverVersion": "32.0.16.1047"
-    },
-    {
-      "vendorId": 5140,
-      "deviceId": 140,
-      "subSysId": 0,
-      "revision": 0,
-      "vendorString": "",
-      "deviceString": "Microsoft Basic Render Driver",
-      "driverVendor": "",
-      "driverVersion": "10.0.22621.5415"
-    }
-  ],
-  "assets": {
-    "public/models/spot.obj": "0738b5e8608fed74e5e8c7aa8dd0af97b4b74f9f6cbf7aac84cd7e40b2e44a75",
-    "public/models/stanford-bunny.obj": "1eb35d1e21ce99e5ce911353b6be278990713448dd9e8f5c9387f9de39b32205",
-    "public/models/suzanne.obj": "d8684326f9bd8cfc24d3d302c1042fa16f63d2e66e49ed56b413fa20bed271e6",
-    "public/splats/alocasia/background.ply": "c6c810b115362fa020644af508a9381d7848448a5de92eed37186ce29eb6a09d",
-    "public/splats/alocasia/foreground.ply": "2c7b90dac649337c2ae868b85442ea4b1b9e8c24394e346378d9faafcb74d50a",
-    "public/splats/alocasia/moving_part_points.ply": "59c751653820df62ccd4a7d80f6a42fba7f443c2c21bde2984a5c87d4e94dbfd",
-    "public/splats/bread.ply": "07e019407e920932094af67acb90b9fe8b37d1206a0724926dc117cb4d12b1bf",
-    "public/splats/wolf.ply": "c23a8f36662ac47445bd4a4e3d6faea6b97bdbc8d6f7934921eccce459651f8b"
+ "commit": "c0261c5633e51c4152194dbc5b14db7d3a5ae745",
+ "recorded": "2026-10-14T02:51:53.138Z",
+ "repeats": 5,
+ "tolerance": "twice the furthest any repeat strayed from the first, per checkpoint",
+ "browser": "Chrome/155.0.8059.39",
+ "adapter": {
+  "vendor": "nvidia",
+  "architecture": "lovelace",
+  "device": "",
+  "description": ""
+ },
+ "gpu": [
+  {
+   "vendorId": 4318,
+   "deviceId": 9860,
+   "subSysId": 1086264408,
+   "revision": 161,
+   "vendorString": "",
+   "deviceString": "NVIDIA GeForce RTX 4090",
+   "driverVendor": "NVIDIA",
+   "driverVersion": "32.0.16.1047"
+  },
+  {
+   "vendorId": 32902,
+   "deviceId": 42880,
+   "subSysId": 3489666136,
+   "revision": 4,
+   "vendorString": "",
+   "deviceString": "Intel(R) UHD Graphics 770",
+   "driverVendor": "",
+   "driverVersion": "32.0.101.6129"
+  },
+  {
+   "vendorId": 4318,
+   "deviceId": 9860,
+   "subSysId": 1086264408,
+   "revision": 161,
+   "vendorString": "",
+   "deviceString": "NVIDIA GeForce RTX 4090",
+   "driverVendor": "",
+   "driverVersion": "32.0.16.1047"
+  },
+  {
+   "vendorId": 5140,
+   "deviceId": 140,
+   "subSysId": 0,
+   "revision": 0,
+   "vendorString": "",
+   "deviceString": "Microsoft Basic Render Driver",
+   "driverVendor": "",
+   "driverVersion": "10.0.22621.5415"
   }
+ ],
+ "assets": {
+  "public/models/spot.obj": "0738b5e8608fed74e5e8c7aa8dd0af97b4b74f9f6cbf7aac84cd7e40b2e44a75",
+  "public/models/stanford-bunny.obj": "1eb35d1e21ce99e5ce911353b6be278990713448dd9e8f5c9387f9de39b32205",
+  "public/models/suzanne.obj": "d8684326f9bd8cfc24d3d302c1042fa16f63d2e66e49ed56b413fa20bed271e6",
+  "public/splats/alocasia/background.ply": "c6c810b115362fa020644af508a9381d7848448a5de92eed37186ce29eb6a09d",
+  "public/splats/alocasia/foreground.ply": "2c7b90dac649337c2ae868b85442ea4b1b9e8c24394e346378d9faafcb74d50a",
+  "public/splats/alocasia/moving_part_points.ply": "59c751653820df62ccd4a7d80f6a42fba7f443c2c21bde2984a5c87d4e94dbfd",
+  "public/splats/bread.ply": "07e019407e920932094af67acb90b9fe8b37d1206a0724926dc117cb4d12b1bf",
+  "public/splats/wolf.ply": "c23a8f36662ac47445bd4a4e3d6faea6b97bdbc8d6f7934921eccce459651f8b"
+ }
 }
