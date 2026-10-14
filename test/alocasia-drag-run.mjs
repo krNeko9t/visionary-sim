@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
-import { connect } from './cdp.mjs';
+import { connect } from './browser.mjs';
 
 // Run against an isolated Chrome --remote-debugging-port and a local Vite
 // server. This runner owns only the tab it creates and always closes that tab.

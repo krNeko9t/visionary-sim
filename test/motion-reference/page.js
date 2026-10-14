@@ -63,4 +63,9 @@ window.playScenario = async (name) => {
         simulation.destroy();
     }
 };
+/** @returns {object} The WebGPU adapter this page's device came from. */
+window.adapterInfo = () => {
+    const { vendor, architecture, device, description } = app.graphicsDevice.gpuAdapter.info;
+    return { vendor, architecture, device, description };
+};
 window.ready = true;

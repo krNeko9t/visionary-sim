@@ -23,6 +23,10 @@ import { posix } from 'node:path';
  *   Gaussian cloud) and the pure functions it needs, such as `meshBounds`.
  *   These three files also hold the application's loaders and shape
  *   generators; the package takes the shapes and leaves those behind.
+ *
+ * The import rule keeps the list complete: a kernel file that imports, or
+ * names the type of, a file not on it is a violation, so whatever the kernel
+ * needs is either listed here and checked, or reported.
  */
 export const KERNEL = [
     'sim',
@@ -38,7 +42,7 @@ export const KERNEL = [
  * @param {string} path - Path relative to `src`.
  * @returns {boolean} Whether `path` is kernel source.
  */
-export function isKernel(path) {
+function isKernel(path) {
     return KERNEL.some(entry => path === entry || path.startsWith(`${entry}/`));
 }
 
@@ -58,7 +62,7 @@ export function isKernel(path) {
  * first is a dependency and the second is a sentence.
  */
 export const RENDERER_API = [
-    'playcanvas', 'setParameter', 'getShaderChunks', 'StorageBuffer', 'computeDispatch', 'supportsCompute'
+    'playcanvas', 'setParameter', 'getShaderChunks', 'StorageBuffer', 'computeDispatch', 'supportsCompute', 'deviceType'
 ];
 
 /**
@@ -68,7 +72,7 @@ export const RENDERER_API = [
  * happens to be called `window` on some object of the kernel's own is not a
  * use of the browser's.
  */
-export const HOST_GLOBALS = [
+const HOST_GLOBALS = [
     'fetch', 'XMLHttpRequest', 'WebSocket', 'document', 'window', 'navigator', 'localStorage', 'requestAnimationFrame'
 ];
 
@@ -99,7 +103,7 @@ const DIALECT = [
  * @param {string} text - Source text.
  * @returns {string} Code only.
  */
-export function codeOf(path, text) {
+function codeOf(path, text) {
     const wgsl = path.endsWith('.wgsl');
     let out = '';
     let i = 0;
@@ -181,7 +185,9 @@ function uses(code, name, free) {
  * A `from '...'` only counts in code, where {@link codeOf} keeps it, so prose
  * that happens to say from "somewhere" is not read as one; `import('...')`
  * counts in code and in comments alike, because that is where a JSDoc type
- * annotation lives.
+ * annotation lives. The layering edges in `test/unit/architecture.test.js`
+ * leave annotations out on purpose -- naming a type does not make one area
+ * reach into another -- but a package has to ship every type it names.
  *
  * @param {string} text - Source text.
  * @param {string} code - The same text through {@link codeOf}, same length.
@@ -225,7 +231,7 @@ function importTarget(from, specifier) {
 export function kernelViolations(files) {
     const counts = new Map();
     const add = (file, rule, name, n = 1) => {
-        const key = JSON.stringify([file, rule, name]);
+        const key = keyOf({ file, rule, name });
         if (n > 0) counts.set(key, (counts.get(key) ?? 0) + n);
     };
     for (const { path, text } of files.filter(({ path }) => isKernel(path))) {
@@ -247,73 +253,76 @@ export function kernelViolations(files) {
             }
         }
     }
-    return [...counts].map(([key, count]) => {
-        const [file, rule, name] = JSON.parse(key);
-        return { file, rule, name, count };
-    });
+    return [...counts].map(([key, count]) => ({ ...JSON.parse(key), count }));
 }
+
+/** @param {Violation} violation - Any row. @returns {string} What identifies it, count aside. */
+const keyOf = ({ file, rule, name }) => JSON.stringify({ file, rule, name });
 
 /** Where the shrink-only list lives, for messages that tell someone to edit it. */
 const EXEMPTIONS_FILE = 'test/kernel-boundary/exemptions.js';
 
-/**
- * @param {Violation} violation - A violation.
- * @returns {string} What it is, in a sentence fragment.
- */
-function describe({ rule, name }) {
-    return { import: `imports ${name}`, name: `uses ${name}`, dialect: `has WGSL dialect: ${name}` }[rule];
-}
+/** For each rule: what a violation is, in a sentence fragment, and how to remove it. */
+const RULES = {
+    import: {
+        what: name => `imports ${name}`,
+        fix: name => (name.includes('/')
+            ? `Kernel code imports only kernel files. If ${name} belongs in the package, add it to KERNEL in ` +
+              'test/kernel-boundary/rules.js so it is checked too; if it is the application\'s (loading, ' +
+              'placing, drawing), take what the kernel needs from it as an argument instead.'
+            : `The package depends on WebGPU only: do with the GPUDevice the host hands over what ${name} does here.`)
+    },
+    name: {
+        what: name => `uses ${name}`,
+        fix: name => (RENDERER_API.includes(name)
+            ? `${name} is the renderer's API: write this against the GPUDevice instead.`
+            : `${name} is I/O or the page: the kernel takes its data as arguments and leaves loading, ` +
+              'devices and frames to the application.')
+    },
+    dialect: {
+        what: name => `has WGSL dialect: ${name}`,
+        fix: () => 'Declare every binding with @group/@binding and the uniforms as a struct the kernel packs itself.'
+    }
+};
 
 /**
- * @param {Violation} violation - A violation.
- * @returns {string} How to remove it.
- */
-function advice({ rule, name }) {
-    if (rule === 'import' && !name.includes('/')) {
-        return `The package depends on WebGPU only: do with the GPUDevice the host hands over what ${name} does here.`;
-    }
-    if (rule === 'import') {
-        return `Kernel code imports only kernel files. If ${name} belongs in the package, add it to KERNEL in ` +
-            'test/kernel-boundary/rules.js so it is checked too; if it is the application\'s (loading, placing, ' +
-            'drawing), take what the kernel needs from it as an argument instead.';
-    }
-    if (rule === 'name' && RENDERER_API.includes(name)) {
-        return `${name} is the renderer's API: write this against the GPUDevice instead.`;
-    }
-    if (rule === 'name') {
-        return `${name} is I/O or the page: the kernel takes its data as arguments and leaves loading, ` +
-            'devices and frames to the application.';
-    }
-    return 'Declare every binding with @group/@binding and the uniforms as a struct the kernel packs itself.';
-}
-
-/**
+ * Holds the tree to the exemption list, and the list to where it started.
+ *
  * @param {Violation[]} violations - What the tree does today.
  * @param {Violation[]} exemptions - What it is allowed to do for now.
+ * @param {Violation[]} start - The list as it was when the boundary was drawn.
+ *   A row may only ever be lowered or deleted from there, so a fix never frees
+ *   room for an exemption somewhere else.
  * @returns {string[]} Every disagreement, each saying what to do about it.
  */
-export function auditExemptions(violations, exemptions) {
-    const key = ({ file, rule, name }) => JSON.stringify([file, rule, name]);
-    const allowed = new Map(exemptions.map(exemption => [key(exemption), exemption.count]));
+export function auditExemptions(violations, exemptions, start) {
+    const what = row => `src/${row.file} ${RULES[row.rule].what(row.name)}`;
+    const fix = row => RULES[row.rule].fix(row.name);
+    const allowed = new Map(exemptions.map(row => [keyOf(row), row.count]));
+    const found = new Map(violations.map(row => [keyOf(row), row.count]));
+    const started = new Map(start.map(row => [keyOf(row), row.count]));
     const problems = [];
     for (const violation of violations) {
-        const { file, count } = violation;
-        const limit = allowed.get(key(violation));
+        const limit = allowed.get(keyOf(violation));
         if (limit === undefined) {
-            problems.push(`src/${file} ${describe(violation)} (${count}x). ${advice(violation)} ` +
+            problems.push(`${what(violation)} (${violation.count}x). ${fix(violation)} ` +
                 `Do not add an exemption: ${EXEMPTIONS_FILE} only shrinks.`);
-        } else if (count > limit) {
-            problems.push(`src/${file} ${describe(violation)} ${count}x, but ${limit}x is exempted: this is new. ` +
-                `${advice(violation)} Do not add to the exemption.`);
+        } else if (violation.count > limit) {
+            problems.push(`${what(violation)} ${violation.count}x, but ${limit}x is exempted: this is new. ` +
+                `${fix(violation)} Do not add to the exemption.`);
         }
     }
-    const found = new Map(violations.map(violation => [key(violation), violation.count]));
     for (const exemption of exemptions) {
-        const count = found.get(key(exemption)) ?? 0;
-        if (count === 0) {
-            problems.push(`src/${exemption.file} no longer ${describe(exemption)}: delete its row from ${EXEMPTIONS_FILE}.`);
+        const count = found.get(keyOf(exemption)) ?? 0;
+        const was = started.get(keyOf(exemption));
+        if (was === undefined || exemption.count > was) {
+            problems.push(`${what(exemption)}: ${EXEMPTIONS_FILE} exempts it ${exemption.count}x, but it started ` +
+                `at ${was ?? 0}x and the list only shrinks. ${fix(exemption)}`);
+        } else if (count === 0) {
+            problems.push(`src/${exemption.file} no longer ${RULES[exemption.rule].what(exemption.name)}: ` +
+                `delete its row from ${EXEMPTIONS_FILE}.`);
         } else if (count < exemption.count) {
-            problems.push(`src/${exemption.file} ${describe(exemption)} ${count}x, ${exemption.count}x is exempted: ` +
+            problems.push(`${what(exemption)} ${count}x, ${exemption.count}x is exempted: ` +
                 `lower that row's count to ${count} in ${EXEMPTIONS_FILE}, so the list keeps saying what is left.`);
         }
     }

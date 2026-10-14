@@ -1,9 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { EXEMPTIONS, EXEMPTIONS_AT_START } from '../kernel-boundary/exemptions.js';
+import { EXEMPTIONS } from '../kernel-boundary/exemptions.js';
 import { KERNEL, auditExemptions, kernelViolations } from '../kernel-boundary/rules.js';
 import { SRC, sourceFiles } from '../sourceTree.js';
 
@@ -15,22 +16,27 @@ import { SRC, sourceFiles } from '../sourceTree.js';
  * `test/kernel-boundary/exemptions.js`; the rewrite empties that list.
  */
 describe('the kernel boundary in this tree', () => {
+    const START = new URL('../kernel-boundary/exemptionsAtStart.json', import.meta.url);
+
     it('names kernel paths that exist', () => {
         for (const path of KERNEL) {
             expect(() => statSync(join(SRC, path)), `KERNEL names src/${path}, which does not exist`).not.toThrow();
         }
     });
 
-    it('has no violation that is not exempted, and no exemption that is not needed', () => {
+    it('has no violation that is not exempted, and no exemption that is not needed or new', () => {
         const files = sourceFiles().map(path => ({ path, text: readFileSync(join(SRC, path), 'utf8') }));
-        const problems = auditExemptions(kernelViolations(files), EXEMPTIONS);
+        const start = JSON.parse(readFileSync(START, 'utf8')).map(([file, rule, name, count]) => ({ file, rule, name, count }));
+        const problems = auditExemptions(kernelViolations(files), EXEMPTIONS, start);
         expect(problems, `\n${problems.join('\n\n')}\n`).toEqual([]);
     });
 
-    it('only ever shrinks the exemption list', () => {
-        const total = EXEMPTIONS.reduce((sum, { count }) => sum + count, 0);
-        expect(total, `the exemptions allow ${total} violations, more than the ${EXEMPTIONS_AT_START} they started ` +
-            'with: fix the new violation instead of exempting it').toBeLessThanOrEqual(EXEMPTIONS_AT_START);
+    it('keeps the list the boundary started with as it was drawn', () => {
+        // The ratchet above is only as fixed as its starting point. That file
+        // records 2026-10-14 and is never edited; shrink exemptions.js instead.
+        const digest = createHash('sha256').update(readFileSync(START)).digest('hex');
+        expect(digest, 'test/kernel-boundary/exemptionsAtStart.json was edited: restore it')
+            .toBe('8bd2cbe442feb8f86adcf950ca762e153317590cc6e7436f503997449d82cc69');
     });
 });
 
@@ -132,14 +138,14 @@ describe('the exemption list that only shrinks', () => {
     const exempt = { file: 'sim/state/particles.js', rule: 'import', name: 'playcanvas', count: 2 };
 
     it('passes violations that are exempted exactly', () => {
-        expect(auditExemptions([{ ...exempt }], [exempt])).toEqual([]);
+        expect(auditExemptions([{ ...exempt }], [exempt], [exempt])).toEqual([]);
     });
 
     it('rejects a new violation, saying how to fix it rather than how to exempt it', () => {
         const problems = auditExemptions([
             { file: 'sim/solver/stepper.js', rule: 'name', name: 'document', count: 1 },
             { ...exempt, count: 3 }
-        ], [exempt]);
+        ], [exempt], [exempt]);
         expect(problems).toHaveLength(2);
         expect(problems[0]).toMatch(/src\/sim\/solver\/stepper\.js/);
         expect(problems[0]).toMatch(/document/);
@@ -152,7 +158,7 @@ describe('the exemption list that only shrinks', () => {
 
     it('rejects an exemption left behind by a fix, saying to shrink the list', () => {
         const dialect = { file: 'sim/state/state.wgsl', rule: 'dialect', name: 'uniform declaration', count: 3 };
-        const problems = auditExemptions([{ ...exempt, count: 1 }], [exempt, dialect]);
+        const problems = auditExemptions([{ ...exempt, count: 1 }], [exempt, dialect], [exempt, dialect]);
         expect(problems).toHaveLength(2);
         expect(problems[0]).toMatch(/src\/sim\/state\/particles\.js.*1x.*2x/);
         expect(problems[0]).toMatch(/lower .*count to 1/i);
@@ -161,5 +167,20 @@ describe('the exemption list that only shrinks', () => {
         for (const problem of problems) {
             expect(problem).toMatch(/test\/kernel-boundary\/exemptions\.js/);
         }
+    });
+
+    it('rejects an exemption the list did not start with, even one that matches a violation', () => {
+        const added = { file: 'sim/pick.js', rule: 'name', name: 'document', count: 1 };
+        const problems = auditExemptions([{ ...exempt }, { ...added }], [exempt, added], [exempt]);
+        expect(problems).toHaveLength(1);
+        expect(problems[0]).toMatch(/src\/sim\/pick\.js/);
+        expect(problems[0]).toMatch(/only shrinks/);
+    });
+
+    it('rejects raising an exemption above where it started', () => {
+        const problems = auditExemptions([{ ...exempt, count: 3 }], [{ ...exempt, count: 3 }], [exempt]);
+        expect(problems).toHaveLength(1);
+        expect(problems[0]).toMatch(/3x.*2x|2x.*3x/);
+        expect(problems[0]).toMatch(/only shrinks/);
     });
 });

@@ -1,12 +1,13 @@
 /**
- * What kernel source already does across the boundary in `rules.js`, as of the
- * day the boundary was drawn. These are debts, not permissions.
+ * What kernel source still does across the boundary in `rules.js`. These are
+ * debts, not permissions.
  *
  * The list only shrinks. `test/unit/kernelBoundary.test.js` fails on anything
  * not listed here, on a count above the one listed, and on a row whose
  * violation has gone or shrunk -- delete or lower the row in the same change
- * that fixes the code. Rewriting the simulation onto WebGPU alone (stage S2 of
- * the first integration) empties it.
+ * that fixes the code. It also fails on a row that is new or higher than in
+ * `exemptionsAtStart.json`, the list as it was the day the boundary was drawn,
+ * which is never edited. Rewriting the simulation onto WebGPU alone empties it.
  *
  * Each row is `[file relative to src, rule, name, count]`; `rule` and `name`
  * mean what they mean in `rules.js`.
@@ -17,6 +18,7 @@ const ROWS = [
     ['sim/simulator.js', 'import', 'playcanvas', 1],
     ['sim/simulator.js', 'name', 'computeDispatch', 1],
     ['sim/simulator.js', 'name', 'supportsCompute', 1],
+    ['sim/simulator.js', 'name', 'deviceType', 2],
     ['sim/state/particles.js', 'import', 'playcanvas', 2],
     ['sim/state/particles.js', 'name', 'StorageBuffer', 6],
     ['sim/solver/stepper.js', 'import', 'playcanvas', 3],
@@ -73,9 +75,3 @@ const ROWS = [
 
 /** @type {import('./rules.js').Violation[]} */
 export const EXEMPTIONS = ROWS.map(([file, rule, name, count]) => ({ file, rule, name, count }));
-
-/**
- * The total count the list started with. Lowering a row needs no change here;
- * the check below it only stops the list from growing back.
- */
-export const EXEMPTIONS_AT_START = 158;

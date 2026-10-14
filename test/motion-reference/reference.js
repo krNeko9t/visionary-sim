@@ -102,6 +102,9 @@ function shapeMismatch(a, b) {
     return null;
 }
 
+/** How {@link recordReference} sets each checkpoint's tolerance, as `conditions.json` records it. */
+export const TOLERANCE_RULE = 'twice the furthest any repeat strayed from the first, per checkpoint';
+
 /**
  * Makes a reference out of repeated runs of one implementation: the first run,
  * with each checkpoint allowing twice the furthest any repeat strayed from it
@@ -126,4 +129,52 @@ export function recordReference(runs) {
             return { ...checkpoint, spread, tolerance: 2 * spread };
         })
     };
+}
+
+/**
+ * @typedef {object} Conditions
+ * @property {string} [commit] - The sim commit a recording was made on.
+ * @property {string} browser - Browser and version.
+ * @property {object} adapter - The WebGPU adapter the page actually used.
+ * @property {{ driverVersion: string }[]} gpu - Every GPU the system reports.
+ * @property {Record<string, string>} assets - SHA-256 of each asset, by path.
+ */
+
+/**
+ * Holds what a run depends on besides the code against the recording.
+ *
+ * @param {Conditions} recorded - Conditions at recording.
+ * @param {Conditions} now - Conditions of this run.
+ * @returns {{ problems: string[], elsewhere: string|null }} Input that differs,
+ *   which fails the comparison by itself; and, when browser, driver or adapter
+ *   differ, what to rule out first should the motion differ too.
+ */
+export function compareConditions(recorded, now) {
+    const problems = Object.entries(recorded.assets)
+        .filter(([path, hash]) => now.assets[path] !== hash)
+        .map(([path, hash]) => `${path} is not the file the reference was recorded with (SHA-256 ${hash}); ` +
+            'supply that file, the comparison means nothing on other input.');
+    const drivers = ({ gpu }) => JSON.stringify(gpu.map(({ driverVersion }) => driverVersion));
+    const moved = now.browser !== recorded.browser || drivers(now) !== drivers(recorded) ||
+        JSON.stringify(now.adapter) !== JSON.stringify(recorded.adapter);
+    const elsewhere = moved
+        ? `This browser, GPU driver or adapter is not the one recorded (${recorded.browser}, ` +
+          `${JSON.stringify(recorded.adapter)}). A different shader compiler can move results by itself: ` +
+          `re-record on ${recorded.commit} in this environment first (${README}) to tell the two apart.`
+        : null;
+    return { problems, elsewhere };
+}
+
+/**
+ * @param {{ scenario: string, script: unknown[], batch: number }} recorded - A recorded scenario.
+ * @param {unknown[]} script - What `scenarios.js` plays today.
+ * @param {number} batch - Steps per frame today.
+ * @returns {string|null} Why the recording no longer describes the scenario, or null.
+ */
+export function scriptChanged(recorded, script, batch) {
+    if (JSON.stringify(recorded.script) === JSON.stringify(script) && recorded.batch === batch) {
+        return null;
+    }
+    return `${recorded.scenario}: scenarios.js no longer plays what was recorded; re-record on the old ` +
+        `implementation (${README}) in the change that edits the scenario.`;
 }

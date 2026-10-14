@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compareRun, recordReference } from '../motion-reference/reference.js';
+import { compareConditions, compareRun, recordReference, scriptChanged } from '../motion-reference/reference.js';
 
 /**
  * One run of a scenario as the browser page reports it: node positions, three
@@ -82,5 +82,45 @@ describe('recording a reference from repeated runs of one implementation', () =>
 
     it('refuses repeats that do not even agree on the scenario\'s shape', () => {
         expect(() => recordReference([run([[0, rest]]), run([[0, [...rest, 2, 0, 0]]])])).toThrow(/nodes/);
+    });
+});
+
+describe('what else a run is held against', () => {
+    const conditions = {
+        commit: 'abc1234',
+        browser: 'Chrome/155.0.8059.39',
+        adapter: { vendor: 'nvidia', architecture: 'lovelace' },
+        gpu: [{ deviceString: 'NVIDIA GeForce RTX 4090', driverVersion: '32.0.16.1047' }],
+        assets: { 'public/models/spot.obj': 'aa', 'public/splats/bread.ply': 'bb' }
+    };
+
+    it('accepts the recorded environment and input', () => {
+        expect(compareConditions(conditions, { ...conditions })).toEqual({ problems: [], elsewhere: null });
+    });
+
+    it('rejects input that is not what was recorded', () => {
+        const { problems } = compareConditions(conditions, { ...conditions, assets: { 'public/models/spot.obj': 'aa' } });
+        expect(problems).toHaveLength(1);
+        expect(problems[0]).toMatch(/public\/splats\/bread\.ply.*bb/);
+    });
+
+    it('notes a different browser, driver or adapter as the first suspect, not as a failure', () => {
+        for (const now of [
+            { ...conditions, browser: 'Chrome/156.0.0.0' },
+            { ...conditions, gpu: [{ ...conditions.gpu[0], driverVersion: '33.0' }] },
+            { ...conditions, adapter: { vendor: 'intel', architecture: 'gen-12lp' } }
+        ]) {
+            const { problems, elsewhere } = compareConditions(conditions, now);
+            expect(problems).toEqual([]);
+            expect(elsewhere).toMatch(/abc1234/);
+            expect(elsewhere).toMatch(/re-record/);
+        }
+    });
+
+    it('tells a changed scenario from a changed motion', () => {
+        const recorded = { scenario: 'tank', script: [['record'], ['run', 480]], batch: 24 };
+        expect(scriptChanged(recorded, [['record'], ['run', 480]], 24)).toBeNull();
+        expect(scriptChanged(recorded, [['record'], ['run', 481]], 24)).toMatch(/tank.*re-record/);
+        expect(scriptChanged(recorded, [['record'], ['run', 480]], 12)).toMatch(/tank/);
     });
 });
