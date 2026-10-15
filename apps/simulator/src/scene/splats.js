@@ -76,7 +76,7 @@ export const splatScene = {
     name: 'splats',
     bounds: BOUNDS,
     decorate: app => createGlassBox(app, BOUNDS),
-    createBodies: () => Promise.all([
+    createObjects: () => Promise.all([
         bodyOf(BREAD, {
             // Finer than 9.5 mm and this particular capture starts needing
             // the seal that closes it into a volume to stay solid at all.
@@ -102,7 +102,7 @@ export const splatContactScene = {
     name: 'splats-contact',
     bounds: BOUNDS,
     decorate: splatScene.decorate,
-    createBodies: () => Promise.all([
+    createObjects: () => Promise.all([
         bodyOf(BREAD, {
             position: [0.0, 0.30, 0.0],
             elementSize: 0.0158,

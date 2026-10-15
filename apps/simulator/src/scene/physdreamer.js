@@ -1,4 +1,4 @@
-import { loadCloud } from '../assets/splats/cloud.js';
+import { loadCloud, restCloud } from '../assets/splats/cloud.js';
 import { readPly } from '../assets/splats/ply.js';
 import { preparePhysDreamerData, cleanPhysDreamerCloud, materialFailure } from './physdreamerData.js';
 import { rawBounds } from '../assets/splats/measure.js';
@@ -55,9 +55,9 @@ export function createPhysDreamerScene(declaration) {
         };
         const report = `${name} r=${r} m; ${JSON.stringify(counts)}`;
         return {
-            bodies: [new SoftBody({ name, source: { kind: 'cloud', cloud, report },
-                render: movable.count ? { kind: 'gaussians', cloud: movable } : null,
-                staticRegion: region.staticRegion, elementSize, material })],
+            objects: [{ body: new SoftBody({ name, source: { kind: 'cloud', cloud: restCloud(cloud) },
+                staticRegion: region.staticRegion, elementSize, material }),
+                render: movable.count ? { kind: 'gaussians', cloud: movable } : null, report }],
             scenery: [
                 ...(fixed.count ? [{ name: `${name}-fixed`, cloud: fixed }] : []),
                 ...(background.count ? [{ name: `${name}-background`, cloud: background }] : [])
@@ -71,7 +71,7 @@ export function createPhysDreamerScene(declaration) {
         grab,
         decorate() {},
         prepare,
-        createBodies: async () => (await prepare()).bodies,
+        createObjects: async () => (await prepare()).objects,
         scenery: async () => (await prepare()).scenery,
         validateSimulation({ perBody }) {
             const material = perBody[0];

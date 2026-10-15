@@ -123,16 +123,17 @@ it('loads all prepared partitions through the real runtime loader without a seco
     vi.stubGlobal('fetch', fetchAsset);
     try {
         const scene = createAlocasiaScene({ r: 0.002 }); // Synthetic coordinates only.
-        const [[body], [fixed, background]] = await Promise.all([scene.createBodies(), scene.scenery()]);
+        const [[{ body, render }], [fixed, background]] = await Promise.all([scene.createObjects(), scene.scenery()]);
         expect(fetchAsset).toHaveBeenCalledTimes(3);
         expect(scene.counts).toMatchObject({ inputForeground: 2, inputBackground: 2, foregroundDiscarded: 0,
             backgroundDiscarded: 0, movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
         const foregroundAsset = cloudFromPly(read(join(dir, 'out/foreground.ply')));
         const backgroundAsset = cloudFromPly(read(join(dir, 'out/background.ply')));
-        expect(body.source.cloud).toEqual(foregroundAsset);
+        const { colors: _colors, ...physicalForeground } = foregroundAsset;
+        expect(body.source.cloud).toEqual(physicalForeground);
         expect(background.cloud).toEqual(backgroundAsset);
         for (const [key, stride] of Object.entries({ positions: 3, rotations: 4, scales: 3, colors: 3, opacity: 1 })) {
-            expect(body.render.cloud[key]).toEqual(foregroundAsset[key].slice(0, stride));
+            expect(render.cloud[key]).toEqual(foregroundAsset[key].slice(0, stride));
             expect(fixed.cloud[key]).toEqual(foregroundAsset[key].slice(stride));
         }
         expect([...background.cloud.positions]).toEqual([

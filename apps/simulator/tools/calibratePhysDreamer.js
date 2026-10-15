@@ -51,7 +51,7 @@ export async function calibratePhysDreamer(values, declaration) {
         // Output location is not input provenance; keep repeated reports identical.
         delete report.request.output;
         const { readPly } = await import('../src/assets/splats/ply.js');
-        const { cloudFromPly } = await import('../src/assets/splats/cloud.js');
+        const { cloudFromPly, restCloud } = await import('../src/assets/splats/cloud.js');
         const { preparePhysDreamerData, materialFailure } = await import('../src/scene/physdreamerData.js');
         const { SoftBody } = await import('visionary-sim/body/softBody.js');
         const { discretizeBody } = await import('visionary-sim/sim/discretize/discretize.js');
@@ -114,7 +114,7 @@ export async function calibratePhysDreamer(values, declaration) {
                     row.errors.push('no material nodes'); continue;
                 }
                 try {
-                    const body = new SoftBody({ name: declaration.name, source: { kind: 'cloud', cloud }, staticRegion: region.staticRegion, elementSize });
+                    const body = new SoftBody({ name: declaration.name, source: { kind: 'cloud', cloud: restCloud(cloud) }, staticRegion: region.staticRegion, elementSize });
                     const { dof } = discretizeBody(body);
                     const staticSet = new Set(staticNodesInRegion(dof.restPositions, body.staticRegion));
                     Object.assign(row, materialCounts(dof.invMass, staticSet));

@@ -1,3 +1,7 @@
+import { meshBounds } from 'visionary-sim/body/restGeometry.js';
+
+export { meshBounds };
+
 /**
  * Minimal OBJ parser: positions and triangulated faces only.
  *
@@ -8,9 +12,7 @@
  */
 
 /**
- * @typedef {object} TriangleMesh
- * @property {Float32Array} positions - Vertex positions, 3 floats per vertex.
- * @property {Uint32Array} indices - Triangle indices, 3 per triangle.
+ * @typedef {import('visionary-sim/body/restGeometry.js').TriangleMesh} TriangleMesh
  */
 
 /**
@@ -75,23 +77,6 @@ export async function loadObj(url) {
         throw new Error(`loadObj: ${url} -> HTTP ${response.status}`);
     }
     return parseObj(await response.text());
-}
-
-/**
- * @param {Float32Array} positions - Vertex positions, 3 floats per vertex.
- * @returns {{ min: number[], max: number[] }} Axis-aligned bounds.
- */
-export function meshBounds(positions) {
-    const min = [Infinity, Infinity, Infinity];
-    const max = [-Infinity, -Infinity, -Infinity];
-    for (let i = 0; i < positions.length; i += 3) {
-        for (let axis = 0; axis < 3; axis++) {
-            const v = positions[i + axis];
-            if (v < min[axis]) min[axis] = v;
-            if (v > max[axis]) max[axis] = v;
-        }
-    }
-    return { min, max };
 }
 
 /**

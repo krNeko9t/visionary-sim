@@ -17,13 +17,8 @@ import { readPly } from './ply.js';
  * slightly flatter look than a plain viewer gives, and the bands can be carried
  * through later if that turns out to matter.
  *
- * @typedef {object} SplatCloud
- * @property {number} count - Number of Gaussians.
- * @property {Float32Array} positions - Centres, 3 per splat, in metres.
- * @property {Float32Array} rotations - Unit quaternions, 4 per splat as xyzw.
- * @property {Float32Array} scales - Standard deviations, 3 per splat, in metres.
- * @property {Float32Array} opacity - Coverage in [0, 1], 1 per splat.
- * @property {Float32Array} colors - Linear RGB, 3 per splat.
+ * @typedef {import('visionary-sim/body/restGeometry.js').GaussianCloud &
+ *   { colors: Float32Array }} SplatCloud
  */
 
 /** Degree-0 spherical harmonic, the constant that turns `f_dc` into colour. */
@@ -122,4 +117,13 @@ function sigmoid(v) {
     }
     const t = Math.exp(v);
     return t / (1 + t);
+}
+
+/**
+ * Select only the physical Gaussian data; arrays are shared without conversion.
+ * @param {SplatCloud} cloud - Prepared application cloud.
+ * @returns {import('visionary-sim/body/restGeometry.js').GaussianCloud} Rest geometry.
+ */
+export function restCloud({ count, positions, rotations, scales, opacity }) {
+    return { count, positions, rotations, scales, opacity };
 }

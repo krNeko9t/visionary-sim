@@ -47,7 +47,7 @@ export const tankScene = {
     name: 'tank',
     bounds: BOUNDS,
     decorate: app => createGlassBox(app, BOUNDS),
-    createBodies: () => Promise.all([
+    createObjects: () => Promise.all([
         meshBody('/models/spot.obj', {
             name: 'spot',
             size: 0.17,
@@ -100,7 +100,7 @@ export const bunnyScene = {
     name: 'bunny',
     bounds: BOUNDS,
     decorate: tankScene.decorate,
-    createBodies: () => Promise.all([
+    createObjects: () => Promise.all([
         meshBody('/models/stanford-bunny.obj', {
             name: 'bunny',
             size: 0.20,

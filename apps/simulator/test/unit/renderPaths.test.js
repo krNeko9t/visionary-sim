@@ -26,7 +26,7 @@ const APP_JS = join(SRC, 'scene/app.js');
  * declared, and the typedef that declares them.
  */
 const HANDED_OVER = [
-    { file: 'body/softBody.js', typedef: 'RenderGeometry' },
+    { file: 'body/factory.js', typedef: 'RenderGeometry' },
     { file: 'sim/discretize/proxyGeometry.js', typedef: 'Wireframe' }
 ];
 

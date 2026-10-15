@@ -14,9 +14,10 @@ const canvas = document.getElementById('app');
 async function boot() {
     const scene = sceneNamed(new URLSearchParams(window.location.search).get('scene'));
     await scene.prepare?.();
-    const [bodies, scenery] = await Promise.all([
-        scene.createBodies(), scene.scenery?.() ?? []
+    const [objects, scenery] = await Promise.all([
+        scene.createObjects(), scene.scenery?.() ?? []
     ]);
+    const bodies = objects.map(({ body }) => body);
     const app = await createApp(canvas);
     let sim;
     let simulationDestroyed = false;
@@ -46,7 +47,7 @@ async function boot() {
         // Every capture says what it measured, simulated or not, because which way
         // up it is and how big it is were declared by hand and a declaration nobody
         // checks is a guess.
-        for (const { report } of [...scenery, ...bodies.map(body => body.source)]) {
+        for (const { report } of [...scenery, ...objects]) {
             if (report) {
                 console.info(`[splats] ${report}`);
             }
@@ -57,8 +58,9 @@ async function boot() {
         // is what you turn on when the first looks wrong.
         const wireframeViews = sim.simBodies.map(({ body, proxy }, index) => {
             const field = sim.deformationOf(index);
-            if (body.render && (body.render.kind !== 'gaussians' || body.render.cloud.count)) {
-                app.root.addChild(draw(app, body.render, field, { name: body.name, tint: body.tint }));
+            const { render, tint } = objects[index];
+            if (render && (render.kind !== 'gaussians' || render.cloud.count)) {
+                app.root.addChild(draw(app, render, field, { name: body.name, tint }));
             }
 
             const view = draw(app, proxy.wireframe(), field, { name: body.name });
@@ -89,7 +91,7 @@ async function boot() {
         report(scene.name, sim.stats());
 
         // Handy from the console; the panel covers everything routine.
-        Object.assign(window, { app, sim, scene, bodies, wireframeViews });
+        Object.assign(window, { app, sim, scene, bodies, objects, wireframeViews });
         return app;
     } catch (error) {
         destroySimulation();

@@ -13,10 +13,8 @@ import { joinPatches, patch } from './tessellate.js';
  * rather than an extraction from the SDF, so it lands exactly on the zero level
  * set at any resolution.
  *
- * @typedef {object} Shape
- * @property {(x: number, y: number, z: number) => number} sdf - Signed distance, negative inside.
- * @property {{ min: number[], max: number[] }} bounds - Axis-aligned bounds of the surface.
- * @property {import('./objLoader.js').TriangleMesh} surface - The same surface as triangles.
+ * @typedef {import('visionary-sim/body/restGeometry.js').Shape &
+ *   { surface: import('visionary-sim/body/restGeometry.js').TriangleMesh }} Shape
  */
 
 /** Cyclic axis triples, so a box face can be built from its normal's axis. */

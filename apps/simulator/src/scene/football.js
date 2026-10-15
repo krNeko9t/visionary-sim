@@ -38,7 +38,7 @@ export const footballScene = {
     name: 'football',
     bounds: BOUNDS,
     decorate: app => createGlassBox(app, BOUNDS),
-    createBodies: () => Promise.all([
+    createObjects: () => Promise.all([
         meshBody('/models/spot.obj', {
             name: 'spot',
             size: 0.17,

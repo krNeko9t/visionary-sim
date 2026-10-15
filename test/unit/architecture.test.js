@@ -32,7 +32,8 @@ import { sourcePath, sourceImport, sourceFiles } from '../sourceTree.js';
  *   separation would quietly stop being true.
  * - `deformation` may reach nothing. A channel that depended on either bank
  *   would no longer be a channel.
- * - `body` may reach only `assets`. A body describes an object; it must not
+ * - Kernel `body` may reach nothing; the application factory may use assets
+ *   (ADR-0023). A body describes an object; it must not
  *   learn how anyone chose to simulate it, or that choice becomes expensive to
  *   change.
  * - `sim/discretize` may reach `sim/state`, `sim/constraints` and `body`, and
@@ -74,16 +75,18 @@ const ALLOWED = {
     'main.js': ['scene', 'sim', 'render', 'ui'],
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
-    sim: ['body', 'deformation', 'assets'],
-    'sim/discretize': ['deformation', 'assets', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
-    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
+    sim: ['body', 'deformation'],
+    'sim/discretize': ['deformation', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
+    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
     'sim/compute': [], // Private native compute boundary; ADR-0022.
     'sim/state': ['sim/compute'],
     'sim/constraints': ['sim/state', 'body', 'sim/compute'],
     'sim/solver': ['sim/state', 'sim/compute'],
     render: ['deformation'],
-    body: ['assets'],
-    assets: [],
+    body: [],
+    'body/factory.js': ['body', 'assets'],
+    'body/restGeometry.js': [],
+    assets: ['body/restGeometry.js'],
     deformation: []
 };
 

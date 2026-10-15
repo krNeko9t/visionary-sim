@@ -29,7 +29,7 @@ window.playScenario = async (name) => {
     const { scene: sceneName, script } = SCENARIOS[name];
     const scene = sceneNamed(sceneName);
     await scene.prepare?.();
-    const simulation = openSimulation(app, scene, await scene.createBodies());
+    const simulation = openSimulation(app, scene, (await scene.createObjects()).map(({ body }) => body));
     try {
         const checkpoints = [];
         let step = 0;

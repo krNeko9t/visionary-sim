@@ -18,15 +18,8 @@ const ROWS = [
     // host binding writes its own declarations.
     ['sim/discretize/lattice/sample.wgsl', 'dialect', 'var<storage> without @binding', 1],
     ['sim/discretize/lattice/sample.wgsl', 'dialect', 'uniform declaration', 5],
-    ['sim/discretize/lattice/sample.wgsl', 'dialect', 'uniform.<name> read', 5],
+    ['sim/discretize/lattice/sample.wgsl', 'dialect', 'uniform.<name> read', 5]
 
-    // Rest-geometry files that also hold the application's loaders and shape
-    // generators. They go when the package takes the data shapes and the
-    // loading, decoding and tessellation stay with the application.
-    ['assets/objLoader.js', 'name', 'fetch', 1],
-    ['assets/shapes.js', 'import', 'assets/tessellate.js', 1],
-    ['assets/splats/cloud.js', 'import', 'assets/splats/ply.js', 2],
-    ['assets/splats/cloud.js', 'name', 'fetch', 1]
 ];
 
 /** @type {import('./rules.js').Violation[]} */

@@ -7,7 +7,7 @@ import { sourceImport } from '../sourceTree.js';
  * The package depends on WebGPU and nothing else: no renderer, no I/O, no page
  * (visionary-editor `docs/adr/0002-visionary-sim-depends-only-on-webgpu.md`).
  * S1 logical paths are resolved through sourceTree.js across both workspaces,
- * including the mixed asset modules still in the application.
+ * including all package source.
  */
 
 /**
@@ -17,12 +17,8 @@ import { sourceImport } from '../sourceTree.js';
  * - `sim`: solving -- discretisation, degrees of freedom, constraints, solver,
  *   grip and picking. `sim/simulator.js` is its one public entry.
  * - `deformation`: the deformation contract hosts paste into their shaders.
- * - `body/softBody.js`, `body/material.js`: what a body is, physically.
- * - `assets/objLoader.js`, `assets/shapes.js`, `assets/splats/cloud.js`: the
- *   rest-geometry data shapes the solver reads (triangle mesh, analytic shape,
- *   Gaussian cloud) and the pure functions it needs, such as `meshBounds`.
- *   These mixed files remain in the app until ticket 10 separates loading and
- *   shape generation from the data shapes. They stay inside this audit.
+ * - `body`: physical descriptions and prepared rest geometry, including the
+ *   pure geometry functions the solver needs. Asset preparation stays in the app.
  *
  * The import rule keeps the list complete: a kernel file that imports, or
  * names the type of, a file not on it is a violation, so whatever the kernel
@@ -33,9 +29,7 @@ export const KERNEL = [
     'deformation',
     'body/softBody.js',
     'body/material.js',
-    'assets/objLoader.js',
-    'assets/shapes.js',
-    'assets/splats/cloud.js'
+    'body/restGeometry.js'
 ];
 
 /**

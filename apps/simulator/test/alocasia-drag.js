@@ -39,7 +39,7 @@ const app = await createApp(document.getElementById('app'));
 app.start();
 window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4, hold = 0.2, gripRadius, legacy = false } = {}) => {
     const scene = createAlocasiaScene({ r: 0.016 });
-    const [body] = await scene.createBodies();
+    const [{ body, render }] = await scene.createObjects();
     if (h !== undefined) body.elementSize = h;
     Object.assign(body.material, material);
     if (legacy) {
@@ -66,7 +66,7 @@ window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4
     // Local deformation distinguishes actual stretching from a curved leaf
     // unfolding (which can increase the end-to-end chord without stretching).
     const leafBindings = [];
-    const cloud = body.render.cloud;
+    const cloud = render.cloud;
     for (let i = 0; i < cloud.count; i += 17) {
         const point = Array.from(cloud.positions.subarray(i * 3, i * 3 + 3));
         if (point[0] < 0.05 || point[1] < 0.21 || point[2] < 0.04 || distance(point, refs[6]) > 0.085) continue;

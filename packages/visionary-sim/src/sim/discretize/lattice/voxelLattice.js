@@ -1,4 +1,4 @@
-import { meshBounds } from '../../../../../../apps/simulator/src/assets/objLoader.js';
+import { meshBounds } from '../../../body/restGeometry.js';
 import { voxelizeCloud } from './cloudVolume.js';
 import { CUBE_CORNERS } from './corners.js';
 import { buildLattice, cellCoords, cellNodeIndices, surfaceNodes } from './lattice.js';

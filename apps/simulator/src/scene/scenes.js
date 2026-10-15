@@ -35,8 +35,10 @@ import { splatContactScene, splatScene } from './splats.js';
  *   diagnostics before any drawing or stepping starts.
  * @property {(app: import('playcanvas').AppBase) => void} decorate - Everything
  *   drawn that is not a body.
- * @property {() => Promise<import('visionary-sim/body/softBody.js').SoftBody[]>} createBodies -
- *   What is simulated.
+ * @property {() => Promise<import('../body/factory.js').SceneObject[]>} createObjects -
+ *   Body/drawing pairs in stable construction order. Entry i's body goes to
+ *   simulator input i; its drawing and proxy wireframe use deformationOf(i).
+ *   Keep entries with null/empty drawing: they still contain physical material.
  * @property {(() => Promise<import('../assets/splats/capture.js').Capture[]>)} [scenery] -
  *   Captures that are drawn but not stepped. A scene-scale scan arrives split
  *   across several files, and only some of them are ever going to be objects;

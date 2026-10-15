@@ -36,7 +36,7 @@
 | `apps/simulator/src/main.js` | 组装：把各层接成一个可运行的程序 |
 | `apps/simulator/src/assets/` | 几何进入系统的入口 |
 | `apps/simulator/src/assets/splats/` | 3DGS 那道门：容器、解激活、清洗、量、摆 |
-| `packages/visionary-sim/src/body/` | 被模拟对象的自我描述：身份、材质、静止形状、可选静态区域。要解算的那份几何与要画的那份分开写——网格物体两者重合，扫描物体不重合 |
+| `packages/visionary-sim/src/body/` | 被模拟对象的自我描述：身份、材质、静止几何、可选静态区域；静止几何类型及求解所需纯函数不依赖资产准备或绘制 |
 | `apps/simulator/src/scene/` | 这一次跑什么、在什么环境里观察它：边界在哪、里面有什么、周围画什么 |
 | `packages/visionary-sim/src/sim/` | 模拟侧。`simulator.js` 是对外唯一入口，也是下面四段的装配处 |
 | `packages/visionary-sim/src/sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云。对外只交出中立的 `ProxyGeometry`（条目与不变量写在 `proxyGeometry.js`），外加它自己造的弹性约束：单元是什么、怎样分批，是离散化的知识 |
@@ -49,15 +49,16 @@
 | `apps/simulator/src/render/` | 把被形变带动的几何画出来；不知道它从哪来 |
 | `apps/simulator/src/ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
 
-| `apps/simulator/src/body/` | 场景的模拟体工厂：从文件和生成形状组装模拟体 |
+| `apps/simulator/src/body/` | 场景对象工厂：从准备好的米制几何组装模拟体与绘制对象的配对，保管颜色和资产报告 |
 | `apps/simulator/src/` | 实验应用源码根目录 |
 | `packages/visionary-sim/src/` | 内核源码根目录 |
 
 表中路径相对仓库根目录。根包是私有 npm workspace；`packages/visionary-sim` 是私有包
 `visionary-sim`，`apps/simulator` 是私有包 `simulator-app`。应用用包名 import 同仓库源码。
 目前 `visionary-sim/*` 子路径按原模块形状开放，公开入口由后续票收紧；计算只依赖原生 WebGPU。
-`assets/` 的混合模块仍留在应用，内核临时引用同一份文件，资产准备与
-静止几何由票 10 分开。边界审计仍覆盖这些候选文件，原有豁免没有增加或重新划线。
+`body/restGeometry.js` 保存内核的三种静止几何类型与纯几何函数；文件读取、解码、清洗、
+摆放、单位换算、形状生成和绘制载荷都在应用（ADR-0023）。应用按场景构造列表的位置配对
+模拟体与绘制对象；空绘制项仍保留物理材料。
 
 `test/sourceTree.js` 将两个 workspace 的物理路径对应到 S1 的逻辑来源路径，供原依赖表及
 只减不增的豁免清单使用；全部内核包源码都会扫描，新目录也不会绕过边界检查。
@@ -113,6 +114,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 代理几何的接口不变量（含球接触的密封条件） | `packages/visionary-sim/test/unit/proxyGeometry.test.js` |
 | 上面§二那张表 ↔ 两个 workspace 的源码与应用 `tools/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `packages/visionary-sim/test/unit/elastic.test.js`、`apps/simulator/test/unit/shapes.test.js`、`packages/visionary-sim/test/unit/cloudVolume.test.js` |
+| 模拟体与绘制对象按构造位置配对，空绘制不丢失物理材料 | `apps/simulator/test/unit/sceneBoot.test.js`、`apps/simulator/test/unit/bodyFactory.test.js` |
 | 凡是会被交出来的几何都有画法 | `apps/simulator/test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
 | PlayCanvas 原生 device 与缓冲包装的未公开字段只在 `render/playcanvasInterop.js` 使用；含浏览器夹具的其他源码不许分散访问 | `test/unit/playcanvasInteropBoundary.test.js`；真实求值、排序与释放见 `apps/simulator/test/native-buffer/` |

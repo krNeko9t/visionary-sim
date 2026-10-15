@@ -27,7 +27,7 @@ vi.mock('playcanvas', async importOriginal => ({
     }
 }));
 
-vi.mock('../../src/assets/splats/cloud.js', () => ({ loadCloud: vi.fn() }));
+vi.mock('../../src/assets/splats/cloud.js', async importOriginal => ({ ...await importOriginal(), loadCloud: vi.fn() }));
 
 function cloud() {
     return {
@@ -62,7 +62,7 @@ beforeEach(() => {
 describe('alocasia scene assembly with an explicitly declared synthetic tolerance', () => {
     it('shares one cleaned foreground between the complete source and disjoint drawing subsets', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
-        const [[body], [fixed, backdrop]] = await Promise.all([scene.createBodies(), scene.scenery()]);
+        const [[{ body, render }], [fixed, backdrop]] = await Promise.all([scene.createObjects(), scene.scenery()]);
         expect(loadCloud).toHaveBeenCalledTimes(2);
         expect(loadCloud).toHaveBeenCalledWith('/splats/alocasia/foreground.ply');
         expect(loadCloud).toHaveBeenCalledWith('/splats/alocasia/background.ply');
@@ -72,7 +72,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         expect(scene.counts).toMatchObject({ inputForeground: 3, inputBackground: 3, foregroundDiscarded: 1, backgroundDiscarded: 1, movableGaussians: 1, fixedGaussians: 1, backgroundGaussians: 2 });
         expect(fetch).toHaveBeenCalledExactlyOnceWith('/splats/alocasia/moving_part_points.ply');
         expect(body.source.cloud.count).toBe(2);
-        expect(body.render.cloud.positions).toEqual(new Float32Array([0, 0.25, 0]));
+        expect(render.cloud.positions).toEqual(new Float32Array([0, 0.25, 0]));
         expect(fixed.cloud.positions).toEqual(new Float32Array([0, 0, 0]));
         expect(body.staticRegion(0, 0, 0)).toBe(true);
         expect(body.staticRegion(0, 0.25, 0)).toBe(false);
@@ -82,11 +82,11 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         expect(scene.bounds.min[1]).toBe(0);
         expect(scene.bounds.max[1]).toBeGreaterThan(0.25);
         expect(scene.bounds.max[0]).toBeLessThan(1);
-        expect(await scene.createBodies()).toEqual([body]);
+        expect((await scene.createObjects())[0].body).toBe(body);
     });
     it('constructs the real simulator from full foreground and accepts its public material diagnostics', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
-        const bodies = await scene.createBodies();
+        const bodies = (await scene.createObjects()).map(({ body }) => body);
         const sim = new Simulator(fakeDevice(), bodies, scene.bounds);
         try {
             const stats = sim.stats();
@@ -100,7 +100,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     });
     it('does not attach the outside of a movable thin leaf to the world', async () => {
         const scene = createAlocasiaScene({ r: 0.016 });
-        const bodies = await scene.createBodies();
+        const bodies = (await scene.createObjects()).map(({ body }) => body);
         const sim = new Simulator(fakeDevice(), bodies, scene.bounds);
         try {
             const { particles } = sim;
@@ -113,12 +113,12 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     });
     it('binds only movable Gaussians and keeps fixed centre, rotation and scale at asset values', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
-        const [body] = await scene.createBodies();
+        const [{ body, render, report }] = await scene.createObjects();
         const [fixed, backdrop] = await scene.scenery();
         const app = { graphicsDevice: {} };
         const positions = new Float32Array([0, 0.25, 0]);
         const field = { shader: '// synthetic field', parameters: { positions } };
-        const movingView = draw(app, body.render, field, { name: body.name });
+        const movingView = draw(app, render, field, { name: body.name });
         const fixedView = createSplatView(app, fixed.name, fixed.cloud);
         expect(movingView.gsplat.setWorkBufferModifier).toHaveBeenCalledExactlyOnceWith({ wgsl: expect.stringContaining(field.shader) });
         expect(movingView.gsplat.setParameter).toHaveBeenCalledWith('positions', positions);
@@ -162,7 +162,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         await expect(createAlocasiaScene({ r: 0.05 }).prepare()).rejects.toThrow(/no moving samples.*r=0.05.*fixedGaussians/);
         const fixedOnly = createAlocasiaScene({ r: 0 });
         fetch.mockResolvedValueOnce({ ok: true, arrayBuffer: async () => points([10, 10, 10]) });
-        expect((await fixedOnly.createBodies())[0].render).toBeNull();
+        expect((await fixedOnly.createObjects())[0].render).toBeNull();
         expect((await createAlocasiaScene({ r: 1 }).scenery()).map(item => item.name)).toEqual(['alocasia-background']);
     });
     it('refuses invalid input and missing assets', async () => {
@@ -175,8 +175,8 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     it('loads the production declaration with the calibrated metric region', async () => {
         const scene = sceneNamed('alocasia');
         expect(scene).toBe(alocasiaScene);
-        const [body] = await scene.createBodies();
-        expect(body.source.report).toContain('alocasia r=0.016 m;');
+        const [{ body, render, report }] = await scene.createObjects();
+        expect(report).toContain('alocasia r=0.016 m;');
         expect(body.staticRegion(0.0159, 0.25, 0)).toBe(false);
         // Extra proxy thickness inherits the nearest measured material; it
         // must not become an attachment just outside the measurement radius.
@@ -188,7 +188,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
         expect((await scene.scenery()).map(item => item.name)).toEqual(['alocasia-fixed', 'alocasia-background']);
     });
     it('refuses an undeclared API tolerance before loading assets', async () => {
-        await expect(createAlocasiaScene().createBodies()).rejects.toThrow(/r.*not calibrated/);
+        await expect(createAlocasiaScene().createObjects()).rejects.toThrow(/r.*not calibrated/);
         expect(loadCloud).not.toHaveBeenCalled();
     });
 });
@@ -208,7 +208,7 @@ it('releases each direct Gaussian resource once when its view is destroyed', asy
 
 it('background changes neither solver bounds nor material, contact or grab candidates', async () => {
     const full = createAlocasiaScene({ r: 0.05 });
-    const fullBodies = await full.createBodies();
+    const fullBodies = (await full.createObjects()).map(({ body }) => body);
     // The alternate backdrop is entirely removed by the same opacity rule.
     loadCloud.mockImplementation(async url => {
         const result = cloud();
@@ -216,7 +216,7 @@ it('background changes neither solver bounds nor material, contact or grab candi
         return result;
     });
     const empty = createAlocasiaScene({ r: 0.05 });
-    const emptyBodies = await empty.createBodies();
+    const emptyBodies = (await empty.createObjects()).map(({ body }) => body);
     expect((await empty.scenery()).map(item => item.name)).toEqual(['alocasia-fixed']);
     expect(empty.counts.backgroundGaussians).toBe(0);
     expect(empty.viewBounds).toEqual({ min: [0, 0, 0], max: [0, 0.25, 0] });
@@ -239,7 +239,7 @@ it.each(['missing', 'nonfinite', 'incomplete'])('rejects %s background consisten
         return result;
     });
     const scene = createAlocasiaScene({ r: 0.05 });
-    const results = await Promise.allSettled([scene.prepare(), scene.createBodies(), scene.scenery()]);
+    const results = await Promise.allSettled([scene.prepare(), scene.createObjects(), scene.scenery()]);
     expect(results.every(result => result.status === 'rejected')).toBe(true);
     expect(results[0].reason.message).toMatch(/background/);
     expect(results[1].reason).toBe(results[0].reason);
@@ -266,7 +266,7 @@ it('isolates multiple factory declarations, snapshots settings, and makes fixed 
     const b = createPhysDreamerScene({ ...ALOCASIA, name: 'synthetic-b', assetRoot: '/synthetic/b', r: 1,
         elementSize: 0.03, requireFixedMaterial: false });
     declaration.r = 1; declaration.material.damping = 9; declaration.grab.responseTime = 9;
-    const [[bodyA], [bodyB]] = await Promise.all([a.createBodies(), b.createBodies()]);
+    const [[{ body: bodyA }], [{ body: bodyB }]] = await Promise.all([a.createObjects(), b.createObjects()]);
     expect(loadCloud).toHaveBeenCalledWith('/synthetic/a/foreground.ply');
     expect(loadCloud).toHaveBeenCalledWith('/synthetic/b/background.ply');
     expect(a.counts).toMatchObject({ movableGaussians: 1, fixedGaussians: 1 });
@@ -289,13 +289,13 @@ it('isolates multiple factory declarations, snapshots settings, and makes fixed 
 describe('PhysDreamer shared factory registration', () => {
     it.each(['hat', 'carnations', 'telephone'])('%s loads isolated assets and preserves complete foreground physics and static background', async (name) => {
         const scene = sceneNamed(name);
-        const [body] = await scene.createBodies();
+        const [{ body, render, report }] = await scene.createObjects();
         const scenery = await scene.scenery();
         expect(loadCloud).toHaveBeenCalledWith(`/splats/${name}/foreground.ply`);
         expect(loadCloud).toHaveBeenCalledWith(`/splats/${name}/background.ply`);
         expect(fetch).toHaveBeenCalledWith(`/splats/${name}/moving_part_points.ply`);
         expect(body.source.cloud.count).toBe(2);
-        expect(body.render.cloud.count).toBe(1);
+        expect(render.cloud.count).toBe(1);
         expect(scenery.map(view => view.name)).toEqual([`${name}-fixed`, `${name}-background`]);
         expect(body.staticRegion(0, 0, 0)).toBe(true);
         expect(body.staticRegion(0, 0.25, 0)).toBe(false);

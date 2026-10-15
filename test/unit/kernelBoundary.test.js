@@ -8,8 +8,8 @@ import { KERNEL, auditExemptions, kernelViolations } from '../kernel-boundary/ru
 import { sourcePath, sourceFiles, packagedSource } from '../sourceTree.js';
 
 /**
- * The visionary-sim package depends on WebGPU and nothing else. Its source spans the kernel
- * workspace and mixed rest-geometry modules still in the application. S1 logical
+ * The visionary-sim package depends on WebGPU and nothing else. Every file in
+ * the package is audited, including rest-geometry types and pure functions. S1 logical
  * identities keep the original ratchet intact across the workspace move. What already crosses it is listed in
  * `test/kernel-boundary/exemptions.js`; the rewrite empties that list.
  */
@@ -27,6 +27,14 @@ describe('the kernel boundary in this tree', () => {
         const start = JSON.parse(readFileSync(START, 'utf8')).map(([file, rule, name, count]) => ({ file, rule, name, count }));
         const problems = auditExemptions(kernelViolations(files), EXEMPTIONS, start);
         expect(problems, `\n${problems.join('\n\n')}\n`).toEqual([]);
+    });
+
+    it('keeps geometry and all package source independent of application assets', () => {
+        const files = sourceFiles().filter(packagedSource)
+            .map(path => ({ path, text: readFileSync(sourcePath(path), 'utf8'), kernel: true }));
+        expect(kernelViolations(files).filter(({ rule }) => rule === 'import')).toEqual([]);
+        expect(KERNEL.some(path => path.startsWith('assets/'))).toBe(false);
+        expect(EXEMPTIONS.some(({ file }) => file.startsWith('assets/'))).toBe(false);
     });
 
     it('keeps the list the boundary started with as it was drawn', () => {
@@ -61,13 +69,13 @@ describe('what the kernel boundary counts as a violation', () => {
 
     it('counts a local import that leaves the kernel, and not one that stays inside it', () => {
         const violations = kernelViolations([
-            file('assets/shapes.js', [
-                "import { translateMesh } from './objLoader.js';",
-                "import { patch } from './tessellate.js';"
+            file('body/restGeometry.js', [
+                "import { DEFAULT_MATERIAL } from './material.js';",
+                "import { patch } from '../assets/tessellate.js';"
             ].join('\n')),
             file('sim/discretize/lattice/sample.js', "import wgsl from './sample.wgsl?raw';\nimport { a } from '../../../deformation/bind.js';")
         ]);
-        expect(violations).toEqual([{ file: 'assets/shapes.js', rule: 'import', name: 'assets/tessellate.js', count: 1 }]);
+        expect(violations).toEqual([{ file: 'body/restGeometry.js', rule: 'import', name: 'assets/tessellate.js', count: 1 }]);
     });
 
     it('counts the renderer\'s API wherever code uses it, and I/O or the page as free names', () => {

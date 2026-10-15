@@ -8,7 +8,6 @@ export const PACKAGE = join(ROOT, 'packages/visionary-sim');
 
 /** Logical S1 source identities stay stable across the mechanical move.
  * Both physical trees are walked, so new package files are audited too.
- * Mixed asset modules stay in the app until the asset-preparation ticket.
  */
 const locations = new Map();
 const directories = new Set();
