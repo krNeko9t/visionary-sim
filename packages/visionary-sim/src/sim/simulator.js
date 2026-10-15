@@ -194,7 +194,6 @@ export class Simulator {
     stats() {
         const timing = this.clock.snapshot();
         return {
-            deviceType: 'webgpu',
             bodyCount: this.simBodies.length,
             scale: totalScale(this.simBodies.map(({ proxy }) => proxy.scale())),
             nodes: this.particles.nodeCount,

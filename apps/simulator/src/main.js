@@ -104,7 +104,7 @@ async function boot() {
  */
 function report(name, stats) {
     console.info(
-        `[softbody] scene=${name} device=${stats.deviceType} bodies=${stats.bodyCount} ` +
+        `[softbody] scene=${name} device=webgpu bodies=${stats.bodyCount} ` +
         `${stats.scale.map(({ label, value }) => `${label}=${value}`).join(' ')} nodes=${stats.nodes} ` +
         `step=${(stats.stepDuration * 1000).toFixed(3)}ms cfl=${stats.cfl.toFixed(2)} ` +
         `maxSteps/frame=${stats.maxStepsPerFrame} ` +

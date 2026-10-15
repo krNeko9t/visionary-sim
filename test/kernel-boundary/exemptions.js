@@ -13,9 +13,6 @@
  * mean what they mean in `rules.js`.
  */
 const ROWS = [
-    // Legacy stats key retained until the public interface ticket.
-    ['sim/simulator.js', 'name', 'deviceType', 1],
-
     // The deformation field handed to the host's shader, in the dialect. It
     // goes when a field becomes shader code plus a buffer manifest and each
     // host binding writes its own declarations.
