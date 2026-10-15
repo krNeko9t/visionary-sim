@@ -42,3 +42,11 @@ export function attachNativeSplatModifier(component, wgsl, buffers) {
         component.workBufferUpdate = update;
     };
 }
+
+/** Apply the transitional field bag, wrapping only native buffers for the host. */
+export function applyFieldParameters(target, field) {
+    for (const [name, value] of Object.entries(field.parameters)) {
+        target.setParameter(name, typeof GPUBuffer !== 'undefined' && value instanceof GPUBuffer
+            ? { impl: { buffer: value } } : value);
+    }
+}

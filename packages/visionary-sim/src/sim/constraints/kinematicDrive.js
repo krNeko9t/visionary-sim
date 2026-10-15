@@ -1,11 +1,6 @@
-import {
-    BUFFERUSAGE_COPY_DST,
-    BUFFERUSAGE_COPY_SRC,
-    Compute,
-    SHADERLANGUAGE_WGSL,
-    Shader,
-    StorageBuffer
-} from 'playcanvas';
+/** @typedef {import('../compute/backend.js').ComputeBackend} ComputeBackend */
+/** @typedef {ReturnType<ComputeBackend['kernel']>} Kernel */
+/** @typedef {ReturnType<ComputeBackend['pass']>} Pass */
 
 import { STATE_WGSL } from '../state/particles.js';
 import driveWgsl from './wgsl/drive.wgsl?raw';
@@ -71,19 +66,18 @@ const RESPONSE_TIME = 0.05;
 
 export class KinematicDrive {
     /**
-     * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+     * @param {ComputeBackend} backend - WebGPU backend.
      * @param {import('../state/particles.js').Particles} particles - Nodes to drive.
      */
-    constructor(device, particles) {
-        this.device = device;
+    constructor(backend, particles) {
+        this.backend = backend;
         this.particles = particles;
         this._law = 'hard';
         /** Global node indices currently held, so a law switch can re-apply prescription. */
         this.heldNodes = [];
         this.drivenCount = 0;
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.driven = new StorageBuffer(device, MAX_DRIVEN * DRIVEN_STRIDE, usage);
+        this.driven = backend.buffer(MAX_DRIVEN * DRIVEN_STRIDE);
 
         // One staging copy sized to capacity, reused for every hold.
         this.drivenWords = new ArrayBuffer(MAX_DRIVEN * DRIVEN_STRIDE);
@@ -101,9 +95,9 @@ export class KinematicDrive {
             compliant: this.pass('compliant', groups)
         };
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('drivenCount', 0);
-            compute.setParameter('grabTarget', [0, 0, 0]);
-            compute.setParameter('grabTargetVelocity', [0, 0, 0]);
+            compute.set('drivenCount', 0);
+            compute.set('grabTarget', [0, 0, 0]);
+            compute.set('grabTargetVelocity', [0, 0, 0]);
         }
         this.responseTime = RESPONSE_TIME;
     }
@@ -114,7 +108,7 @@ export class KinematicDrive {
             throw new RangeError('drive responseTime must be a finite positive number of seconds');
         }
         this._responseTime = seconds;
-        for (const compute of Object.values(this.computes)) compute.setParameter('responseTime', seconds);
+        for (const compute of Object.values(this.computes)) compute.set('responseTime', seconds);
     }
 
     get responseTime() { return this._responseTime; }
@@ -122,27 +116,23 @@ export class KinematicDrive {
     /**
      * @param {string} name - Shader name, for debugging.
      * @param {string} body - Kernel source.
-     * @returns {Shader} The compiled kernel, with both sets of declarations.
+     * @returns {Kernel} The compiled kernel, with both sets of declarations.
      */
     kernel(name, body) {
-        return new Shader(this.device, {
-            name,
-            shaderLanguage: SHADERLANGUAGE_WGSL,
-            cshader: `${STATE_WGSL}\n${driveWgsl}\n${body}`
-        });
+        return this.backend.kernel(name, `${STATE_WGSL}\n${driveWgsl}\n${body}`);
     }
 
     /**
      * @param {DriveLaw} law - Which shader.
      * @param {number} groups - Workgroups to dispatch.
-     * @returns {Compute} The configured dispatch.
+     * @returns {Pass} The configured dispatch.
      */
     pass(law, groups) {
-        const compute = new Compute(this.device, this.shaders[law], `sim-drive-${law}`);
+        const compute = this.backend.pass(this.shaders[law], `sim-drive-${law}`);
         for (const [binding, buffer] of Object.entries(this.particles.bindings)) {
-            compute.setParameter(binding, buffer);
+            compute.set(binding, buffer);
         }
-        compute.setParameter('driven', this.driven);
+        compute.set('driven', this.driven);
         compute.setupDispatch(groups, 1, 1);
         return compute;
     }
@@ -195,7 +185,7 @@ export class KinematicDrive {
         this.drivenCount = count;
         this.heldNodes = nodes.slice(0, count);
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('drivenCount', count);
+            compute.set('drivenCount', count);
         }
         this.applyPrescription();
     }
@@ -206,8 +196,8 @@ export class KinematicDrive {
      */
     setGrabTarget(target, velocity) {
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('grabTarget', target);
-            compute.setParameter('grabTargetVelocity', velocity);
+            compute.set('grabTarget', target);
+            compute.set('grabTargetVelocity', velocity);
         }
     }
 
@@ -216,7 +206,7 @@ export class KinematicDrive {
         this.drivenCount = 0;
         this.heldNodes = [];
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('drivenCount', 0);
+            compute.set('drivenCount', 0);
         }
         this.particles.clearPrescribed();
     }
@@ -257,7 +247,7 @@ export class KinematicDrive {
     /**
      * The dispatch this constraint contributes to one substep, in order.
      *
-     * @returns {Compute[]} The one pass for the active law, or none while
+     * @returns {Pass[]} The one pass for the active law, or none while
      *   nothing is held.
      */
     get passes() {
@@ -269,7 +259,7 @@ export class KinematicDrive {
      */
     setSubstepDt(dt) {
         for (const compute of Object.values(this.computes)) {
-            compute.setParameter('dt', dt);
+            compute.set('dt', dt);
         }
     }
 

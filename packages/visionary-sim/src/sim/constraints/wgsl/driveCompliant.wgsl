@@ -24,17 +24,17 @@
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
-    if (i >= uniform.drivenCount) {
+    if (i >= params.drivenCount) {
         return;
     }
 
     let d = driven[i];
     let n = d.node;
-    let goal = uniform.grabTarget + d.offset.xyz;
+    let goal = params.grabTarget + d.offset.xyz;
     let p = nodePos[n].xyz;
 
-    let dt2 = uniform.dt * uniform.dt;
-    let tau2 = uniform.responseTime * uniform.responseTime;
+    let dt2 = params.dt * params.dt;
+    let tau2 = params.responseTime * params.responseTime;
     let frac = dt2 / (dt2 + tau2);
 
     nodePos[n] = vec4f(p + (goal - p) * frac, 0.0);

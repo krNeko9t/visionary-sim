@@ -13,49 +13,8 @@
  * mean what they mean in `rules.js`.
  */
 const ROWS = [
-    // Buffers and dispatch borrowed from PlayCanvas. They go when the kernel
-    // gets its own thin compute backend over the GPUDevice.
-    ['sim/simulator.js', 'import', 'playcanvas', 1],
-    ['sim/simulator.js', 'name', 'computeDispatch', 1],
-    ['sim/simulator.js', 'name', 'supportsCompute', 1],
-    ['sim/simulator.js', 'name', 'deviceType', 2],
-    ['sim/state/particles.js', 'import', 'playcanvas', 2],
-    ['sim/state/particles.js', 'name', 'StorageBuffer', 6],
-    ['sim/solver/stepper.js', 'import', 'playcanvas', 3],
-    ['sim/solver/stepper.js', 'name', 'setParameter', 7],
-    ['sim/constraints/bodyContact.js', 'import', 'playcanvas', 2],
-    ['sim/constraints/bodyContact.js', 'name', 'setParameter', 9],
-    ['sim/constraints/bodyContact.js', 'name', 'StorageBuffer', 3],
-    ['sim/constraints/kinematicDrive.js', 'import', 'playcanvas', 2],
-    ['sim/constraints/kinematicDrive.js', 'name', 'setParameter', 11],
-    ['sim/constraints/kinematicDrive.js', 'name', 'StorageBuffer', 2],
-    ['sim/discretize/discretize.js', 'import', 'playcanvas', 1],
-    ['sim/discretize/lattice/elasticCells.js', 'import', 'playcanvas', 3],
-    ['sim/discretize/lattice/elasticCells.js', 'name', 'setParameter', 7],
-    ['sim/discretize/lattice/elasticCells.js', 'name', 'StorageBuffer', 3],
-
-    // The kernel's own shaders in PlayCanvas's WGSL dialect. They go when
-    // every kernel declares explicit bindings.
-    ['sim/state/state.wgsl', 'dialect', 'var<storage> without @binding', 5],
-    ['sim/solver/wgsl/predict.wgsl', 'dialect', 'uniform declaration', 3],
-    ['sim/solver/wgsl/predict.wgsl', 'dialect', 'uniform.<name> read', 4],
-    ['sim/solver/wgsl/finalize.wgsl', 'dialect', 'uniform declaration', 4],
-    ['sim/solver/wgsl/finalize.wgsl', 'dialect', 'uniform.<name> read', 8],
-    ['sim/constraints/wgsl/contacts.wgsl', 'dialect', 'var<storage> without @binding', 2],
-    ['sim/constraints/wgsl/contacts.wgsl', 'dialect', 'uniform declaration', 5],
-    ['sim/constraints/wgsl/contacts.wgsl', 'dialect', 'uniform.<name> read', 5],
-    ['sim/constraints/wgsl/bin.wgsl', 'dialect', 'uniform.<name> read', 2],
-    ['sim/constraints/wgsl/sort.wgsl', 'dialect', 'uniform.<name> read', 3],
-    ['sim/constraints/wgsl/collide.wgsl', 'dialect', 'uniform.<name> read', 3],
-    ['sim/constraints/wgsl/settle.wgsl', 'dialect', 'uniform declaration', 1],
-    ['sim/constraints/wgsl/settle.wgsl', 'dialect', 'uniform.<name> read', 3],
-    ['sim/constraints/wgsl/drive.wgsl', 'dialect', 'var<storage> without @binding', 1],
-    ['sim/constraints/wgsl/drive.wgsl', 'dialect', 'uniform declaration', 5],
-    ['sim/constraints/wgsl/driveHard.wgsl', 'dialect', 'uniform.<name> read', 5],
-    ['sim/constraints/wgsl/driveCompliant.wgsl', 'dialect', 'uniform.<name> read', 6],
-    ['sim/discretize/lattice/wgsl/cells.wgsl', 'dialect', 'var<storage> without @binding', 2],
-    ['sim/discretize/lattice/wgsl/project.wgsl', 'dialect', 'uniform declaration', 4],
-    ['sim/discretize/lattice/wgsl/project.wgsl', 'dialect', 'uniform.<name> read', 7],
+    // Legacy stats key retained until the public interface ticket.
+    ['sim/simulator.js', 'name', 'deviceType', 1],
 
     // The deformation field handed to the host's shader, in the dialect. It
     // goes when a field becomes shader code plus a buffer manifest and each

@@ -46,7 +46,9 @@ import { sourcePath, sourceImport, sourceFiles } from '../sourceTree.js';
  *   is the one directory allowed to know the proxy is a lattice
  *   ({@link DISCRETISATION_RESIDENT}), so what it may reach is worth saying
  *   out loud rather than inheriting by prefix (ADR-0012).
- * - `sim/state` may reach nothing at all. It holds the degrees of freedom and
+ * - State, constraints and discretisation may use the private neutral compute
+ *   boundary (ADR-0022). It knows no physics and owns no host device.
+ * - `sim/state` otherwise reaches nothing. It holds the degrees of freedom and
  *   must not know what any of them are for. This is the seam that lets a second
  *   kind of constraint exist: contact between bodies shares nothing with
  *   elasticity except the nodes it moves, so the nodes are what both are
@@ -73,11 +75,12 @@ const ALLOWED = {
     ui: ['sim', 'body'],
     scene: ['body', 'assets', 'sim'],
     sim: ['body', 'deformation', 'assets'],
-    'sim/discretize': ['deformation', 'assets', 'sim/state', 'sim/constraints', 'body'],
-    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets', 'sim/state', 'sim/constraints', 'body'],
-    'sim/state': [],
-    'sim/constraints': ['sim/state', 'body'],
-    'sim/solver': ['sim/state'],
+    'sim/discretize': ['deformation', 'assets', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
+    'sim/discretize/lattice': ['sim/discretize', 'deformation', 'assets', 'sim/state', 'sim/constraints', 'body', 'sim/compute'],
+    'sim/compute': [], // Private native compute boundary; ADR-0022.
+    'sim/state': ['sim/compute'],
+    'sim/constraints': ['sim/state', 'body', 'sim/compute'],
+    'sim/solver': ['sim/state', 'sim/compute'],
     render: ['deformation'],
     body: ['assets'],
     assets: [],

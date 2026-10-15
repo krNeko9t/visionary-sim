@@ -1,11 +1,6 @@
-import {
-    BUFFERUSAGE_COPY_DST,
-    BUFFERUSAGE_COPY_SRC,
-    Compute,
-    SHADERLANGUAGE_WGSL,
-    Shader,
-    StorageBuffer
-} from 'playcanvas';
+/** @typedef {import('../compute/backend.js').ComputeBackend} ComputeBackend */
+/** @typedef {ReturnType<ComputeBackend['kernel']>} Kernel */
+/** @typedef {ReturnType<ComputeBackend['pass']>} Pass */
 
 import { STATE_WGSL } from '../state/particles.js';
 import { broadphaseGrid, worstCaseBucketOccupancy } from './broadphase.js';
@@ -54,14 +49,14 @@ const GAIN = 1;
 
 export class BodyContact {
     /**
-     * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+     * @param {ComputeBackend} backend - WebGPU backend.
      * @param {import('../state/particles.js').Particles} particles - Nodes to move.
      * @param {import('../discretize/proxyGeometry.js').ProxyGeometry[]} proxies - The
      *   bodies that can touch, in scene order.
      * @param {{ min: number[], max: number[] }} bounds - Where they can do it.
      */
-    constructor(device, particles, proxies, bounds) {
-        this.device = device;
+    constructor(backend, particles, proxies, bounds) {
+        this.backend = backend;
         this.particles = particles;
 
         /**
@@ -111,7 +106,6 @@ export class BodyContact {
             }
         }
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
         const words = new ArrayBuffer(Math.max(1, records.length) * SURFACE_STRIDE);
         const uints = new Uint32Array(words);
         const floats = new Float32Array(words);
@@ -122,14 +116,14 @@ export class BodyContact {
             uints[base + SURFACE_FIELDS.body] = records[r].body;
             floats[base + SURFACE_FIELDS.radius] = records[r].radius;
         }
-        this.surface = new StorageBuffer(device, words.byteLength, usage);
+        this.surface = backend.buffer(words.byteLength);
         this.surface.write(0, new Uint8Array(words));
 
         // Counters first, then slots behind them. Only counters need an empty
         // value: the bin pass overwrites every slot below the new count, and
         // the local sort pass orders exactly that live prefix.
         const gridWords = this.grid.bucketCount * (1 + BUCKET_SLOTS);
-        this.contactGrid = new StorageBuffer(device, gridWords * 4, usage);
+        this.contactGrid = backend.buffer(gridWords * 4);
         this.contactGrid.write(0, new Uint32Array(gridWords));
 
         this.shaders = {
@@ -157,36 +151,32 @@ export class BodyContact {
     /**
      * @param {string} name - Shader name, for debugging.
      * @param {string} body - Kernel source.
-     * @returns {Shader} The compiled kernel, with both sets of declarations.
+     * @returns {Kernel} The compiled kernel, with both sets of declarations.
      */
     kernel(name, body) {
-        return new Shader(this.device, {
-            name,
-            shaderLanguage: SHADERLANGUAGE_WGSL,
-            cshader: `${STATE_WGSL}\n${contactsWgsl}\n${body}`
-        });
+        return this.backend.kernel(name, `${STATE_WGSL}\n${contactsWgsl}\n${body}`);
     }
 
     /**
      * @param {string} name - Which of the four kernels.
      * @param {number} groups - Workgroups to dispatch.
-     * @returns {Compute} The configured dispatch.
+     * @returns {Pass} The configured dispatch.
      */
     pass(name, groups) {
-        const compute = new Compute(this.device, this.shaders[name], `sim-contact-${name}`);
+        const compute = this.backend.pass(this.shaders[name], `sim-contact-${name}`);
         // Every kernel carries every declaration, so every kernel is bound the
         // same way. Which of them a given kernel reads is the kernel's business.
         for (const [binding, buffer] of Object.entries(this.particles.bindings)) {
-            compute.setParameter(binding, buffer);
+            compute.set(binding, buffer);
         }
-        compute.setParameter('surface', this.surface);
-        compute.setParameter('contactGrid', this.contactGrid);
-        compute.setParameter('gridOrigin', this.grid.origin);
-        compute.setParameter('gridDims', this.grid.dims);
-        compute.setParameter('bucketSize', this.grid.bucketSize);
-        compute.setParameter('bucketCount', this.grid.bucketCount);
-        compute.setParameter('surfaceCount', this.surfaceCount);
-        compute.setParameter('gain', GAIN);
+        compute.set('surface', this.surface);
+        compute.set('contactGrid', this.contactGrid);
+        compute.set('gridOrigin', this.grid.origin);
+        compute.set('gridDims', this.grid.dims);
+        compute.set('bucketSize', this.grid.bucketSize);
+        compute.set('bucketCount', this.grid.bucketCount);
+        compute.set('surfaceCount', this.surfaceCount);
+        compute.set('gain', GAIN);
         compute.setupDispatch(groups, 1, 1);
         return compute;
     }
@@ -194,7 +184,7 @@ export class BodyContact {
     /**
      * The dispatches this constraint contributes to one substep, in order.
      *
-     * @returns {Compute[]} The passes, or none while it is switched off.
+     * @returns {Pass[]} The passes, or none while it is switched off.
      */
     get passes() {
         return this.enabled ? this.dispatches : [];

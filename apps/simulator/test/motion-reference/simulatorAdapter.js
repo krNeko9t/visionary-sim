@@ -1,3 +1,4 @@
+import { nativeDevice } from '../../src/render/playcanvasInterop.js';
 import { Simulator } from 'visionary-sim/sim/simulator.js';
 
 /**
@@ -8,10 +9,9 @@ import { Simulator } from 'visionary-sim/sim/simulator.js';
  * surface changes -- fields become methods, it takes a `GPUDevice` and submits
  * its own work -- this file changes and nothing else in the test does.
  *
- * Today it drives the simulator the way `src/main.js` does: on the PlayCanvas
- * application's device, with dispatches recorded inside a render frame. Node
- * positions are read from `particles`, which is not yet public; that read is
- * the reason this file exists.
+ * It borrows the application's native device and reads through the simulator's
+ * public method. The original batch cadence remains unchanged for comparison;
+ * native-compute separately verifies stepping without a render loop.
  */
 
 /**
@@ -21,7 +21,7 @@ import { Simulator } from 'visionary-sim/sim/simulator.js';
  * @returns {object} The simulation, as this test uses it.
  */
 export function openSimulation(app, scene, bodies) {
-    const sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
+    const sim = new Simulator(nativeDevice(app.graphicsDevice), bodies, scene.bounds);
     scene.validateSimulation?.(sim.stats());
     if (scene.gravity !== undefined) sim.params.gravity = [...scene.gravity];
     if (scene.grab) {
@@ -56,7 +56,7 @@ export function openSimulation(app, scene, bodies) {
 
         /** @returns {Promise<Float32Array>} Every node's position, xyz per node, in metres. */
         async readNodes() {
-            const raw = await sim.particles.readPositions();
+            const raw = await sim.readPositions();
             const positions = new Float32Array(raw.length / 4 * 3);
             for (let n = 0; n < positions.length / 3; n++) {
                 positions.set(raw.subarray(n * 4, n * 4 + 3), n * 3);

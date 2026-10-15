@@ -16,22 +16,21 @@
 // is broken. Only the counters need it -- a slot past its bucket's count is
 // never read.
 
-uniform gain: f32;
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
 
-    if (i < uniform.surfaceCount) {
+    if (i < params.surfaceCount) {
         let delta = surface[i].delta;
         if (delta.w > 0.0) {
             let node = surface[i].node;
-            let step = delta.xyz * (uniform.gain / delta.w);
+            let step = delta.xyz * (params.gain / delta.w);
             nodePos[node] = vec4f(nodePos[node].xyz + step, 0.0);
         }
     }
 
-    if (i < uniform.bucketCount) {
+    if (i < params.bucketCount) {
         atomicStore(&contactGrid[i], 0u);
     }
 }

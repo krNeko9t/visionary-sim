@@ -3,6 +3,7 @@ import { draw } from '../../src/render/draw.js';
 import { createSplatView } from '../../src/render/splats.js';
 
 const state = vi.hoisted(() => ({ scene: null, events: [], app: null, sim: null }));
+vi.mock('../../src/render/playcanvasInterop.js', () => ({ nativeDevice: device => device }));
 vi.mock('../../src/scene/scenes.js', () => ({ sceneNamed: () => state.scene }));
 vi.mock('../../src/scene/app.js', () => ({
     WebGpuUnavailableError: class extends Error {},

@@ -1,3 +1,4 @@
+import { applyFieldParameters } from './playcanvasInterop.js';
 import {
     Color,
     Entity,
@@ -153,9 +154,7 @@ export function createLineView(app, lines, field, { name = 'lines', shrink = 0.7
         });
         const tint = groupTint(group, groups.length);
         material.setParameter('uTint', [tint.r, tint.g, tint.b]);
-        for (const [parameter, value] of Object.entries(field.parameters)) {
-            material.setParameter(parameter, value);
-        }
+        applyFieldParameters(material, field);
         material.update();
 
         const mesh = new Mesh(device);

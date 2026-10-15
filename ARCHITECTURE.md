@@ -6,7 +6,7 @@
 §一到§三是结构。可以换掉的选择各是一条 ADR，不写在这里；换掉其中任何一条，前三节不动——
 动了，说明它不是选择而是结构，该写回这里。按地基往上的顺序读：
 
-1. 渲染与场景交给 PlayCanvas，物理是 WebGPU 上的 WGSL compute（ADR-0009）
+1. 渲染与场景交给 PlayCanvas，物理借用宿主的原生 GPUDevice 独立提交 WGSL compute（ADR-0022）
 2. XPBD 子步 + 稳定 Neo-Hookean（ADR-0010），可选材料拉伸限制与扫描标签延拓（ADR-0020）
 3. 代理几何是均匀体素点阵（ADR-0005），以及把它从别的模块里隔开的那道缝（ADR-0006、ADR-0007）
 4. 接触是边界节点上的球并集（ADR-0008）
@@ -41,6 +41,7 @@
 | `packages/visionary-sim/src/sim/` | 模拟侧。`simulator.js` 是对外唯一入口，也是下面四段的装配处 |
 | `packages/visionary-sim/src/sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云。对外只交出中立的 `ProxyGeometry`（条目与不变量写在 `proxyGeometry.js`），外加它自己造的弹性约束：单元是什么、怎样分批，是离散化的知识 |
 | `packages/visionary-sim/src/sim/discretize/lattice/` | 代理几何的体素点阵实现。全仓库只有这里可以说点阵的词 |
+| `packages/visionary-sim/src/sim/compute/` | 私有原生 WebGPU 后端：显式布局、参数打包、缓冲与独立提交；测试以伪造后端替换 |
 | `packages/visionary-sim/src/sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
 | `packages/visionary-sim/src/sim/constraints/` | 自由度要服从什么：不由离散化决定的约束（接触、`kinematicDrive.js`），以及弹性约束借用的 XPBD 公式（顺服量、本构的 2×2 联立）。一种约束自带它的数据、它的批次规则和它的投影核；看不见离散化 |
 | `packages/visionary-sim/src/sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
@@ -54,8 +55,8 @@
 
 表中路径相对仓库根目录。根包是私有 npm workspace；`packages/visionary-sim` 是私有包
 `visionary-sim`，`apps/simulator` 是私有包 `simulator-app`。应用用包名 import 同仓库源码。
-目前 `visionary-sim/*` 子路径按原模块形状开放，公开入口由后续票收紧；PlayCanvas 依赖随旧计算
-代码保留到计算后端票。`assets/` 的混合模块仍留在应用，内核临时引用同一份文件，资产准备与
+目前 `visionary-sim/*` 子路径按原模块形状开放，公开入口由后续票收紧；计算只依赖原生 WebGPU。
+`assets/` 的混合模块仍留在应用，内核临时引用同一份文件，资产准备与
 静止几何由票 10 分开。边界审计仍覆盖这些候选文件，原有豁免没有增加或重新划线。
 
 `test/sourceTree.js` 将两个 workspace 的物理路径对应到 S1 的逻辑来源路径，供原依赖表及
@@ -87,7 +88,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
    自由度            自由度要服从什么         让它随时间服从
 ```
 
-`sim/state/` 什么都不依赖，只管节点的位置、历史和逆质量。这是允许出现第二种约束的那道缝：
+`sim/state/` 除私有计算后端外不依赖其他模块，只管节点的位置、历史和逆质量。这是允许出现第二种约束的那道缝：
 接触与弹性除了"移动同一批节点"之外毫无共同点，于是节点成了两者唯一都能看见的东西，而两者
 互相看不见。被规定的自由度也走这道缝：模拟构造时按物体的静态区域采样节点，`sim/state/`
 分别保留静态与运动学集合，再与材料逆质量合成求解用的逆质量；它不知道区域如何判断，或

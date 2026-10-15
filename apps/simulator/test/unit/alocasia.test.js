@@ -1,3 +1,5 @@
+vi.mock('visionary-sim/sim/compute/backend.js', () => import('../../../../packages/visionary-sim/test/helpers/fakeCompute.js'));
+import { fakeDevice } from '../../../../packages/visionary-sim/test/helpers/fakeCompute.js';
 import { Entity } from 'playcanvas';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCloud } from '../../src/assets/splats/cloud.js';
@@ -12,13 +14,6 @@ import { createAlocasiaScene, alocasiaScene } from '../../src/scene/alocasia.js'
 const gpu = vi.hoisted(() => ({ resources: [] }));
 vi.mock('playcanvas', async importOriginal => ({
     ...await importOriginal(),
-    StorageBuffer: class {
-        constructor(_device, size) { this.bytes = new Uint8Array(size); }
-        write(offset, data) { this.bytes.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), offset); }
-        destroy() {}
-    },
-    Shader: class { destroy() {} },
-    Compute: class { setParameter() {} setupDispatch() {} destroy() {} },
     Entity: class {
         constructor(name) { this.name = name; this.listeners = {}; }
         once(event, fn) { this.listeners[event] = fn; }
@@ -92,7 +87,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     it('constructs the real simulator from full foreground and accepts its public material diagnostics', async () => {
         const scene = createAlocasiaScene({ r: 0.05 });
         const bodies = await scene.createBodies();
-        const sim = new Simulator({ supportsCompute: true, deviceType: 'test' }, bodies, scene.bounds);
+        const sim = new Simulator(fakeDevice(), bodies, scene.bounds);
         try {
             const stats = sim.stats();
             expect(stats.perBody[0].staticNodes).toBeGreaterThan(0);
@@ -106,7 +101,7 @@ describe('alocasia scene assembly with an explicitly declared synthetic toleranc
     it('does not attach the outside of a movable thin leaf to the world', async () => {
         const scene = createAlocasiaScene({ r: 0.016 });
         const bodies = await scene.createBodies();
-        const sim = new Simulator({ supportsCompute: true, deviceType: 'test' }, bodies, scene.bounds);
+        const sim = new Simulator(fakeDevice(), bodies, scene.bounds);
         try {
             const { particles } = sim;
             const leafNodes = Array.from({ length: particles.nodeCount }, (_, i) => i)
@@ -227,7 +222,7 @@ it('background changes neither solver bounds nor material, contact or grab candi
     expect(empty.viewBounds).toEqual({ min: [0, 0, 0], max: [0, 0.25, 0] });
     expect(empty.bounds).toEqual(full.bounds);
     expect(emptyBodies[0].source.cloud).toEqual(fullBodies[0].source.cloud);
-    const sims = [fullBodies, emptyBodies].map(bodies => new Simulator({ supportsCompute: true, deviceType: 'test' }, bodies, full.bounds));
+    const sims = [fullBodies, emptyBodies].map(bodies => new Simulator(fakeDevice(), bodies, full.bounds));
     try {
         expect(sims[0].stats().perBody).toEqual(sims[1].stats().perBody);
         expect(sims[0].stats().bodyCount).toBe(1);
@@ -306,7 +301,7 @@ describe('PhysDreamer shared factory registration', () => {
         expect(body.staticRegion(0, 0.25, 0)).toBe(false);
         expect(scene.gravity).toEqual([0, 0, 0]);
         expect(scene.grab).toEqual({ law: 'compliant', responseTime: 0.003 });
-        const sim = new Simulator({ supportsCompute: true, deviceType: 'test' }, [body], scene.bounds);
+        const sim = new Simulator(fakeDevice(), [body], scene.bounds);
         try { expect(() => scene.validateSimulation(sim.stats())).not.toThrow(); }
         finally { sim.destroy(); }
     });

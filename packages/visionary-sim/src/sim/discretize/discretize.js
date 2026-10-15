@@ -1,3 +1,5 @@
+/** @typedef {import('../compute/backend.js').ComputeBackend} ComputeBackend */
+
 import { elasticConstraints as elasticOfTheOnlyKind } from './lattice/elasticCells.js';
 import { proxyFor } from './lattice/voxelLattice.js';
 
@@ -34,13 +36,13 @@ const ELASTIC = [elasticOfTheOnlyKind];
  * the body was cut up. Contact is the opposite case and stays over there: it
  * couples bodies, and one broadphase has to see all of them (ADR-0007).
  *
- * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+ * @param {ComputeBackend} backend - WebGPU backend.
  * @param {import('../state/particles.js').Particles} particles - Every body's nodes.
  * @param {import('./proxyGeometry.js').ProxyGeometry[]} proxies - Every body's proxy, in scene order.
  * @param {import('../../body/material.js').Material[]} materials - Each body's
  *   material, same order, edited in place later.
  * @returns {import('./proxyGeometry.js').ElasticConstraint[]} In the order they should be solved.
  */
-export function elasticConstraints(device, particles, proxies, materials) {
-    return ELASTIC.flatMap(build => build(device, particles, proxies, materials));
+export function elasticConstraints(backend, particles, proxies, materials) {
+    return ELASTIC.flatMap(build => build(backend, particles, proxies, materials));
 }

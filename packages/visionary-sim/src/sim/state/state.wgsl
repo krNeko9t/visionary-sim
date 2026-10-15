@@ -13,10 +13,10 @@
 // 16-byte alignment. The w component is unused. Every deformation field a
 // discretisation hands out (`field()` in `sim/discretize/proxyGeometry.js`)
 // reads the same array read-only and depends on this layout.
-var<storage, read_write> nodePos: array<vec4f>;
-var<storage, read_write> nodePrev: array<vec4f>;
-var<storage, read_write> nodeVel: array<vec4f>;
-var<storage, read> nodeInvMass: array<f32>;
+@group(0) @binding(0) var<storage, read_write> nodePos: array<vec4f>;
+@group(0) @binding(1) var<storage, read_write> nodePrev: array<vec4f>;
+@group(0) @binding(2) var<storage, read_write> nodeVel: array<vec4f>;
+@group(0) @binding(3) var<storage, read> nodeInvMass: array<f32>;
 
 // Per-body parameters that belong to the nodes rather than to any constraint:
 // what slows them down, what they rub against. 32 bytes, written by
@@ -32,7 +32,7 @@ struct NodeParams {
     pad3: u32,
 }
 
-var<storage, read> nodeParams: array<NodeParams>;
+@group(0) @binding(4) var<storage, read> nodeParams: array<NodeParams>;
 
 // Bodies own contiguous node ranges, and there are only a handful of them, so a
 // linear scan is cheaper than storing a node-to-body index for every node.

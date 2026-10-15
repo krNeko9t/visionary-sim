@@ -30,11 +30,11 @@ struct CellParams {
     pad3: f32,
 }
 
-var<storage, read> cellParams: array<CellParams>;
+@group(0) @binding(5) var<storage, read> cellParams: array<CellParams>;
 
 // One entry per occupied cell: (body index, linear cell index), grouped by
 // colour across every body at once.
-var<storage, read> cells: array<vec2u>;
+@group(0) @binding(6) var<storage, read> cells: array<vec2u>;
 
 fn cellCoords(dims: vec3u, linear: u32) -> vec3u {
     return vec3u(

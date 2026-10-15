@@ -1,3 +1,4 @@
+import { nativeDevice } from '../src/render/playcanvasInterop.js';
 import { createApp } from '../src/scene/app.js';
 import { createAlocasiaScene } from '../src/scene/alocasia.js';
 import { readPly } from '../src/assets/splats/ply.js';
@@ -50,7 +51,7 @@ window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4
         body.material.maxStretch = 0;
         body.material.damping = 0.6;
     }
-    const sim = new Simulator(app.graphicsDevice, [body], scene.bounds);
+    const sim = new Simulator(nativeDevice(app.graphicsDevice), [body], scene.bounds);
     if (gripRadius !== undefined) sim.setGripRadius(gripRadius);
     if (!legacy) {
         sim.setDriveLaw(scene.grab.law);
@@ -86,7 +87,7 @@ window.runDrag = async ({ h, delta = [0.04, 0, 0], material = {}, duration = 0.4
         }
     };
     const capture = async () => {
-        const raw = await sim.particles.readPositions();
+        const raw = await sim.readPositions();
         const positions = new Float32Array(raw.length / 4 * 3);
         let staticMax = 0, bad = 0;
         for (let i = 0; i < positions.length / 3; i++) {

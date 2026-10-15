@@ -1,3 +1,4 @@
+import { nativeDevice } from './render/playcanvasInterop.js';
 import { attachGrabber } from './ui/grab.js';
 import { showLoadError } from './ui/loadError.js';
 import { createPanel } from './ui/panel.js';
@@ -26,7 +27,7 @@ async function boot() {
     };
     app.on('destroy', destroySimulation);
     try {
-        sim = new Simulator(app.graphicsDevice, bodies, scene.bounds);
+        sim = new Simulator(nativeDevice(app.graphicsDevice), bodies, scene.bounds);
         scene.validateSimulation?.(sim.stats());
         if (scene.gravity !== undefined) sim.params.gravity = [...scene.gravity];
         if (scene.grab) {
@@ -76,8 +77,8 @@ async function boot() {
         document.body.append(panel.element);
         attachGrabber(app, camera, sim);
 
-        // The dispatch has to be recorded inside the render frame, so it hangs off
-        // the app update rather than a timer of its own.
+        // Submit physics before the host evaluates deformation and draws.
+        // Both use the same native queue; standalone stepping is also legal.
         app.on('update', (dt) => {
             sim.step(dt);
             panel.update(dt);

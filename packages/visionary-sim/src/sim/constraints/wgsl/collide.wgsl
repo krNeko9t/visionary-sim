@@ -16,7 +16,7 @@
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let s = gid.x;
-    if (s >= uniform.surfaceCount) {
+    if (s >= params.surfaceCount) {
         return;
     }
 
@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     var hits = 0.0;
 
     let centre = vec3i(gridCoord(pi));
-    let dims = vec3i(uniform.gridDims);
+    let dims = vec3i(params.gridDims);
 
     for (var dz = -1; dz <= 1; dz++) {
         let z = centre.z + dz;
@@ -55,7 +55,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
                 let bucket = bucketAt(vec3u(u32(x), u32(y), u32(z)));
                 let held = min(atomicLoad(&contactGrid[bucket]), BUCKET_SLOTS);
-                let base = uniform.bucketCount + bucket * BUCKET_SLOTS;
+                let base = params.bucketCount + bucket * BUCKET_SLOTS;
 
                 for (var k = 0u; k < held; k++) {
                     let other = atomicLoad(&contactGrid[base + k]);

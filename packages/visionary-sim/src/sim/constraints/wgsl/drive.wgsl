@@ -1,3 +1,12 @@
+struct Params {
+    grabTarget: vec3f,
+    grabTargetVelocity: vec3f,
+    drivenCount: u32,
+    dt: f32,
+    responseTime: f32,
+}
+@group(0) @binding(7) var<uniform> params: Params;
+
 // What the kinematic drive constraint needs on top of the particle
 // declarations: which nodes it is driving this substep, where the grab target
 // currently is, and (for the compliant law only) how stiffly it is held.
@@ -28,12 +37,7 @@ struct Driven {
     offset: vec4f,
 }
 
-var<storage, read> driven: array<Driven>;
+@group(0) @binding(5) var<storage, read> driven: array<Driven>;
 
-uniform grabTarget: vec3f;
-uniform grabTargetVelocity: vec3f;
-uniform drivenCount: u32;
-uniform dt: f32;
 // Compliant law only: see `wgsl/driveCompliant.wgsl` for what this means
 // physically. The hard law ignores it.
-uniform responseTime: f32;

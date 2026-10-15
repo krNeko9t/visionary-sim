@@ -15,15 +15,15 @@
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
-    if (i >= uniform.drivenCount) {
+    if (i >= params.drivenCount) {
         return;
     }
 
     let d = driven[i];
     let n = d.node;
     let here = nodePos[n].xyz;
-    let goal = uniform.grabTarget + d.offset.xyz;
-    let step = uniform.grabTargetVelocity * uniform.dt;
+    let goal = params.grabTarget + d.offset.xyz;
+    let step = params.grabTargetVelocity * params.dt;
     let toGoal = goal - here;
     // Once this substep's step would reach or pass the goal, land on it
     // exactly instead of overshooting past it.
@@ -31,5 +31,5 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     nodePrev[n] = vec4f(here, 0.0);
     nodePos[n] = vec4f(next, 0.0);
-    nodeVel[n] = vec4f((next - here) / uniform.dt, 0.0);
+    nodeVel[n] = vec4f((next - here) / params.dt, 0.0);
 }

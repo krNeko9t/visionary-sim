@@ -1,3 +1,10 @@
+struct Params {
+    nodeCount: u32,
+    dt: f32,
+    gravity: vec3f,
+}
+@group(0) @binding(7) var<uniform> params: Params;
+
 // Substep prediction: symplectic Euler on the nodes.
 //
 // This is the whole of XPBD's time integration. Gauss-Seidel, which the spec
@@ -8,14 +15,11 @@
 // `finalize.wgsl`. Whatever constraints run in between is not this file's
 // business; it moves nodes it knows nothing else about.
 
-uniform nodeCount: u32;
-uniform dt: f32;
-uniform gravity: vec3f;
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let n = gid.x;
-    if (n >= uniform.nodeCount) {
+    if (n >= params.nodeCount) {
         return;
     }
     // Zero means inactive, statically prescribed, or kinematically prescribed.
@@ -23,10 +27,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         return;
     }
 
-    let v = nodeVel[n].xyz + uniform.gravity * uniform.dt;
+    let v = nodeVel[n].xyz + params.gravity * params.dt;
     let p = nodePos[n].xyz;
 
     nodePrev[n] = vec4f(p, 0.0);
-    nodePos[n] = vec4f(p + v * uniform.dt, 0.0);
+    nodePos[n] = vec4f(p + v * params.dt, 0.0);
     nodeVel[n] = vec4f(v, 0.0);
 }

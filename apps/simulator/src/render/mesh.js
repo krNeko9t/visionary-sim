@@ -1,3 +1,4 @@
+import { applyFieldParameters } from './playcanvasInterop.js';
 import { Color, Entity, Mesh, MeshInstance, SHADERLANGUAGE_WGSL, StandardMaterial } from 'playcanvas';
 
 import { restNormals } from './normals.js';
@@ -48,9 +49,7 @@ export function createMeshView(app, surface, field, { tint = [0.92, 0.45, 0.26],
     const chunks = material.getShaderChunks(SHADERLANGUAGE_WGSL);
     chunks.set('litUserDeclarationVS', field.shader);
     chunks.set('litUserMainEndVS', vertexHookWgsl);
-    for (const [name, value] of Object.entries(field.parameters)) {
-        material.setParameter(name, value);
-    }
+    applyFieldParameters(material, field);
     material.update();
 
     const mesh = new Mesh(app.graphicsDevice);

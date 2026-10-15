@@ -1,3 +1,13 @@
+struct Params {
+    gridOrigin: vec3f,
+    gridDims: vec3u,
+    bucketSize: f32,
+    bucketCount: u32,
+    surfaceCount: u32,
+    gain: f32,
+}
+@group(0) @binding(7) var<uniform> params: Params;
+
 // What the contact constraint needs on top of the particle declarations: which
 // nodes can touch something, the grid that finds them near each other, and
 // where a substep's corrections are gathered before they are applied.
@@ -35,7 +45,7 @@ struct Surface {
     delta: vec4f,
 }
 
-var<storage, read_write> surface: array<Surface>;
+@group(0) @binding(5) var<storage, read_write> surface: array<Surface>;
 
 // The broadphase, as one buffer: `bucketCount` occupancy counters, followed by
 // `bucketCount * BUCKET_SLOTS` surface-record indices.
@@ -44,7 +54,7 @@ var<storage, read_write> surface: array<Surface>;
 // one bucket in the same dispatch. The slot entries are written and read
 // through `atomicStore`/`atomicLoad`, which cost nothing over a plain access
 // and keep the buffer one type.
-var<storage, read_write> contactGrid: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> contactGrid: array<atomic<u32>>;
 
 // How many nodes a bucket can hold. Mirrored in `bodyContact.js`, which sizes
 // the buffer. `sort.wgsl` puts the live prefix in ascending surface-index order
@@ -64,11 +74,6 @@ var<storage, read_write> contactGrid: array<atomic<u32>>;
 // allocation.
 const BUCKET_SLOTS: u32 = 32u;
 
-uniform gridOrigin: vec3f;
-uniform gridDims: vec3u;
-uniform bucketSize: f32;
-uniform bucketCount: u32;
-uniform surfaceCount: u32;
 
 // Which bucket of the grid a world point falls in, by coordinates.
 //
@@ -77,10 +82,10 @@ uniform surfaceCount: u32;
 // the real distance either way -- it can only crowd the buckets at the rim,
 // which costs contacts in exactly the situation where there are none.
 fn gridCoord(p: vec3f) -> vec3u {
-    let last = vec3f(uniform.gridDims) - vec3f(1.0);
-    return vec3u(clamp(floor((p - uniform.gridOrigin) / uniform.bucketSize), vec3f(0.0), last));
+    let last = vec3f(params.gridDims) - vec3f(1.0);
+    return vec3u(clamp(floor((p - params.gridOrigin) / params.bucketSize), vec3f(0.0), last));
 }
 
 fn bucketAt(coord: vec3u) -> u32 {
-    return coord.x + uniform.gridDims.x * (coord.y + uniform.gridDims.y * coord.z);
+    return coord.x + params.gridDims.x * (coord.y + params.gridDims.y * coord.z);
 }

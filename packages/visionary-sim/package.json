@@ -6,9 +6,6 @@
   "exports": {
     "./*": "./src/*"
   },
-  "dependencies": {
-    "playcanvas": "^2.21.3"
-  },
   "scripts": {
     "test": "vitest run --config ../../vitest.config.js packages/visionary-sim/test/unit"
   }

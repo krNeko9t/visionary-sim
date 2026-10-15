@@ -1,3 +1,4 @@
+import { applyFieldParameters } from './playcanvasInterop.js';
 import { Entity, GSplatData, GSplatResource, WORKBUFFER_UPDATE_ALWAYS } from 'playcanvas';
 
 import { COVARIANCE_WGSL } from 'visionary-sim/deformation/bind.js';
@@ -73,9 +74,7 @@ export function createSplatView(app, name, cloud, field = null) {
             // approach, and it is a re-bake of every splat in the body per frame.
             entity.gsplat.workBufferUpdate = WORKBUFFER_UPDATE_ALWAYS;
 
-            for (const [parameter, value] of Object.entries(field.parameters)) {
-                entity.gsplat.setParameter(parameter, value);
-            }
+            applyFieldParameters(entity.gsplat, field);
         }
         return entity;
     } catch (error) {

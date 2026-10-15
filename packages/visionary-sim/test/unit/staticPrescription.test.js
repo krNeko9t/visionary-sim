@@ -24,33 +24,8 @@ describe('static prescription at rest', () => {
 
 // Only the external GPU boundary is replaced. Body, discretisation, state,
 // constraints and Simulator below are the production implementations.
-vi.mock('playcanvas', async importOriginal => {
-    const original = await importOriginal();
-    return {
-        ...original,
-        StorageBuffer: class {
-            constructor(device, size) {
-                this.bytes = new Uint8Array(size);
-                this.writes = [];
-            }
-            write(offset, data) {
-                const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-                this.bytes.set(bytes, offset);
-                this.writes.push(this.bytes.slice());
-            }
-            async read(offset, size, target) {
-                new Uint8Array(target.buffer, target.byteOffset, size).set(this.bytes.subarray(offset, offset + size));
-            }
-            destroy() {}
-        },
-        Shader: class { destroy() {} },
-        Compute: class {
-            setParameter() {}
-            setupDispatch() {}
-            destroy() {}
-        }
-    };
-});
+vi.mock('../../src/sim/compute/backend.js', () => import('../helpers/fakeCompute.js'));
+import { ComputeBackend, fakeDevice } from '../helpers/fakeCompute.js';
 
 
 const floats = buffer => Array.from(new Float32Array(buffer.bytes.buffer));
@@ -67,7 +42,7 @@ describe('static and kinematic prescription have separate lifetimes', () => {
             nodes([0, 0, 0, 1, 0, 0], [2, 0], [1]),
             nodes([2, 0, 0, 3, 0, 0, 4, 0, 0], [3, 4, 5], [0, 2])
         ];
-        const particles = new Particles({}, bodies);
+        const particles = new Particles(new ComputeBackend(), bodies);
         expect(Array.from(new Float32Array(particles.nodeInvMass.writes[0].buffer))).toEqual([2, 0, 0, 4, 0]);
         expect([...particles.staticPrescribed]).toEqual([1, 2, 4]);
         expect(particles.materialCounts(0)).toEqual({ materialNodes: 1, staticNodes: 0, movableNodes: 1 });
@@ -95,7 +70,7 @@ describe('static and kinematic prescription have separate lifetimes', () => {
 
 
 const bounds = { min: [-0.2, -0.2, -0.2], max: [0.2, 0.2, 0.2] };
-const device = { supportsCompute: true, deviceType: 'test' };
+const device = fakeDevice();
 const body = (staticRegion, elementSize = 0.02) => new SoftBody({
     name: 'synthetic sphere',
     source: { kind: 'shape', shape: sphere({ radius: 0.04 }) },
@@ -243,7 +218,7 @@ describe('static material remains a contact surface', () => {
     it('keeps the static side still and gives the moving body the full overlap correction', () => {
         // Each body supplies one contact node; the first also has an inactive
         // node so the second surface node needs a nonzero shared offset.
-        const particles = new Particles(device, [
+        const particles = new Particles(new ComputeBackend(), [
             nodes([0, 0, 0, -1, 0, 0], [3, 0], [0]),
             nodes([0.015625, 0, 0], [2])
         ]);
@@ -251,7 +226,7 @@ describe('static material remains a contact surface', () => {
             contactSurface: () => ({ nodes: [0], radii: [0.01] }),
             spacing: { min: 0.02, max: 0.02 }
         });
-        const contact = new BodyContact(device, particles, [proxy(), proxy()], bounds);
+        const contact = new BodyContact(new ComputeBackend(), particles, [proxy(), proxy()], bounds);
         expect(contact.surfaceCount).toBe(2);
         const uints = new Uint32Array(contact.surface.bytes.buffer);
         const values = new Float32Array(contact.surface.bytes.buffer);
@@ -279,5 +254,15 @@ describe('static material remains a contact surface', () => {
         expect(particles.invMass[0]).toBe(3);
         contact.destroy();
         particles.destroy();
+    });
+});
+
+describe('readbacks cannot revive a cancelled grab', () => {
+    it.each(['releaseGrab', 'reset', 'destroy'])('cancels an in-flight grab on %s', async action => {
+        const sim = new Simulator(device, [body()], bounds);
+        const pending = sim.grab([0, 0, 1], [0, 0, -1]);
+        sim[action]();
+        expect(await pending).toBeNull();
+        sim.destroy();
     });
 });

@@ -1,3 +1,11 @@
+struct Params {
+    colorStart: u32,
+    colorCount: u32,
+    dt: f32,
+    limitOnly: u32,
+}
+@group(0) @binding(7) var<uniform> params: Params;
+
 // Stable Neo-Hookean elasticity, XPBD form (Macklin & Muller 2021).
 //
 // One thread owns one lattice cell: it pulls the cell's eight nodes into
@@ -23,21 +31,17 @@
 // between bodies is -- has no parity to appeal to and must not be batched this
 // way. It gets its own file and its own answer.
 
-uniform colorStart: u32;
-uniform colorCount: u32;
-uniform dt: f32;
-uniform limitOnly: u32;
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let slot = gid.x;
-    if (slot >= uniform.colorCount) {
+    if (slot >= params.colorCount) {
         return;
     }
 
-    let entry = cells[uniform.colorStart + slot];
+    let entry = cells[params.colorStart + slot];
     let cp = cellParams[entry.x];
-    if (uniform.limitOnly != 0u && cp.maxStretch <= 1.0) {
+    if (params.limitOnly != 0u && cp.maxStretch <= 1.0) {
         return;
     }
     let coord = cellCoords(cp.cellDims, entry.y);
@@ -57,12 +61,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         w[c] = nodeInvMass[n];
     }
 
-    if (uniform.limitOnly == 0u) {
-        let invDt2 = 1.0 / (uniform.dt * uniform.dt);
+    if (params.limitOnly == 0u) {
+        let invDt2 = 1.0 / (params.dt * params.dt);
         let alphaDev = cp.alphaDev * invDt2;
         let alphaHyd = cp.alphaHyd * invDt2;
         // The material stores a relaxation time; the solve wants it in substeps.
-        let relax = cp.relaxation / uniform.dt;
+        let relax = cp.relaxation / params.dt;
         // Every rest cell is the same cube, so the six rest shape inverses are
         // scene-wide constants and only need scaling by the cell size. There is no
         // per-tetrahedron rest data in memory at all.

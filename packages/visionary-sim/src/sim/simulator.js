@@ -1,3 +1,6 @@
+import { ComputeBackend } from './compute/backend.js';
+import { validateDevice } from './deviceRequirements.js';
+export { requiredFeatures, requiredLimits } from './deviceRequirements.js';
 import { bodyOfNode, nearestNodeToRay } from './pick.js';
 import { validateMaxStretch } from '../body/material.js';
 import { staticNodesInRegion } from './staticPrescription.js';
@@ -30,80 +33,85 @@ const DEFAULT_PARAMS = {
 };
 
 export class Simulator {
+    #backend;
+    #grabGeneration = 0;
+    #destroyed = false;
     /**
-     * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+     * @param {GPUDevice} device - WebGPU device.
      * @param {import('../body/softBody.js').SoftBody[]} bodies - Bodies to simulate.
      * @param {{ min: number[], max: number[] }} tank - Tank interior bounds.
      */
     constructor(device, bodies, tank) {
-        if (!device.supportsCompute) {
-            throw new Error('Simulator requires a device with compute support');
+        validateDevice(device);
+        const backend = this.#backend = new ComputeBackend(device);
+        try {
+            this.tank = tank;
+            this.params = { ...DEFAULT_PARAMS };
+
+            /** @type {SimBody[]} */
+            this.simBodies = bodies.map(body => ({ body, proxy: discretizeBody(body) }));
+
+            // The three pieces of the simulation side, assembled here and nowhere
+            // else. They are listed in dependency order and each knows only the one
+            // before it: the nodes exist, constraints move them, a stepper runs the
+            // constraints. The stepper never learns what kind of constraint it is
+            // running, which is what left room for a second kind, and now a third:
+            // nodes that are not solved for, but told.
+            // State receives only node data and the sampled static prescription,
+            // never the proxy or the body's world-region declaration.
+            this.particles = new Particles(backend, this.simBodies.map(({ body, proxy }) => ({
+                ...proxy.dof,
+                staticNodes: staticNodesInRegion(proxy.dof.restPositions, body.staticRegion)
+            })));
+            this.drive = new KinematicDrive(backend, this.particles);
+            // Elasticity is the discretisation's to build (ADR-0007): what an
+            // element is and how elements are batched is how the body was cut up.
+            this.elasticSets = elasticConstraints(
+                backend,
+                this.particles,
+                this.simBodies.map(({ proxy }) => proxy),
+                this.simBodies.map(({ body }) => body.material)
+            );
+            this.contact = new BodyContact(backend, this.particles, this.simBodies.map(({ proxy }) => proxy), tank);
+            // Order is solve order. Driven nodes go first: under the hard law
+            // nothing else can move them anyway, and this is what lets the
+            // compliant law's nudge still be shaped by elasticity and contact
+            // afterwards, in the same substep. Contact goes last of the other two
+            // so it has the final word on where a node may be: elasticity can push
+            // a node back into whatever it was resting on, and only one of the two
+            // is allowed to be wrong about that.
+            this.stepper = new Stepper(backend, this.particles, [this.drive, ...this.elasticSets, this.contact]);
+
+            // The clock turns irregular elapsed time into a count of fixed stable
+            // steps without knowing the dispatches that execute them; this class
+            // is their only seam.
+            this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
+
+            for (let b = 0; b < this.simBodies.length; b++) {
+                const { damping, friction } = this.simBodies[b].body.material;
+                this.particles.setParams(b, { damping, friction });
+            }
+
+            // Where the grab target is, and where it was last frame -- the only two
+            // numbers `dispatch` needs to hand `this.drive` a velocity for this
+            // frame's substeps. `previousPosition` only advances when a dispatch
+            // actually runs, so a frame with nothing to simulate never loses the
+            // motion in between.
+            this.grabTarget = { position: [0, 0, 0], previousPosition: [0, 0, 0] };
+            /**
+             * Which nodes a grab holds, and how big a gripped part `withinRadius`
+             * takes. `withinRadius` is the default: `singleNode` is what made a
+             * drag feel heavier the finer the body was, kept only because a
+             * switchable strategy needs both a control and a fallback arm, same
+             * reasoning as keeping the compliant drive law alongside the hard one.
+             */
+            this.grip = { strategy: 'withinRadius', radius: DEFAULT_GRIPPED_PART_RADIUS };
+            /** Set by {@link requestStep}, consumed by the next {@link step}. */
+            this.pendingStep = false;
+        } catch (error) {
+            backend.destroy();
+            throw error;
         }
-        this.device = device;
-        this.tank = tank;
-        this.params = { ...DEFAULT_PARAMS };
-
-        /** @type {SimBody[]} */
-        this.simBodies = bodies.map(body => ({ body, proxy: discretizeBody(body) }));
-
-        // The three pieces of the simulation side, assembled here and nowhere
-        // else. They are listed in dependency order and each knows only the one
-        // before it: the nodes exist, constraints move them, a stepper runs the
-        // constraints. The stepper never learns what kind of constraint it is
-        // running, which is what left room for a second kind, and now a third:
-        // nodes that are not solved for, but told.
-        // State receives only node data and the sampled static prescription,
-        // never the proxy or the body's world-region declaration.
-        this.particles = new Particles(device, this.simBodies.map(({ body, proxy }) => ({
-            ...proxy.dof,
-            staticNodes: staticNodesInRegion(proxy.dof.restPositions, body.staticRegion)
-        })));
-        this.drive = new KinematicDrive(device, this.particles);
-        // Elasticity is the discretisation's to build (ADR-0007): what an
-        // element is and how elements are batched is how the body was cut up.
-        this.elasticSets = elasticConstraints(
-            device,
-            this.particles,
-            this.simBodies.map(({ proxy }) => proxy),
-            this.simBodies.map(({ body }) => body.material)
-        );
-        this.contact = new BodyContact(device, this.particles, this.simBodies.map(({ proxy }) => proxy), tank);
-        // Order is solve order. Driven nodes go first: under the hard law
-        // nothing else can move them anyway, and this is what lets the
-        // compliant law's nudge still be shaped by elasticity and contact
-        // afterwards, in the same substep. Contact goes last of the other two
-        // so it has the final word on where a node may be: elasticity can push
-        // a node back into whatever it was resting on, and only one of the two
-        // is allowed to be wrong about that.
-        this.stepper = new Stepper(device, this.particles, [this.drive, ...this.elasticSets, this.contact]);
-
-        // Render frames decide when GPU work may be recorded, but not how much
-        // physical time one solve represents. The clock turns their irregular
-        // dt into a count of fixed stable steps and knows nothing about the
-        // dispatches that will execute them; this class is their only seam.
-        this.clock = new FixedTimestep(stableStepDuration(this.waveRate()));
-
-        for (let b = 0; b < this.simBodies.length; b++) {
-            const { damping, friction } = this.simBodies[b].body.material;
-            this.particles.setParams(b, { damping, friction });
-        }
-
-        // Where the grab target is, and where it was last frame -- the only two
-        // numbers `dispatch` needs to hand `this.drive` a velocity for this
-        // frame's substeps. `previousPosition` only advances when a dispatch
-        // actually runs, so a frame with nothing to simulate never loses the
-        // motion in between.
-        this.grabTarget = { position: [0, 0, 0], previousPosition: [0, 0, 0] };
-        /**
-         * Which nodes a grab holds, and how big a gripped part `withinRadius`
-         * takes. `withinRadius` is the default: `singleNode` is what made a
-         * drag feel heavier the finer the body was, kept only because a
-         * switchable strategy needs both a control and a fallback arm, same
-         * reasoning as keeping the compliant drive law alongside the hard one.
-         */
-        this.grip = { strategy: 'withinRadius', radius: DEFAULT_GRIPPED_PART_RADIUS };
-        /** Set by {@link requestStep}, consumed by the next {@link step}. */
-        this.pendingStep = false;
     }
 
     /**
@@ -122,7 +130,7 @@ export class Simulator {
      */
     deformationOf(bodyIndex) {
         const { proxy } = this.simBodies[bodyIndex];
-        return proxy.field(this.particles.nodePos, this.particles.offsetOf(bodyIndex));
+        return proxy.field(this.particles.nodePos.native, this.particles.offsetOf(bodyIndex));
     }
 
     /**
@@ -186,7 +194,7 @@ export class Simulator {
     stats() {
         const timing = this.clock.snapshot();
         return {
-            deviceType: this.device.deviceType,
+            deviceType: 'webgpu',
             bodyCount: this.simBodies.length,
             scale: totalScale(this.simBodies.map(({ proxy }) => proxy.scale())),
             nodes: this.particles.nodeCount,
@@ -225,8 +233,7 @@ export class Simulator {
     /**
      * Advances the simulation by one frame.
      *
-     * Must be called inside the render frame -- `computeDispatch` records into
-     * the frame's command encoder.
+     * Submits its own commands; legal both inside and outside a render frame.
      *
      * @param {number} dt - Elapsed seconds since the last frame.
      */
@@ -274,10 +281,7 @@ export class Simulator {
     /**
      * Asks for exactly one fixed physical step, paused or not.
      *
-     * Deferred rather than run here, because a dispatch is only legal inside
-     * the render frame and the thing that wants a single step is a button
-     * click. Keeping that rule inside this class is the point: no caller should
-     * have to know when a dispatch may be recorded.
+     * Consumed by the next step call, which may run outside a render frame.
      */
     requestStep() {
         this.pendingStep = true;
@@ -287,7 +291,7 @@ export class Simulator {
      * @param {number} steps - Number of fixed physical steps to dispatch.
      */
     dispatch(steps) {
-        if (steps < 1) {
+        if (steps < 1 || this.particles.nodeCount === 0) {
             return;
         }
 
@@ -311,7 +315,7 @@ export class Simulator {
             this.grabTarget.previousPosition = position;
         }
 
-        this.device.computeDispatch(this.stepper.sequence(steps), 'softbody-step');
+        this.#backend.dispatch(this.stepper.sequence(steps), 'softbody-step');
     }
 
     /**
@@ -378,7 +382,18 @@ export class Simulator {
      *   Which body was hit and where, or null if the ray missed everything.
      */
     async grab(origin, direction) {
-        const nodes = await this.particles.readPositions();
+        if (this.#destroyed) return null;
+        const generation = ++this.#grabGeneration;
+        let nodes;
+        try {
+            nodes = await this.readPositions();
+        } catch (error) {
+            // Destroy may cancel a pending map. A cancelled interaction has no
+            // result; other readback failures remain visible to the caller.
+            if (generation !== this.#grabGeneration) return null;
+            throw error;
+        }
+        if (generation !== this.#grabGeneration) return null;
         // A little over the widest node spacing, so that anything visibly over
         // a body has a node within reach. This is aim tolerance, not hand size:
         // it stays a property of the discretisation on purpose, see `sim/grip.js`.
@@ -456,7 +471,8 @@ export class Simulator {
 
     /** Releases whatever {@link grab} is currently holding. */
     releaseGrab() {
-        this.drive.release();
+        this.#grabGeneration++;
+        if (!this.#destroyed) this.drive.release();
     }
 
     /**
@@ -484,7 +500,14 @@ export class Simulator {
         this.pendingStep = false;
     }
 
+    /** Live positions as xyzw per node; each read owns its returned array. */
+    readPositions() { return this.particles.readPositions(); }
+
     destroy() {
+        if (this.#destroyed) return;
+        this.#destroyed = true;
+        this.#grabGeneration++;
+        this.#backend.destroy();
         this.stepper.destroy();
         this.contact.destroy();
         for (const elastic of this.elasticSets) {

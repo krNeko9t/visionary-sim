@@ -9,7 +9,7 @@
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
     let s = gid.x;
-    if (s >= uniform.surfaceCount) {
+    if (s >= params.surfaceCount) {
         return;
     }
 
@@ -18,6 +18,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     // Arrival order is unspecified, so this is not yet an order collision may
     // use. The following sort pass owns each bucket and canonicalises it.
     if (slot < BUCKET_SLOTS) {
-        atomicStore(&contactGrid[uniform.bucketCount + bucket * BUCKET_SLOTS + slot], s);
+        atomicStore(&contactGrid[params.bucketCount + bucket * BUCKET_SLOTS + slot], s);
     }
 }

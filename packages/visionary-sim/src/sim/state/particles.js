@@ -1,5 +1,6 @@
+/** @typedef {import('../compute/backend.js').ComputeBackend} ComputeBackend */
+
 import { materialCounts } from './materialCounts.js';
-import { BUFFERUSAGE_COPY_DST, BUFFERUSAGE_COPY_SRC, StorageBuffer } from 'playcanvas';
 
 import stateWgsl from './state.wgsl?raw';
 
@@ -48,11 +49,10 @@ const PARAMS_WORDS = PARAMS_STRIDE / 4;
 
 export class Particles {
     /**
-     * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+     * @param {ComputeBackend} backend - WebGPU backend.
      * @param {BodyNodes[]} bodies - Each body's nodes, in scene order.
      */
-    constructor(device, bodies) {
-        this.device = device;
+    constructor(backend, bodies) {
         this.bodies = bodies;
 
         let total = 0;
@@ -90,12 +90,11 @@ export class Particles {
         /** GPU-facing copy of `invMass`, with prescribed nodes forced to zero. */
         this.gpuInvMass = new Float32Array(invMass);
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.nodePos = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodePrev = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodeVel = new StorageBuffer(device, positions.byteLength, usage);
-        this.nodeInvMass = new StorageBuffer(device, invMass.byteLength, usage);
-        this.nodeParams = new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage);
+        this.nodePos = backend.buffer(positions.byteLength);
+        this.nodePrev = backend.buffer(positions.byteLength);
+        this.nodeVel = backend.buffer(positions.byteLength);
+        this.nodeInvMass = backend.buffer(invMass.byteLength);
+        this.nodeParams = backend.buffer(bodies.length * PARAMS_STRIDE);
 
         this.nodePos.write(0, positions);
         this.nodePrev.write(0, positions);
@@ -223,13 +222,12 @@ export class Particles {
      * these buffers are arranged to avoid -- so this is meant to be called
      * rarely, not every frame.
      *
-     * @returns {Promise<Float32Array>} Positions, 4 floats per node. Reused
-     *   between calls, so read it before awaiting anything else.
+     * @returns {Promise<Float32Array>} Positions, 4 floats per node. Each call owns its array.
      */
     async readPositions() {
-        this.readback ??= new Float32Array(this.nodeCount * 4);
-        await this.nodePos.read(0, this.readback.byteLength, this.readback, true);
-        return this.readback;
+        const readback = new Float32Array(this.nodeCount * 4);
+        await this.nodePos.read(0, readback.byteLength, readback, true);
+        return readback;
     }
 
     /** Every buffer this owns, keyed by its name in the WGSL. */

@@ -1,11 +1,5 @@
-import {
-    BUFFERUSAGE_COPY_DST,
-    BUFFERUSAGE_COPY_SRC,
-    Compute,
-    SHADERLANGUAGE_WGSL,
-    Shader,
-    StorageBuffer
-} from 'playcanvas';
+/** @typedef {import('../../compute/backend.js').ComputeBackend} ComputeBackend */
+/** @typedef {ReturnType<ComputeBackend['pass']>} Pass */
 
 import { elementCompliance } from '../../constraints/compliance.js';
 import { validateMaxStretch } from '../../../body/material.js';
@@ -119,7 +113,7 @@ function kuhnConstants() {
  * dispatch across the scene rather than one per body. That is co-location, not
  * coupling: it is safe because bodies own disjoint node ranges (I6).
  *
- * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+ * @param {ComputeBackend} backend - WebGPU backend.
  * @param {import('../../state/particles.js').Particles} particles - Every body's nodes.
  * @param {import('../proxyGeometry.js').ProxyGeometry[]} proxies - Every body's
  *   proxy, in scene order; the ones that are not lattices are someone else's.
@@ -129,21 +123,20 @@ function kuhnConstants() {
  * @returns {import('../proxyGeometry.js').ElasticConstraint[]} Nothing if no
  *   body is a lattice, one constraint otherwise.
  */
-export function elasticConstraints(device, particles, proxies, materials) {
+export function elasticConstraints(backend, particles, proxies, materials) {
     const bodies = proxies.flatMap((proxy, slot) => (proxy instanceof VoxelLattice
         ? [{ lattice: proxy.lattice, material: materials[slot], slot }]
         : []));
-    return bodies.length > 0 ? [new ElasticCells(device, particles, bodies)] : [];
+    return bodies.length > 0 ? [new ElasticCells(backend, particles, bodies)] : [];
 }
 
 export class ElasticCells {
     /**
-     * @param {import('playcanvas').GraphicsDevice} device - WebGPU device.
+     * @param {ComputeBackend} backend - WebGPU backend.
      * @param {import('../../state/particles.js').Particles} particles - Nodes to move.
      * @param {CellBody[]} bodies - Lattices and their materials, in scene order.
      */
-    constructor(device, particles, bodies) {
-        this.device = device;
+    constructor(backend, particles, bodies) {
         this.particles = particles;
         this.bodies = bodies;
 
@@ -169,9 +162,8 @@ export class ElasticCells {
             this.colorRanges.push({ start, count: cursor - start });
         }
 
-        const usage = BUFFERUSAGE_COPY_DST | BUFFERUSAGE_COPY_SRC;
-        this.cells = new StorageBuffer(device, entries.byteLength, usage);
-        this.cellParams = new StorageBuffer(device, bodies.length * PARAMS_STRIDE, usage);
+        this.cells = backend.buffer(entries.byteLength);
+        this.cellParams = backend.buffer(bodies.length * PARAMS_STRIDE);
         this.cells.write(0, entries);
 
         // One staging copy reused for every material update, so dragging a
@@ -181,11 +173,7 @@ export class ElasticCells {
         this.paramUints = new Uint32Array(this.paramWords);
         this.uploadParams();
 
-        this.shader = new Shader(device, {
-            name: 'sim-elastic-cells',
-            shaderLanguage: SHADERLANGUAGE_WGSL,
-            cshader: `${kuhnConstants()}\n${STATE_WGSL}\n${xpbdCoupleWgsl}\n${cellsWgsl}\n${projectWgsl}`
-        });
+        this.shader = backend.kernel('sim-elastic-cells', `${kuhnConstants()}\n${STATE_WGSL}\n${xpbdCoupleWgsl}\n${cellsWgsl}\n${projectWgsl}`);
 
         // One instance per colour: same shader, but each carries its own range
         // in its own uniform buffer, so all eight can be queued at once. Empty
@@ -194,14 +182,14 @@ export class ElasticCells {
             .map((range, color) => ({ range, color }))
             .filter(({ range }) => range.count > 0)
             .map(({ range, color }) => {
-                const compute = new Compute(device, this.shader, `sim-elastic-${color}`);
-                compute.setParameter('colorStart', range.start);
-                compute.setParameter('colorCount', range.count);
-                compute.setParameter('limitOnly', limitOnly);
-                compute.setParameter('cells', this.cells);
-                compute.setParameter('cellParams', this.cellParams);
+                const compute = backend.pass(this.shader, `sim-elastic-${color}`);
+                compute.set('colorStart', range.start);
+                compute.set('colorCount', range.count);
+                compute.set('limitOnly', limitOnly);
+                compute.set('cells', this.cells);
+                compute.set('cellParams', this.cellParams);
                 for (const [name, buffer] of Object.entries(particles.bindings)) {
-                    compute.setParameter(name, buffer);
+                    compute.set(name, buffer);
                 }
                 compute.setupDispatch(Math.ceil(range.count / WORKGROUP_SIZE), 1, 1);
                 return compute;
@@ -217,7 +205,7 @@ export class ElasticCells {
     /**
      * The dispatches this constraint contributes to one substep, in order.
      *
-     * @returns {Compute[]} The passes.
+     * @returns {Pass[]} The passes.
      */
     get passes() {
         return this.bodies.some(({ material }) => material.maxStretch > 1)
@@ -265,7 +253,7 @@ export class ElasticCells {
      */
     setSubstepDt(dt) {
         for (const compute of [...this.batches, ...this.stretchBatches]) {
-            compute.setParameter('dt', dt);
+            compute.set('dt', dt);
         }
     }
 
