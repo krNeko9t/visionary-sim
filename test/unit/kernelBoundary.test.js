@@ -1,18 +1,16 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { EXEMPTIONS } from '../kernel-boundary/exemptions.js';
 import { KERNEL, auditExemptions, kernelViolations } from '../kernel-boundary/rules.js';
-import { SRC, sourceFiles } from '../sourceTree.js';
+import { sourcePath, sourceFiles, packagedSource } from '../sourceTree.js';
 
 /**
- * The visionary-sim package depends on WebGPU and nothing else. Its source still
- * lives inside the PlayCanvas application, so the line is drawn over today's
- * paths (`KERNEL` in `test/kernel-boundary/rules.js`) and checked here before
- * anything moves. What already crosses it is listed in
+ * The visionary-sim package depends on WebGPU and nothing else. Its source spans the kernel
+ * workspace and mixed rest-geometry modules still in the application. S1 logical
+ * identities keep the original ratchet intact across the workspace move. What already crosses it is listed in
  * `test/kernel-boundary/exemptions.js`; the rewrite empties that list.
  */
 describe('the kernel boundary in this tree', () => {
@@ -20,12 +18,12 @@ describe('the kernel boundary in this tree', () => {
 
     it('names kernel paths that exist', () => {
         for (const path of KERNEL) {
-            expect(() => statSync(join(SRC, path)), `KERNEL names src/${path}, which does not exist`).not.toThrow();
+            expect(() => statSync(sourcePath(path)), `KERNEL names src/${path}, which does not exist`).not.toThrow();
         }
     });
 
     it('has no violation that is not exempted, and no exemption that is not needed or new', () => {
-        const files = sourceFiles().map(path => ({ path, text: readFileSync(join(SRC, path), 'utf8') }));
+        const files = sourceFiles().map(path => ({ path, text: readFileSync(sourcePath(path), 'utf8'), kernel: packagedSource(path) || undefined }));
         const start = JSON.parse(readFileSync(START, 'utf8')).map(([file, rule, name, count]) => ({ file, rule, name, count }));
         const problems = auditExemptions(kernelViolations(files), EXEMPTIONS, start);
         expect(problems, `\n${problems.join('\n\n')}\n`).toEqual([]);

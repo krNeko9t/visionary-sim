@@ -27,28 +27,39 @@
 
 每个目录承担一个**关注点**，名字取自关注点而不是取自实现，所以更换算法时目录结构不变。
 
-这张表与 `src/` 及根目录 `tools/` 的实际目录由 `test/unit/docs.test.js` 双向核对：表里写着的目录必须存在，
+这张表与两个 workspace 的源码及应用离线工具目录由 `test/unit/docs.test.js` 双向核对：表里写着的目录必须存在，
 存在的目录必须在表里。读这张表因此等于读那棵树，不需要信任谁记得更新它。
 
 | 目录 | 承担 |
 |---|---|
-| `../tools/` | 离线资产准备与校准报告；通过共享准备、代理几何与材料计数接口输出资产和分类证据，不被运行时代码引用 |
-| `main.js` | 组装：把各层接成一个可运行的程序 |
-| `assets/` | 几何进入系统的入口 |
-| `assets/splats/` | 3DGS 那道门：容器、解激活、清洗、量、摆 |
-| `body/` | 被模拟对象的自我描述：身份、材质、静止形状、可选静态区域。要解算的那份几何与要画的那份分开写——网格物体两者重合，扫描物体不重合 |
-| `scene/` | 这一次跑什么、在什么环境里观察它：边界在哪、里面有什么、周围画什么 |
-| `sim/` | 模拟侧。`simulator.js` 是对外唯一入口，也是下面四段的装配处 |
-| `sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云。对外只交出中立的 `ProxyGeometry`（条目与不变量写在 `proxyGeometry.js`），外加它自己造的弹性约束：单元是什么、怎样分批，是离散化的知识 |
-| `sim/discretize/lattice/` | 代理几何的体素点阵实现。全仓库只有这里可以说点阵的词 |
-| `sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
-| `sim/constraints/` | 自由度要服从什么：不由离散化决定的约束（接触、`kinematicDrive.js`），以及弹性约束借用的 XPBD 公式（顺服量、本构的 2×2 联立）。一种约束自带它的数据、它的批次规则和它的投影核；看不见离散化 |
-| `sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
-| `deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动。持有的是契约（`DeformationField` 与 WGSL 的 `deformationAt`），不是实现：采样器由离散化交出 |
-| `render/` | 把被形变带动的几何画出来；不知道它从哪来 |
-| `ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
+| `apps/simulator/tools/` | 离线资产准备与校准报告；通过共享准备、代理几何与材料计数接口输出资产和分类证据，不被运行时代码引用 |
+| `apps/simulator/src/main.js` | 组装：把各层接成一个可运行的程序 |
+| `apps/simulator/src/assets/` | 几何进入系统的入口 |
+| `apps/simulator/src/assets/splats/` | 3DGS 那道门：容器、解激活、清洗、量、摆 |
+| `packages/visionary-sim/src/body/` | 被模拟对象的自我描述：身份、材质、静止形状、可选静态区域。要解算的那份几何与要画的那份分开写——网格物体两者重合，扫描物体不重合 |
+| `apps/simulator/src/scene/` | 这一次跑什么、在什么环境里观察它：边界在哪、里面有什么、周围画什么 |
+| `packages/visionary-sim/src/sim/` | 模拟侧。`simulator.js` 是对外唯一入口，也是下面四段的装配处 |
+| `packages/visionary-sim/src/sim/discretize/` | 把物体变成有限个自由度。来源有三种：解析形状、三角网格、高斯点云。对外只交出中立的 `ProxyGeometry`（条目与不变量写在 `proxyGeometry.js`），外加它自己造的弹性约束：单元是什么、怎样分批，是离散化的知识 |
+| `packages/visionary-sim/src/sim/discretize/lattice/` | 代理几何的体素点阵实现。全仓库只有这里可以说点阵的词 |
+| `packages/visionary-sim/src/sim/state/` | 那些自由度本身。不知道它们是干什么用的 |
+| `packages/visionary-sim/src/sim/constraints/` | 自由度要服从什么：不由离散化决定的约束（接触、`kinematicDrive.js`），以及弹性约束借用的 XPBD 公式（顺服量、本构的 2×2 联立）。一种约束自带它的数据、它的批次规则和它的投影核；看不见离散化 |
+| `packages/visionary-sim/src/sim/solver/` | 让它们随时间服从：预测、依次交给每种约束、收尾 |
+| `packages/visionary-sim/src/deformation/` | 把求解结果表达为空间形变，任何静止点据此被带动。持有的是契约（`DeformationField` 与 WGSL 的 `deformationAt`），不是实现：采样器由离散化交出 |
+| `apps/simulator/src/render/` | 把被形变带动的几何画出来；不知道它从哪来 |
+| `apps/simulator/src/ui/` | 把控制权交给人：读出解算状态、改变材料、伸手抓住物体 |
 
-表中路径相对 `src/`；`../tools/` 是仓库根目录的离线工具。
+| `apps/simulator/src/body/` | 场景的模拟体工厂：从文件和生成形状组装模拟体 |
+| `apps/simulator/src/` | 实验应用源码根目录 |
+| `packages/visionary-sim/src/` | 内核源码根目录 |
+
+表中路径相对仓库根目录。根包是私有 npm workspace；`packages/visionary-sim` 是私有包
+`visionary-sim`，`apps/simulator` 是私有包 `simulator-app`。应用用包名 import 同仓库源码。
+目前 `visionary-sim/*` 子路径按原模块形状开放，公开入口由后续票收紧；PlayCanvas 依赖随旧计算
+代码保留到计算后端票。`assets/` 的混合模块仍留在应用，内核临时引用同一份文件，资产准备与
+静止几何由票 10 分开。边界审计仍覆盖这些候选文件，原有豁免没有增加或重新划线。
+
+`test/sourceTree.js` 将两个 workspace 的物理路径对应到 S1 的逻辑来源路径，供原依赖表及
+只减不增的豁免清单使用；全部内核包源码都会扫描，新目录也不会绕过边界检查。
 
 `wgsl/` 不在表内：那是所在目录的着色器文本，不是另一个关注点。
 
@@ -99,7 +110,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | `render/` 里不出现离散化的词汇（同上，反向。这条决定体素点阵能不能真的换掉） | 同上 |
 | 只有 `sim/discretize/lattice/` 可以说点阵的词，也只有 `sim/discretize/` 可以 import 进那个目录——「换掉点阵只动那个目录与选用它的那一行」 | 同上 |
 | 代理几何的接口不变量（含球接触的密封条件） | `test/unit/proxyGeometry.test.js` |
-| 上面§二那张表 ↔ `src/` 与 `tools/` 实际目录 | `test/unit/docs.test.js` |
+| 上面§二那张表 ↔ 两个 workspace 的源码与应用 `tools/` 实际目录 | `test/unit/docs.test.js` |
 | 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
 | 凡是会被交出来的几何都有画法 | `test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |

@@ -1,19 +1,18 @@
 {
-  "name": "softbody-webgpu",
+  "name": "visionary-sim-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Real-time XPBD soft bodies on WebGPU, rendered with PlayCanvas. 3DGS-ready.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "npm run dev --workspace simulator-app --",
+    "build": "npm run build --workspace simulator-app",
+    "preview": "npm run preview --workspace simulator-app --",
     "test": "vitest run",
-    "check": "vitest run && vite build"
-  },
-  "dependencies": {
-    "lil-gui": "^0.21.0",
-    "playcanvas": "^2.21.3"
+    "check": "npm test && npm run build"
   },
   "devDependencies": {
     "vite": "^8.2.0",

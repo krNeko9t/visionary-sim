@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { sourceDirectories } from '../sourceTree.js';
 
 /**
  * The documentation's shape, as a rule rather than as a promise.
@@ -25,7 +26,6 @@ import { describe, expect, it } from 'vitest';
  */
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const SRC = join(ROOT, 'src');
 
 /**
  * How many lines each file loaded into every session may spend.
@@ -40,26 +40,6 @@ const SRC = join(ROOT, 'src');
  */
 const BUDGET = { 'CLAUDE.md': 50, 'STATUS.md': 32 };
 
-/** Directories that are shader text belonging to their parent, not an area. */
-const NOT_AN_AREA = 'wgsl';
-
-/**
- * @param {string} dir - Directory to walk.
- * @returns {string[]} Directory paths relative to `src`, using forward slashes.
- */
-function directories(dir = SRC) {
-    const dirs = readdirSync(dir).flatMap((entry) => {
-        const full = join(dir, entry);
-        if (!statSync(full).isDirectory()) {
-            return [];
-        }
-        const here = relative(SRC, full).replaceAll('\\', '/');
-        const nested = directories(full);
-        return entry === NOT_AN_AREA ? [] : [here, ...nested];
-    });
-    return dir === SRC ? [...dirs, '../tools', ...directories(join(ROOT, 'tools'))] : dirs;
-}
-
 /**
  * The directories the architecture document says exist, read out of the table
  * in its "目录" section.
@@ -68,7 +48,7 @@ function directories(dir = SRC) {
  * ending in a slash -- so a directory mentioned in a prose cell does not count
  * as documenting it.
  *
- * @returns {string[]} Directory paths relative to `src`.
+ * @returns {string[]} Directory paths relative to the repository root.
  */
 function documentedDirectories() {
     const text = readFileSync(join(ROOT, 'ARCHITECTURE.md'), 'utf8');
@@ -84,13 +64,13 @@ function documentedDirectories() {
 describe('the documentation the repository ships', () => {
     it('describes every directory that exists', () => {
         const documented = new Set(documentedDirectories());
-        const missing = directories().filter(dir => !documented.has(dir));
+        const missing = sourceDirectories().filter(dir => !documented.has(dir));
 
         expect(missing, `\nnot in ARCHITECTURE.md §二: ${missing.join(', ')}\n`).toEqual([]);
     });
 
     it('describes no directory that does not exist', () => {
-        const actual = new Set(directories());
+        const actual = new Set(sourceDirectories());
         const invented = documentedDirectories().filter(dir => !actual.has(dir));
 
         expect(invented, `\nARCHITECTURE.md §二 lists missing: ${invented.join(', ')}\n`).toEqual([]);

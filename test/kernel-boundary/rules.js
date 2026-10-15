@@ -1,4 +1,4 @@
-import { posix } from 'node:path';
+import { sourceImport } from '../sourceTree.js';
 
 /**
  * Where the visionary-sim package will be cut out of this repository, and what
@@ -6,12 +6,12 @@ import { posix } from 'node:path';
  *
  * The package depends on WebGPU and nothing else: no renderer, no I/O, no page
  * (visionary-editor `docs/adr/0002-visionary-sim-depends-only-on-webgpu.md`).
- * Today it is still a set of directories inside the PlayCanvas application, so
- * the line is drawn here, over today's paths, before the files move.
+ * S1 logical paths are resolved through sourceTree.js across both workspaces,
+ * including the mixed asset modules still in the application.
  */
 
 /**
- * The kernel: every path that moves into the package, relative to `src`. A
+ * Kernel candidates, by their original S1 source identity. A
  * directory covers everything inside it.
  *
  * - `sim`: solving -- discretisation, degrees of freedom, constraints, solver,
@@ -21,8 +21,8 @@ import { posix } from 'node:path';
  * - `assets/objLoader.js`, `assets/shapes.js`, `assets/splats/cloud.js`: the
  *   rest-geometry data shapes the solver reads (triangle mesh, analytic shape,
  *   Gaussian cloud) and the pure functions it needs, such as `meshBounds`.
- *   These three files also hold the application's loaders and shape
- *   generators; the package takes the shapes and leaves those behind.
+ *   These mixed files remain in the app until ticket 10 separates loading and
+ *   shape generation from the data shapes. They stay inside this audit.
  *
  * The import rule keeps the list complete: a kernel file that imports, or
  * names the type of, a file not on it is a violation, so whatever the kernel
@@ -209,7 +209,7 @@ function importSpecifiers(text, code) {
  * @returns {string} The target.
  */
 function importTarget(from, specifier) {
-    return specifier.startsWith('.') ? posix.join(posix.dirname(from), specifier) : specifier;
+    return sourceImport(from, specifier);
 }
 
 /**
@@ -224,7 +224,7 @@ function importTarget(from, specifier) {
 /**
  * What kernel source does that the package may not.
  *
- * @param {{ path: string, text: string }[]} files - Source files, paths relative
+ * @param {{ path: string, text: string, kernel?: boolean }[]} files - Source files, paths relative
  *   to `src`. Files outside the kernel are ignored.
  * @returns {Violation[]} One entry per file, rule and name.
  */
@@ -234,7 +234,7 @@ export function kernelViolations(files) {
         const key = keyOf({ file, rule, name });
         if (n > 0) counts.set(key, (counts.get(key) ?? 0) + n);
     };
-    for (const { path, text } of files.filter(({ path }) => isKernel(path))) {
+    for (const { path, text } of files.filter(({ path, kernel }) => kernel || isKernel(path))) {
         const code = codeOf(path, text);
         for (const specifier of importSpecifiers(text, code)) {
             const target = importTarget(path, specifier);

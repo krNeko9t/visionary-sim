@@ -1,10 +1,9 @@
 import { readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { RENDERER_API } from '../kernel-boundary/rules.js';
-import { SRC, sourceFiles } from '../sourceTree.js';
+import { sourcePath, sourceImport, sourceFiles } from '../sourceTree.js';
 
 /**
  * The repository's shape, as a rule rather than as a promise.
@@ -128,7 +127,7 @@ function discretisationIn(file) {
     // Import specifiers are blanked out: a path into the resident says where a
     // module lives, not what it is, and who may reach the resident at all is
     // an import rule -- {@link DISCRETISATION_RESIDENT}'s own test below.
-    const text = readFileSync(join(SRC, file), 'utf8').replace(/from\s+'[^']*'/g, "from ''");
+    const text = readFileSync(sourcePath(file), 'utf8').replace(/from\s+'[^']*'/g, "from ''");
     return DISCRETISATION
         // `deform` then a capital is how every piece of shader text pasted into
         // someone else's shader names what it introduces -- the channel's own
@@ -185,17 +184,16 @@ function permits(area, target) {
 
 /** Every local import in the tree, as `{ from, to }` paths relative to `src`. */
 const EDGES = sourceFiles().flatMap((file) => {
-    const text = readFileSync(join(SRC, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    return [...text.matchAll(/(?:from\s+|import\s*\()'(\.[^']+)'/g)].map((match) => {
-        const target = resolve(dirname(join(SRC, file)), match[1].split('?')[0]);
-        return { from: file, to: relative(SRC, target).replaceAll('\\', '/') };
+    const text = readFileSync(sourcePath(file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    return [...text.matchAll(/(?:from\s+|import\s*\()'((?:\.|visionary-sim\/)[^']+)'/g)].map((match) => {
+        return { from: file, to: sourceImport(file, match[1]) };
     });
 });
 
 describe('the layering the file tree claims', () => {
     it('has every area it is supposed to have', () => {
         for (const area of REQUIRED) {
-            expect(() => statSync(join(SRC, area)), `src/${area} is missing`).not.toThrow();
+            expect(() => statSync(sourcePath(area)), `src/${area} is missing`).not.toThrow();
         }
     });
 
@@ -246,7 +244,7 @@ describe('the layering the file tree claims', () => {
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'deformation')
             .flatMap((file) => {
-                const text = readFileSync(join(SRC, file), 'utf8');
+                const text = readFileSync(sourcePath(file), 'utf8');
                 return RENDERER_API
                     .filter(name => text.includes(name))
                     .map(name => `src/${file} mentions "${name}"`);
@@ -263,7 +261,7 @@ describe('the layering the file tree claims', () => {
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'render')
             .flatMap((file) => {
-                const text = readFileSync(join(SRC, file), 'utf8');
+                const text = readFileSync(sourcePath(file), 'utf8');
                 return DISCRETISATION
                     .filter(pattern => pattern.test(text))
                     .map(pattern => `src/${file} matches ${pattern}`);
@@ -313,7 +311,7 @@ describe('the layering the file tree claims', () => {
         const leaks = sourceFiles()
             .filter(file => areaOf(file) === 'sim/state' || areaOf(file) === 'sim/solver')
             .flatMap((file) => {
-                const text = readFileSync(join(SRC, file), 'utf8');
+                const text = readFileSync(sourcePath(file), 'utf8');
                 return INTERACTION
                     .filter(pattern => pattern.test(text))
                     .map(pattern => `src/${file} matches ${pattern}`);
@@ -329,7 +327,7 @@ describe('the layering the file tree claims', () => {
         expect(EDGES.filter(({ from, to }) => from.startsWith('../tools/') &&
             !to.startsWith('../tools/') && !to.startsWith('assets/') && !shared.has(to))).toEqual([]);
         for (const file of sourceFiles().filter(file => !file.startsWith('../tools/'))) {
-            expect(readFileSync(join(SRC, file), 'utf8')).not.toMatch(/(?:from\s*|import\s*\()(['"])node:/);
+            expect(readFileSync(sourcePath(file), 'utf8')).not.toMatch(/(?:from\s*|import\s*\()(['"])node:/);
         }
     });
 
