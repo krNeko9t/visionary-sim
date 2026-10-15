@@ -114,6 +114,7 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | 越界即塌的两条边界、离散化与点云的封口 | `packages/visionary-sim/test/unit/elastic.test.js`、`apps/simulator/test/unit/shapes.test.js`、`packages/visionary-sim/test/unit/cloudVolume.test.js` |
 | 凡是会被交出来的几何都有画法 | `apps/simulator/test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
+| PlayCanvas 原生 device 与缓冲包装的未公开字段只在 `render/playcanvasInterop.js` 使用；含浏览器夹具的其他源码不许分散访问 | `test/unit/playcanvasInteropBoundary.test.js`；真实求值、排序与释放见 `apps/simulator/test/native-buffer/` |
 | 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `packages/visionary-sim/test/unit/timestep.test.js`、`packages/visionary-sim/test/unit/simulatorTiming.test.js` |
 | 接触桶不受 GPU 原子插入顺序影响 | `packages/visionary-sim/test/unit/contact.test.js` |
 | 两种驱动律各自的位移/修正公式；被规定节点在弹性投影里不再分走修正 | `packages/visionary-sim/test/unit/kinematicDrive.test.js`、`packages/visionary-sim/test/unit/elastic.test.js` |

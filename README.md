@@ -39,6 +39,8 @@ Vite server and an isolated Chrome with WebGPU. See
 [test/motion-reference/README.md](apps/simulator/test/motion-reference/README.md)
 and [test/alocasia-drag.md](apps/simulator/test/alocasia-drag.md). The editor's
 `docs/browser-tests-on-4090.md` describes the mandatory desktop and presentation gates.
+The synthetic [native-buffer smoke](apps/simulator/test/native-buffer/README.md)
+guards native-buffer work-buffer modifiers, GPU sorting and resource ownership.
 
 This is the mechanical workspace split. Mixed rest-geometry and asset-preparation
 modules remain together in the app until ticket 10; the kernel temporarily reaches
