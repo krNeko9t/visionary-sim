@@ -39,12 +39,14 @@ try {
     camera.setPosition(0, 0, 5);
     app.root.addChild(camera);
     const view = createSplatView(app, 'native-smoke', {
-        count: 2,
-        positions: new Float32Array([-0.8, 0, 0.35, -0.8, 0, -0.35]),
-        rotations: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1]),
-        scales: new Float32Array(6).fill(0.22),
-        opacity: new Float32Array([0.95, 0.95]),
-        colors: new Float32Array([1, 0, 0, 0, 1, 0])
+        // NVIDIA's OneSweep sorter requires at least a vec4 of keys. The last
+        // two splats are invisible padding, not additional visual assertions.
+        count: 4,
+        positions: new Float32Array([-0.8, 0, 0.35, -0.8, 0, -0.35, 0, 3, 0, 0, -3, 0]),
+        rotations: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]),
+        scales: new Float32Array(12).fill(0.22),
+        opacity: new Float32Array([0.95, 0.95, 0, 0]),
+        colors: new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
     });
     app.root.addChild(view);
     const detach = attachNativeSplatModifier(view.gsplat, `

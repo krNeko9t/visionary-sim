@@ -26,7 +26,9 @@ Shared-queue ordering makes those writes visible to the modifier and then the
 GPU sorter/draw. No cross-device copies or readback of private host data are used.
 
 The fixed 320×240 orthographic view has two overlapping red/green Gaussians at
-x = −0.8, z = ±0.35. After eight warmup frames, each assertion samples the first
+x = −0.8, z = ±0.35. Two zero-opacity splats pad the input to four keys, the
+minimum 16-byte binding required by the pinned NVIDIA OneSweep sorter.
+After eight warmup frames, each assertion samples the first
 frame after a native update, at pixels (112,120) and (208,120):
 
 - Rest: red at the left, black at the right.
