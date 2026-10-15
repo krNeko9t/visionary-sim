@@ -15,7 +15,7 @@ vi.mock('../../src/render/draw.js', () => ({ draw: vi.fn(() => ({})) }));
 vi.mock('../../src/render/splats.js', () => ({ createSplatView: vi.fn(() => ({})) }));
 vi.mock('../../src/ui/panel.js', () => ({ createPanel: () => ({ element: {}, update() {} }) }));
 vi.mock('../../src/ui/grab.js', () => ({ attachGrabber() {} }));
-vi.mock('../../src/sim/simulator.js', () => ({ Simulator: class {
+vi.mock('visionary-sim/sim/simulator.js', () => ({ Simulator: class {
     constructor(_device, _bodies, bounds) {
         state.events.push(['sim', bounds]); state.sim = this;
         this.params = { gravity: [0, -9.81, 0] }; this.simBodies = _bodies.map(body => ({ body, proxy: { wireframe: () => ({ kind: 'lines' }) } }));

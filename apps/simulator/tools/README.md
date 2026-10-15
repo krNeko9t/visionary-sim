@@ -1,6 +1,6 @@
 # PhysDreamer 共享工厂
 
-正式命令（Node 24）：
+以下命令均在实验应用目录 `apps/simulator/` 执行（先在仓库根运行 `npm ci`，再 `cd apps/simulator`；Node 24）：
 
 ```sh
 node tools/prepare-physdreamer.js --scene alocasia --input /path/to/originals \
@@ -120,7 +120,7 @@ CSV 列为 `id,x,y,z,static,red,green,blue`，所有 xyz 均为共同世界空�
 合成端到端测试（无需真实资产/GPU）：
 
 ```sh
-npm test -- --run test/unit/calibrateAlocasia.test.js
+npm --prefix ../.. test -- apps/simulator/test/unit/calibrateAlocasia.test.js
 ```
 
 测试在临时目录创建已声明共同坐标的合成高斯、样本与准备报告，覆盖数值、清洗、精度、逐点
@@ -128,7 +128,7 @@ npm test -- --run test/unit/calibrateAlocasia.test.js
 
 # 运行已校准的 alocasia 场景
 
-在仓库根执行；资产已存在时直接启动即可。新 checkout 需先安装依赖（`npm ci`），
+在 `apps/simulator/` 执行；资产已存在时直接启动即可。新 checkout 需先在仓库根安装依赖（`npm ci`），
 再用真实四输入准备资产（产物不入 git）：
 
 ```sh

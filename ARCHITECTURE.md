@@ -109,16 +109,16 @@ sim/state/  ◄──  sim/constraints/  ◄──  sim/solver/
 | `deformation/` 里不出现渲染器的词汇（**知识边**，import 表看不见） | 同上 |
 | `render/` 里不出现离散化的词汇（同上，反向。这条决定体素点阵能不能真的换掉） | 同上 |
 | 只有 `sim/discretize/lattice/` 可以说点阵的词，也只有 `sim/discretize/` 可以 import 进那个目录——「换掉点阵只动那个目录与选用它的那一行」 | 同上 |
-| 代理几何的接口不变量（含球接触的密封条件） | `test/unit/proxyGeometry.test.js` |
+| 代理几何的接口不变量（含球接触的密封条件） | `packages/visionary-sim/test/unit/proxyGeometry.test.js` |
 | 上面§二那张表 ↔ 两个 workspace 的源码与应用 `tools/` 实际目录 | `test/unit/docs.test.js` |
-| 越界即塌的两条边界、离散化与点云的封口 | `test/unit/elastic.test.js`、`shapes.test.js`、`cloudVolume.test.js` |
-| 凡是会被交出来的几何都有画法 | `test/unit/renderPaths.test.js` |
+| 越界即塌的两条边界、离散化与点云的封口 | `packages/visionary-sim/test/unit/elastic.test.js`、`apps/simulator/test/unit/shapes.test.js`、`packages/visionary-sim/test/unit/cloudVolume.test.js` |
+| 凡是会被交出来的几何都有画法 | `apps/simulator/test/unit/renderPaths.test.js` |
 | 形变后的高斯始终走读取 work buffer 的 GPU sorter | 同上 |
-| 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `test/unit/timestep.test.js`、`simulatorTiming.test.js` |
-| 接触桶不受 GPU 原子插入顺序影响 | `test/unit/contact.test.js` |
-| 两种驱动律各自的位移/修正公式；被规定节点在弹性投影里不再分走修正 | `test/unit/kinematicDrive.test.js`、`elastic.test.js` |
+| 渲染帧率只改变固定物理量子的数量，过载不改变步长 | `packages/visionary-sim/test/unit/timestep.test.js`、`packages/visionary-sim/test/unit/simulatorTiming.test.js` |
+| 接触桶不受 GPU 原子插入顺序影响 | `packages/visionary-sim/test/unit/contact.test.js` |
+| 两种驱动律各自的位移/修正公式；被规定节点在弹性投影里不再分走修正 | `packages/visionary-sim/test/unit/kinematicDrive.test.js`、`packages/visionary-sim/test/unit/elastic.test.js` |
 | `sim/state`、`sim/solver` 不出现抓取/指针/拖拽一类的交互词汇（知识边） | `test/unit/architecture.test.js` |
-| 抓取集合握住的材料量不随点阵分辨率变化 | `test/unit/grip.test.js` |
+| 抓取集合握住的材料量不随点阵分辨率变化 | `packages/visionary-sim/test/unit/grip.test.js` |
 | 将进入 visionary-sim 包的内核源码（`test/kernel-boundary/rules.js` 的 `KERNEL`）只依赖 WebGPU：不 import 包或内核外的文件，不用渲染器 API 和 I/O、页面一类的全局名，WGSL 不写 PlayCanvas 方言；现存违规列在只减不增的 `test/kernel-boundary/exemptions.js` | `test/unit/kernelBoundary.test.js` |
 
 这些约束的**推导写在它约束的那段代码旁边**，不在这里：泊松比下限在 `body/material.js`，
